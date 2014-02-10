@@ -96,7 +96,7 @@ public class BenchmarkRunner {
         };
         Benchmark[] allBenchmarks = new Benchmark[] {
             new OrderedPropertyIndexOrderByInsertTest(),
-            new StardardPropertyIndexOrderByInsertTest(),
+            new StandardPropertyIndexOrderByInsertTest(),
             new NoIndexesOrderByInsertTest(),
             new OrderByQueryTest(),
             new LoginTest(),

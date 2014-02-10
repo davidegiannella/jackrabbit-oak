@@ -41,6 +41,8 @@ public abstract class BaseOrderByInsertTest extends AbstractTest {
     * the number of nodes created per iteration
     */
    private final static int NODES_PER_ITERATION = Integer.parseInt(System.getProperty("nodesPerIteration", "100"));
+   
+   private final static int PRE_ADDED_NODES = Integer.parseInt(System.getProperty("preAddedNodes", "0"));
 
    /**
     * node name below which creating the test data
@@ -64,6 +66,11 @@ public abstract class BaseOrderByInsertTest extends AbstractTest {
       //initiate the place for writing child nodes
       dump = session.getRootNode().addNode(DUMP_NODE,NODE_TYPE);
       session.save();
+      
+      defineIndex();
+      
+      //pre-adding nodes
+      fireNodes(PRE_ADDED_NODES);
    }
 
    @Override
@@ -79,14 +86,24 @@ public abstract class BaseOrderByInsertTest extends AbstractTest {
     */
    @Override
    protected void runTest() throws Exception {
+      fireNodes(NODES_PER_ITERATION);
+   }
+   
+   void fireNodes(int numberOfNodes){
       try{
-         for(int i=0; i<NODES_PER_ITERATION; i++){
+         for(int i=0; i<numberOfNodes; i++){
             String uuid = UUID.randomUUID().toString();
             dump.addNode(uuid, NODE_TYPE).setProperty(INDEXED_PROPERTY, uuid);
             session.save();            
          }
       } catch (RepositoryException e){
          throw new RuntimeException(e);
-      }
+      }      
+   }
+
+   /**
+    * override when needed to define an index
+    */
+   void defineIndex() throws Exception{
    }
 }

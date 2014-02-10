@@ -26,14 +26,11 @@ import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvi
 /**
  *
  */
-public class StardardPropertyIndexOrderByInsertTest extends BaseOrderByInsertTest {
+public class StandardPropertyIndexOrderByInsertTest extends BaseOrderByInsertTest {
    private Node index = null;
    
    @Override
-   protected void beforeTest() throws Exception {
-      super.beforeTest();
-      
-      //creating the index definition
+   void defineIndex() throws Exception {
       index = new OakIndexUtils.PropertyIndex().property(INDEXED_PROPERTY).create(session);
       if(index == null) throw new RuntimeException("Error while creating the index definition. index node is null.");
       if(!PropertyIndexEditorProvider.TYPE.equals(index.getProperty(IndexConstants.TYPE_PROPERTY_NAME).getString())) throw new RuntimeException("The type of the index does not match the expected");
