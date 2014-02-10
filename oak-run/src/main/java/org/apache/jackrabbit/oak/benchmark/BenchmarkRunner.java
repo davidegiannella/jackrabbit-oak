@@ -95,6 +95,10 @@ public class BenchmarkRunner {
                         base.value(options), 256, cacheSize, mmap.value(options))
         };
         Benchmark[] allBenchmarks = new Benchmark[] {
+            new OrderedPropertyIndexOrderByInsertTest(),
+            new StardardPropertyIndexOrderByInsertTest(),
+            new NoIndexesOrderByInsertTest(),
+            new OrderByQueryTest(),
             new LoginTest(),
             new LoginLogoutTest(),
             new NamespaceTest(),

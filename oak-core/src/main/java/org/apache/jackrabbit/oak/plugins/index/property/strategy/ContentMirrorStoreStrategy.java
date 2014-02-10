@@ -24,6 +24,8 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.Set;
 
+import javax.annotation.Nonnull;
+
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
@@ -78,7 +80,7 @@ public class ContentMirrorStoreStrategy implements IndexStoreStrategy {
         }
     }
 
-    private static void remove(NodeBuilder index, String key, String value) {
+    private void remove(NodeBuilder index, String key, String value) {
         NodeBuilder builder = index.getChildNode(key);
         if (builder.exists()) {
             // Collect all builders along the given path
@@ -97,24 +99,45 @@ public class ContentMirrorStoreStrategy implements IndexStoreStrategy {
             }
 
             // Prune all index nodes that are no longer needed
-            for (NodeBuilder node : builders) {
-                if (node.getBoolean("match") || node.getChildNodeCount(1) > 0) {
-                    return;
-                } else if (node.exists()) {
-                    node.remove();
-                }
-            }
+            prune(builders);
         }
     }
 
-    private static void insert(NodeBuilder index, String key, String value) {
-        NodeBuilder builder = index.child(key);
+    /**
+     * Physically prune a list of nodes from the index
+     * 
+     * @param builders list of nodes to prune
+     */
+    void prune(final Deque<NodeBuilder> builders){
+       for (NodeBuilder node : builders) {
+          if (node.getBoolean("match") || node.getChildNodeCount(1) > 0) {
+              return;
+          } else if (node.exists()) {
+              node.remove();
+          }
+      }
+    }
+    
+    private void insert(NodeBuilder index, String key, String value) {
+//        NodeBuilder builder = index.child(key);
+        NodeBuilder builder = fetchKeyNode(index, key);
         for (String name : PathUtils.elements(value)) {
             builder = builder.child(name);
         }
         builder.setProperty("match", true);
     }
 
+    /**
+     * fetch from the index the <i>key</i> node
+     * 
+     * @param index the current index root
+     * @param key the 'key' to fetch from the repo
+     * @return the node representing the key
+     */
+    NodeBuilder fetchKeyNode(@Nonnull NodeBuilder index,@Nonnull String key){
+       return index.child(key);
+    }
+    
     public Iterable<String> query(final Filter filter, final String indexName,
             final NodeState indexMeta, final String indexStorageNodeName,
             final Iterable<String> values) {
