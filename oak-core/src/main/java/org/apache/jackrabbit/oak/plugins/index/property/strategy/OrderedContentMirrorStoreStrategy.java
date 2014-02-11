@@ -89,16 +89,28 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
    }
 
    @Override
-   void prune(Deque<NodeBuilder> builders) {
+   void prune(final NodeBuilder index, final Deque<NodeBuilder> builders){
       for(NodeBuilder node : builders){
          if(node.hasProperty("match") || node.getChildNodeCount(1) > 0){
             return;
          }else if (node.exists()) {
             if(node.hasProperty(NEXT)){
+               //TODO this pruning doens't really works because of the chicken-egg problem around node names, NodeState and NodeBuilder.
+               //TODO Fix me!
+               
                //it's an index key and we have to relink the list
                //(1) find the previous element
+               NodeState previous = findPrevious(index.getNodeState(), node.getNodeState());
+               
                //(2) find the next element
+               String next = node.getString(NEXT);
+               if(next==null) next = "";
+               
                //(3) re-link the previous to the next
+               previous.builder().setProperty(NEXT, next);
+               
+               //(4) remove the current node
+               node.remove();
             }else{
                node.remove();
             }
@@ -111,7 +123,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
       ChildNodeEntry previous = null;
       ChildNodeEntry current = null; 
       boolean found = false;
-      Iterator<ChildNodeEntry> it = (Iterator<ChildNodeEntry>) getChildNodeEntries(index).iterator();
+      Iterator<ChildNodeEntry> it = (Iterator<ChildNodeEntry>) getChildNodeEntries(index,true).iterator();
       
       while(!found && it.hasNext()){
          current = it.next();

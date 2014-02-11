@@ -482,7 +482,7 @@ public class OrderedContentMirrorStorageStrategyTest {
    }
    
    /**
-    * perform a test where the index gets updated if an already existant
+    * perform a test where the index gets updated if an already existent
     * node/key gets updated by changing the key and the key contains only 1 item.
     * 
     * Where the second key is greater than the first.
@@ -520,7 +520,7 @@ public class OrderedContentMirrorStorageStrategyTest {
     * </code>
     */
     
-   @Ignore("easing the merge") @Test public void singleKeyUpdate(){
+   @Test public void singleKeyUpdate(){
       final String N0 = KEYS[0];
       final String N1 = KEYS[1];
       final String PATH = "/content/foobar";
@@ -566,7 +566,7 @@ public class OrderedContentMirrorStorageStrategyTest {
     *    }
     * </code>
     */
-   @Ignore("easing the merge") @Test public void findPrevious(){
+   @Test public void findPrevious1ItemIndex(){
       final OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
       final String N0 = KEYS[0];
       final NodeState NODE_START = EmptyNodeState.EMPTY_NODE.builder().setProperty(NEXT, N0).getNodeState();
