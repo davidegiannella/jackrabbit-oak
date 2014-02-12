@@ -18,7 +18,8 @@
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
 import static com.google.common.collect.Sets.newHashSet;
-import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.*;
+import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.NEXT;
+import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.START;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -27,14 +28,11 @@ import static org.junit.Assert.assertTrue;
 import java.util.Iterator;
 import java.util.Set;
 
-import junit.framework.Assert;
-
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.common.base.Strings;
@@ -837,8 +835,97 @@ public class OrderedContentMirrorStorageStrategyTest {
    
    /**
     * test when the only document is deleted from an indexed key but there're still some keys left in the index
+    * 
+    * <p><i>it relies on the functionality of the store.update() for creating the index</i></p>
+    * 
+    * <code>
+    *    Stage 1
+    *    =======
+    *    
+    *    :index : {
+    *       :start : { :next = n1 },
+    *       n0 : {
+    *          :next = ,
+    *          content : {
+    *             doc0 : { match = true }
+    *          }
+    *       },
+    *       n1 : {
+    *          :next = n2,
+    *          content : {
+    *             doc1 : { match = true }
+    *          }
+    *       }
+    *       n2 : {
+    *          :next = n0,
+    *          content : {
+    *             doc2 : { match = true }
+    *          }
+    *       }
+    *    }
+    *    
+    *    Stage 2
+    *    =======
+    *    
+    *    :index : {
+    *       :start : { :next = n1 },
+    *       n0 : {
+    *          :next = ,
+    *          content : {
+    *             doc0 : { match = true }
+    *          }
+    *       },
+    *       n1 : {
+    *          :next = n0,
+    *          content : {
+    *             doc1 : { match = true }
+    *          }
+    *       }
+    *    }
+    *    
+    * </code>
     */
-   @Ignore @Test public void deleteTheOnlyDocumentInMultiKeysIndex(){
-      Assert.fail();
+   @Test public void deleteTheOnlyDocumentInMultiKeysIndex(){
+      final String PATH0 = "/content/doc0";
+      final String PATH1 = "/content/doc1";
+      final String PATH2 = "/content/doc2";
+      final String N0 = KEYS[2];
+      final String N1 = KEYS[0];
+      final String N2 = KEYS[1];
+      
+      NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
+      IndexStoreStrategy store = new OrderedContentMirrorStoreStrategy();
+      
+      //Stage 1
+      store.update(index, PATH0, EMPTY_KEY_SET, newHashSet(N0));
+      store.update(index, PATH1, EMPTY_KEY_SET, newHashSet(N1));
+      store.update(index, PATH2, EMPTY_KEY_SET, newHashSet(N2));
+      
+      //as we trust the store we skip the check and goes straight to Stage 2.
+      
+      //Stage 2
+      store.update(index, PATH2, newHashSet(N2), EMPTY_KEY_SET);
+      
+      //checking key nodes
+      assertTrue(index.hasChildNode(START));
+      assertTrue(index.hasChildNode(N0));
+      assertTrue(index.hasChildNode(N1));
+      assertFalse(index.hasChildNode(N2));
+      
+      //checking pointers
+      assertEquals(N1,index.getChildNode(START).getString(NEXT));
+      assertEquals(N0,index.getChildNode(N1).getString(NEXT));
+      assertTrue(Strings.isNullOrEmpty(index.getChildNode(N0).getString(NEXT)));
+      
+      //checking sub-nodes
+      String[] subNodes = Iterables.toArray(PathUtils.elements(PATH0), String.class);
+      assertTrue(index.getChildNode(N0).hasChildNode(subNodes[0]));
+      assertTrue(index.getChildNode(N0).getChildNode(subNodes[0]).hasChildNode(subNodes[1]));
+      assertTrue(index.getChildNode(N0).getChildNode(subNodes[0]).getChildNode(subNodes[1]).getBoolean("match"));
+      
+      subNodes = Iterables.toArray(PathUtils.elements(PATH1), String.class);
+      assertTrue(index.getChildNode(N1).hasChildNode(subNodes[0]));
+      assertTrue(index.getChildNode(N1).getChildNode(subNodes[0]).hasChildNode(subNodes[1]));
+      assertTrue(index.getChildNode(N1).getChildNode(subNodes[0]).getChildNode(subNodes[1]).getBoolean("match"));
    }
 }
