@@ -100,14 +100,16 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                
                //it's an index key and we have to relink the list
                //(1) find the previous element
-               NodeState previous = findPrevious(index.getNodeState(), node.getNodeState());
+               ChildNodeEntry previous = findPrevious(index.getNodeState(), node.getNodeState());
+               
+               log.debug("previous: {}",previous);
                
                //(2) find the next element
                String next = node.getString(NEXT);
                if(next==null) next = "";
                
                //(3) re-link the previous to the next
-               previous.builder().setProperty(NEXT, next);
+               index.getChildNode(previous.getName()).setProperty(NEXT, next);
                
                //(4) remove the current node
                node.remove();
@@ -119,7 +121,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
    }
 
    @SuppressWarnings("unchecked")
-   @Nullable NodeState findPrevious(@Nonnull final NodeState index, @Nonnull final NodeState node){
+   @Nullable ChildNodeEntry findPrevious(@Nonnull final NodeState index, @Nonnull final NodeState node){
       ChildNodeEntry previous = null;
       ChildNodeEntry current = null; 
       boolean found = false;
@@ -136,7 +138,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
          }
       }
       
-      return ((found) ? previous.getNodeState() : null);
+      return ((found) ? previous : null);
    }
    
    @Override

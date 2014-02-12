@@ -520,7 +520,7 @@ public class OrderedContentMirrorStorageStrategyTest {
     * </code>
     */
     
-   @Ignore("Easying the merge") @Test public void singleKeyUpdate(){
+   @Test public void singleKeyUpdate(){
       final String N0 = KEYS[0];
       final String N1 = KEYS[1];
       final String PATH = "/content/foobar";
@@ -550,6 +550,17 @@ public class OrderedContentMirrorStorageStrategyTest {
       store.update(index, PATH, newHashSet(N0), newHashSet(N1));
       node = index.getChildNode(START);
       assertEquals(":start should now point to N1",N1,node.getString(NEXT));
+      
+      node = index.getChildNode(N1);
+      assertTrue("N1 should exists",node.exists());
+      assertTrue("N1 should point nowhere",Strings.isNullOrEmpty(node.getString(NEXT)));
+      
+      node = node.getChildNode(NODES[0]);
+      assertTrue("N1 should have /content",node.exists());
+      
+      node = node.getChildNode(NODES[1]);
+      assertTrue("/content should contain /foobar",node.exists());
+      assertTrue("/foobar should have match=true",node.getBoolean("match"));
    }
    
    /**
@@ -577,10 +588,10 @@ public class OrderedContentMirrorStorageStrategyTest {
       index.setChildNode(N0,NODE_0);
       
       NodeState indexState = index.getNodeState();
-      NodeState previous = store.findPrevious(
+      ChildNodeEntry previous = store.findPrevious(
             indexState, 
             NODE_0
       );
-      assertEquals("the :start node is expected",NODE_START,previous);
+      assertEquals("the :start node is expected",NODE_START,previous.getNodeState());
    }
 }
