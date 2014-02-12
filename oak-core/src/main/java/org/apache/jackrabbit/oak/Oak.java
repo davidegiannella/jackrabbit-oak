@@ -60,6 +60,7 @@ import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
 import org.apache.jackrabbit.oak.spi.commit.BackgroundObserver;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.CompositeHook;
 import org.apache.jackrabbit.oak.spi.commit.ConflictHandler;
@@ -82,6 +83,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.spi.whiteboard.DefaultWhiteboard;
 import org.apache.jackrabbit.oak.spi.whiteboard.Registration;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
+import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardAware;
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -389,7 +391,8 @@ public class Oak {
         return with(new EditorProvider() {
             @Override @Nonnull
             public Editor getRootEditor(
-                    NodeState before, NodeState after, NodeBuilder builder) {
+                    NodeState before, NodeState after,
+                    NodeBuilder builder, CommitInfo info) {
                 return editor;
             }
         });
@@ -398,6 +401,9 @@ public class Oak {
     @Nonnull
     public Oak with(@Nonnull SecurityProvider securityProvider) {
         this.securityProvider = checkNotNull(securityProvider);
+        if (securityProvider instanceof WhiteboardAware) {
+            ((WhiteboardAware) securityProvider).setWhiteboard(whiteboard);
+        }
         for (SecurityConfiguration sc : securityProvider.getConfigurations()) {
             RepositoryInitializer ri = sc.getRepositoryInitializer();
             if (ri != RepositoryInitializer.DEFAULT) {
@@ -442,6 +448,10 @@ public class Oak {
     @Nonnull
     public Oak with(@Nonnull Whiteboard whiteboard) {
         this.whiteboard = checkNotNull(whiteboard);
+        if (securityProvider instanceof WhiteboardAware) {
+            ((WhiteboardAware) securityProvider).setWhiteboard(whiteboard);
+        }
+
         return this;
     }
 

@@ -34,6 +34,13 @@ public final class CommitInfo {
 
     public static final String OAK_UNKNOWN = "oak:unknown";
 
+    /**
+     * Empty commit information object. Used as a dummy object when no
+     * metadata is known (or needed) about a commit.
+     */
+    public static final CommitInfo EMPTY =
+            new CommitInfo(OAK_UNKNOWN, OAK_UNKNOWN, null);
+
     private final String sessionId;
 
     private final String userId;
@@ -42,6 +49,8 @@ public final class CommitInfo {
 
     private final long date = System.currentTimeMillis();
 
+    private final String path;
+
     /**
      * Creates a commit info for the given session and user.
      *
@@ -49,10 +58,19 @@ public final class CommitInfo {
      * @param userId The user id.
      * @param message message attached to this commit, or {@code null}
      */
-    public CommitInfo(@Nonnull String sessionId, @Nullable String userId, @Nullable String message) {
+    public CommitInfo(
+            @Nonnull String sessionId, @Nullable String userId,
+            @Nullable String message) {
+        this(sessionId, userId, message, "/");
+    }
+
+    public CommitInfo(
+            @Nonnull String sessionId, @Nullable String userId,
+            @Nullable String message, @Nonnull String path) {
         this.sessionId = checkNotNull(sessionId);
         this.userId = (userId == null) ? OAK_UNKNOWN : userId;
         this.message = message;
+        this.path = checkNotNull(path);
     }
 
     /**
@@ -86,6 +104,21 @@ public final class CommitInfo {
         return date;
     }
 
+    /**
+     * Returns the base path of this commit. All changes within this commit
+     * are expected to be located within the returned path. By default this
+     * is the root path, but a particular commit can declare a more specific
+     * base path to indicate that only changes within that subtree should
+     * be considered. Note that this value is purely informational and its
+     * interpretation depends on the kinds of commit hooks and observers
+     * present on the system.
+     *
+     * @return base path of this commit
+     */
+    public String getPath() {
+        return path;
+    }
+
     //------------------------------------------------------------< Object >--
 
     @Override
@@ -97,7 +130,8 @@ public final class CommitInfo {
             return sessionId.equals(that.sessionId)
                     && userId.equals(that.userId)
                     && Objects.equal(this.message, that.message)
-                    && this.date == that.date;
+                    && this.date == that.date
+                    && path.equals(that.path);
         } else {
             return false;
         }
@@ -105,7 +139,7 @@ public final class CommitInfo {
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(sessionId, userId, message, date);
+        return Objects.hashCode(sessionId, userId, message, date, path);
     }
 
     @Override
@@ -115,6 +149,7 @@ public final class CommitInfo {
                 .add("userId", userId)
                 .add("userData", message)
                 .add("date", date)
+                .add("path", path)
                 .toString();
     }
 

@@ -55,15 +55,18 @@ import org.apache.jackrabbit.oak.spi.security.user.UserConfiguration;
 import org.apache.jackrabbit.oak.spi.security.user.UserConstants;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardAuthorizableActionProvider;
+import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardAware;
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardRestrictionProvider;
 import org.osgi.framework.ServiceReference;
 import org.osgi.service.component.ComponentContext;
 
 import com.google.common.collect.ImmutableMap;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 @Component(immediate = true)
 @Service
-public class SecurityProviderImpl implements SecurityProvider {
+public class SecurityProviderImpl implements SecurityProvider, WhiteboardAware {
 
     @Reference(bind = "bindAuthorizationConfiguration",
             cardinality = ReferenceCardinality.MANDATORY_UNARY, // FIXME OAK-1268
@@ -110,6 +113,8 @@ public class SecurityProviderImpl implements SecurityProvider {
 
     private ConfigurationParameters configuration;
 
+    private Whiteboard whiteboard;
+
     /**
      * Default constructor used in OSGi environments.
      */
@@ -121,7 +126,8 @@ public class SecurityProviderImpl implements SecurityProvider {
      * Constructor used for non OSGi environments.
      * @param configuration security configuration
      */
-    public SecurityProviderImpl(ConfigurationParameters configuration) {
+    public SecurityProviderImpl(@Nonnull ConfigurationParameters configuration) {
+        checkNotNull(configuration);
         this.configuration = configuration;
 
         authenticationConfiguration = new AuthenticationConfigurationImpl(this);
@@ -130,6 +136,16 @@ public class SecurityProviderImpl implements SecurityProvider {
         principalConfiguration = new PrincipalConfigurationImpl(this);
         privilegeConfiguration = new PrivilegeConfigurationImpl();
         tokenConfiguration = new TokenConfigurationImpl(this);
+    }
+
+    @Override
+    public void setWhiteboard(@Nonnull Whiteboard whiteboard) {
+        this.whiteboard = whiteboard;
+    }
+
+    @Override
+    public Whiteboard getWhiteboard() {
+        return whiteboard;
     }
 
     @Nonnull
@@ -183,7 +199,7 @@ public class SecurityProviderImpl implements SecurityProvider {
 
     @Activate
     protected void activate(ComponentContext context) throws Exception {
-        Whiteboard whiteboard = new OsgiWhiteboard(context.getBundleContext());
+        whiteboard = new OsgiWhiteboard(context.getBundleContext());
         authorizableActionProvider.start(whiteboard);
         restrictionProvider.start(whiteboard);
     }
