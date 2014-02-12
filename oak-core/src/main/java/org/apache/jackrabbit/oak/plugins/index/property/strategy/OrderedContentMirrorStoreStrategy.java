@@ -26,6 +26,7 @@ import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.state.AbstractChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -38,9 +39,22 @@ import com.google.common.base.Strings;
 
 public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrategy {
    private final static Logger log = LoggerFactory.getLogger(OrderedContentMirrorStoreStrategy.class);
+   
+   /**
+    * the property linking to the next node
+    */
    public final static String NEXT = ":next";
+   
+   /**
+    * node that works as root of the index (start point or 0 element)
+    */
    public final static String START = ":start";
-
+   
+   /**
+    * a NodeState used for easy creating of an empty :start
+    */
+   public final static NodeState EMPTY_START_NODE = EmptyNodeState.EMPTY_NODE.builder().setProperty(NEXT, "").getNodeState(); 
+   
    @Override
    NodeBuilder fetchKeyNode(@Nonnull NodeBuilder index, @Nonnull String key) {
       log.debug("fetchKeyNode() - index: {} - key: {}",index,key);
@@ -148,7 +162,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
    }
    
    /**
-    * retrive an Iterable for going through the index in the right order with potentially the :start node
+    * Retrieve an Iterable for going through the index in the right order with potentially the :start node
     * 
     * @param index the root of the index (:index)
     * @param includeStart true if :start should be included as first element
@@ -156,15 +170,15 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     */
    @Nonnull Iterable<? extends ChildNodeEntry> getChildNodeEntries(@Nonnull final NodeState index, final boolean includeStart){
       Iterable<? extends ChildNodeEntry> cne = null;
-      NodeState start = index.getChildNode(START);
+      final NodeState start = index.getChildNode(START);
       
-      if(!start.exists() || Strings.isNullOrEmpty(start.getString(NEXT)) && !includeStart) {
+      if((!start.exists() || Strings.isNullOrEmpty(start.getString(NEXT))) && !includeStart) {
          //if the property is not there or is empty it means we're empty
          cne = Collections.emptyList();
       }else{
          cne = new Iterable<ChildNodeEntry>(){
             private NodeState _index = index;
-            private NodeState _start = _index.getChildNode(START);
+            private NodeState _start = ((includeStart && !start.exists())?EMPTY_START_NODE:start);
             private NodeState current = _start;
             private boolean _includeStart = includeStart;
 
