@@ -302,9 +302,29 @@ public class OrderedContentMirrorStorageStrategyTest {
     * test the iteration over an empty list when the :start is required.
     * In this case :start should always be returned
     * 
+    * <code>
+    *    :index : {
+    *       :start : { :next= }
+    *    }
+    * </code>
     */
-   @Ignore("easing the merge") @Test public void childNodeEntriesNoItemsWithStart(){
-      Assert.fail("develop me");
+   @Test public void childNodeEntriesNoItemsWithStart(){
+      NodeState NODE_START = EmptyNodeState.EMPTY_NODE.builder().setProperty(NEXT, "").getNodeState();
+      NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
+      OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
+      
+      //setting-up the index
+      index.setChildNode(START, NODE_START);
+      
+      Iterable<? extends ChildNodeEntry> children = store.getChildNodeEntries(index.getNodeState(), true);
+      assertEquals("Wrong size of Iterable",1,Iterators.size(children.iterator()));
+      
+      Iterator<? extends ChildNodeEntry> it = store.getChildNodeEntries(index.getNodeState(), true).iterator();
+      assertTrue("We should have at least 1 element",it.hasNext());
+      ChildNodeEntry entry = it.next();
+      assertEquals(":start is expected",START,entry.getName());
+      assertEquals("wrong node returned",NODE_START,entry.getNodeState());
+      assertFalse("We should be at the end of the list",it.hasNext());
    }
    
    

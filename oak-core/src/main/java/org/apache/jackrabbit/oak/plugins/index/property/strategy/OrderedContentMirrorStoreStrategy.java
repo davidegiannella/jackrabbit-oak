@@ -33,10 +33,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Iterators;
 
 
 public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrategy {
@@ -95,24 +92,13 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             return;
          }else if (node.exists()) {
             if(node.hasProperty(NEXT)){
-               //TODO this pruning doens't really works because of the chicken-egg problem around node names, NodeState and NodeBuilder.
-               //TODO Fix me!
-               
                //it's an index key and we have to relink the list
-               //(1) find the previous element
-               ChildNodeEntry previous = findPrevious(index.getNodeState(), node.getNodeState());
-               
+               ChildNodeEntry previous = findPrevious(index.getNodeState(), node.getNodeState()); //(1) find the previous element
                log.debug("previous: {}",previous);
-               
-               //(2) find the next element
-               String next = node.getString(NEXT);
+               String next = node.getString(NEXT); //(2) find the next element
                if(next==null) next = "";
-               
-               //(3) re-link the previous to the next
-               index.getChildNode(previous.getName()).setProperty(NEXT, next);
-               
-               //(4) remove the current node
-               node.remove();
+               index.getChildNode(previous.getName()).setProperty(NEXT, next); //(3) re-link the previous to the next
+               node.remove(); //(4) remove the current node
             }else{
                node.remove();
             }
@@ -172,7 +158,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
       Iterable<? extends ChildNodeEntry> cne = null;
       NodeState start = index.getChildNode(START);
       
-      if(!start.exists() || Strings.isNullOrEmpty(start.getString(NEXT))) {
+      if(!start.exists() || Strings.isNullOrEmpty(start.getString(NEXT)) && !includeStart) {
          //if the property is not there or is empty it means we're empty
          cne = Collections.emptyList();
       }else{
@@ -188,7 +174,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 
                   @Override
                   public boolean hasNext() {
-                     return !Strings.isNullOrEmpty(current.getString(NEXT));
+                     return (
+                              (_includeStart && _start.equals(current)) || 
+                              (!_includeStart && !Strings.isNullOrEmpty(current.getString(NEXT)))
+                     );
                   }
 
                   @Override
@@ -197,7 +186,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                      if(_includeStart && _start.equals(current)){
                         _cne = new OrderedChildNodeEntry(START, current);
                         _includeStart = false; //let's set it to false. We just included it.
-//                        current = _index.getChildNode(current.getString(NEXT));
                      } else {
                         if(hasNext()){
                            final String name = current.getString(NEXT);
