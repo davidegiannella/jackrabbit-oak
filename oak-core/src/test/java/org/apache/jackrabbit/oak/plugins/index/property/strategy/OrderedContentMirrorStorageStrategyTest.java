@@ -28,13 +28,13 @@ import static org.junit.Assert.assertTrue;
 import java.util.Iterator;
 import java.util.Set;
 
+import junit.framework.Assert;
+
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.common.base.Strings;
@@ -625,5 +625,114 @@ public class OrderedContentMirrorStorageStrategyTest {
             NODE_0
       );
       assertEquals("the :start node is expected",NODE_START,previous.getNodeState());
+   }
+   
+   /**
+    * test the use case where a document change the indexed property. For example document that change author.
+    * 
+    * <p><i>it relies on the functionality of the store.update() for creating the index</i></p>
+    * 
+    * <code>
+    *    Stage 1
+    *    =======
+    *    
+    *    :index : {
+    *       :start : { :next = n0 },
+    *       n0 : {
+    *          :next = ,
+    *          content : {
+    *             one { match=true },
+    *             two { match=true }
+    *          }
+    *       }
+    *    }
+    *    
+    *    Stage 2
+    *    =======
+    *    
+    *    :index : {
+    *       :start : { :next = n0 },
+    *       n0 : {
+    *          :next = n1,
+    *          content : {
+    *             one : { match = true }
+    *          }
+    *       },
+    *       n1 : {
+    *          :next = ,
+    *          content : {
+    *             two : { match = true }
+    *          }
+    *       }
+    *    }
+    * </code>
+    */
+   @Test public void documentChangingKey(){
+      final String PATH0 = "/content/one";
+      final String PATH1 = "/content/two";
+      final String N0 = KEYS[0];
+      final String N1 = KEYS[1];
+      NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
+      IndexStoreStrategy store = new OrderedContentMirrorStoreStrategy();
+      
+      //Stage 1 - initialising the index
+      store.update(index, PATH0, EMPTY_KEY_SET, newHashSet(N0));
+      store.update(index, PATH1, EMPTY_KEY_SET, newHashSet(N0));
+      
+      //ensuring the right structure
+      assertTrue(index.hasChildNode(START));
+      assertTrue(index.hasChildNode(N0));
+      assertFalse(index.hasChildNode(N1));
+      
+      NodeBuilder node = index.getChildNode(START);
+      assertEquals(":start pointing to wrong node", N0,node.getString(NEXT));
+      
+      node = index.getChildNode(N0);
+      assertTrue("N0 should go nowhere", Strings.isNullOrEmpty(node.getString(NEXT)));
+      
+      //checking the first document
+      String[] path = Iterables.toArray(PathUtils.elements(PATH0), String.class);
+      node = node.getChildNode(path[0]);
+      assertTrue(node.exists());
+      node = node.getChildNode(path[1]);
+      assertTrue(node.exists());
+      assertTrue(node.getBoolean("match"));
+      
+      path = Iterables.toArray(PathUtils.elements(PATH0), String.class);
+      node = index.getChildNode(N0).getChildNode(path[0]);
+      assertTrue(node.exists());
+      node = node.getChildNode(path[1]);
+      assertTrue(node.exists());
+      assertTrue(node.getBoolean("match"));
+      
+      //Stage 2
+      store.update(index, PATH1, newHashSet(N0), newHashSet(N1));
+      assertTrue(index.hasChildNode(START));
+      assertTrue(index.hasChildNode(N0));
+      assertTrue(index.hasChildNode(N1));
+      
+      node = index.getChildNode(START);
+      assertEquals(":start pointing to wrong node", N0,node.getString(NEXT));
+      
+      node = index.getChildNode(N0);
+      assertEquals(N1,node.getString(NEXT));
+      path = Iterables.toArray(PathUtils.elements(PATH0), String.class);
+      node = node.getChildNode(path[0]);
+      assertTrue(node.exists());
+      node = node.getChildNode(path[1]);
+      assertTrue(node.exists());
+      assertTrue(node.getBoolean("match"));
+      path = Iterables.toArray(PathUtils.elements(PATH1), String.class);
+      node = index.getChildNode(N0).getChildNode(path[0]);//we know both the documents share the same /content
+      assertFalse("/content/two should no longer be under N0",node.hasChildNode(path[1]));
+      
+      node = index.getChildNode(N1);
+      assertTrue("N1 should point nowhere",Strings.isNullOrEmpty(node.getString(NEXT)));
+      path = Iterables.toArray(PathUtils.elements(PATH1), String.class);
+      node = node.getChildNode(path[0]);
+      assertTrue(node.exists());
+      node = node.getChildNode(path[1]);
+      assertTrue(node.exists());
+      assertTrue(node.getBoolean("match"));
    }
 }
