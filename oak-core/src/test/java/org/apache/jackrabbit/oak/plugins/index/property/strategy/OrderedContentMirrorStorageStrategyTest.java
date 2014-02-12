@@ -18,8 +18,7 @@
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
 import static com.google.common.collect.Sets.newHashSet;
-import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.NEXT;
-import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.START;
+import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -35,6 +34,7 @@ import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.common.base.Strings;
@@ -734,5 +734,62 @@ public class OrderedContentMirrorStorageStrategyTest {
       node = node.getChildNode(path[1]);
       assertTrue(node.exists());
       assertTrue(node.getBoolean("match"));
+   }
+   
+   /**
+    * test when a document is deleted and is the only one under the indexed key
+    * 
+    * <p><i>it relies on the functionality of the store.update() for creating the index</i></p>
+    * 
+    * <code>
+    *    Stage 1
+    *    =======
+    *    
+    *    :index : {
+    *       :start : { :next = n0 },
+    *       n0 : {
+    *          :next = ,
+    *          sampledoc : { match = true }
+    *       }
+    *    }
+    *    
+    *    Stage 2
+    *    =======
+    *    
+    *    :index : {
+    *       :start : { :next = }
+    *    }
+    * </code>
+    */
+   @Test public void deleteTheOnlyDocument(){
+      final String N0 = KEYS[0];
+      final String PATH = "/sampledoc";
+      NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
+      IndexStoreStrategy store = new OrderedContentMirrorStoreStrategy();
+      
+      //Stage 1 - initialising the index
+      store.update(index, PATH, EMPTY_KEY_SET, newHashSet(N0));
+      
+      //we assume it works and therefore not checking the status of the index
+      //let's go straight to Stage 2
+      
+      //Stage 2
+      store.update(index, PATH, newHashSet(N0), EMPTY_KEY_SET);
+      assertFalse("The node should have been removed",index.hasChildNode(N0));
+      assertTrue("as the index should be empty, :start should point nowhere", Strings.isNullOrEmpty(index.getChildNode(START).getString(NEXT)));
+   }
+   
+   /**
+    * test when the document is deleted but there're still some documents left under the indexed key
+    */
+   @Ignore @Test public void deleteOneOfTheDocuments(){
+      Assert.fail();
+   }
+   
+   /**
+    * test when the only document is deleted from an indexed key but there're still some keys left in the index
+    */
+   @Ignore @Test public void deleteTheOnlyDocumentInMultiKeysIndex(){
+      Assert.fail();
    }
 }
