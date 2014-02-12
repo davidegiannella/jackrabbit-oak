@@ -781,9 +781,58 @@ public class OrderedContentMirrorStorageStrategyTest {
    
    /**
     * test when the document is deleted but there're still some documents left under the indexed key
+    * 
+    * <p><i>it relies on the functionality of the store.update() for creating the index</i></p>
+    * 
+    * <code>
+    *    Stage 1
+    *    =======
+    *    
+    *    :index : {
+    *       :start : { :next = n0 },
+    *       n0 : {
+    *          :next = ,
+    *          doc1 : { match=true },
+    *          doc2 : { match=true }
+    *       }
+    *    }
+    *    
+    *    Stage 2
+    *    =======
+    *    
+    *    :index : {
+    *       :start : { :next = n0 },
+    *       n0 : {
+    *          :next  =,
+    *          doc2 : { match = true }
+    *       }
+    *    }
+    * </code>
     */
-   @Ignore @Test public void deleteOneOfTheDocuments(){
-      Assert.fail();
+   @Test public void deleteOneOfTheDocuments(){
+      final String N0 = KEYS[0];
+      final String DOC1 = "doc1";
+      final String DOC2 = "doc2";
+      final String PATH1 = "/" + DOC1;
+      final String PATH2 = "/" + DOC2;
+      NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
+      IndexStoreStrategy store = new OrderedContentMirrorStoreStrategy();
+      
+      store.update(index, PATH1, EMPTY_KEY_SET, newHashSet(N0));
+      store.update(index, PATH2, EMPTY_KEY_SET, newHashSet(N0));
+      
+      //we trust the store at this point and skip a double-check. Let's move to Stage 2!
+      
+      store.update(index, PATH1, newHashSet(N0), EMPTY_KEY_SET);
+      
+      assertTrue(index.hasChildNode(START));
+      assertTrue(index.hasChildNode(N0));
+      assertEquals(":start should still point to N0",N0,index.getChildNode(START).getString(NEXT));
+      assertTrue("n0 should point nowhere",Strings.isNullOrEmpty(index.getChildNode(N0).getString(NEXT)));
+      
+      assertFalse(index.getChildNode(N0).hasChildNode(DOC1));
+      assertTrue(index.getChildNode(N0).hasChildNode(DOC2));
+      assertTrue(index.getChildNode(N0).getChildNode(DOC2).getBoolean("match"));
    }
    
    /**
