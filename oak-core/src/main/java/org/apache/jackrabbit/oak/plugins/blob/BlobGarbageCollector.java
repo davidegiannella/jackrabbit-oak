@@ -14,18 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.mk.blobs;
+package org.apache.jackrabbit.oak.plugins.blob;
 
 /**
- * Tests the MemoryBlobStore implementation.
+ * Interface for blob garbage collector
  */
-public class MemoryBlobStoreTest extends AbstractBlobStoreTest {
+public interface BlobGarbageCollector {
 
-    @Override
-    public void setUp() throws Exception {
-        store = new MemoryBlobStore();
-        store.setBlockSize(128);
-        store.setBlockSizeMin(48);
-    }    
-
+    /**
+     * Collect garbage blobs from the passed node store instance.
+     * 
+     * @throws Exception
+     */
+    void collectGarbage() throws Exception;
 }
