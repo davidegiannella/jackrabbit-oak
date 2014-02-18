@@ -10,8 +10,7 @@ import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
-public class OrderedPropertyIndexEditorProvider implements IndexEditorProvider {
-   public final static String TYPE = "ordered";
+public class OrderedPropertyIndexEditorProvider implements IndexEditorProvider, OrderedIndex {
    
    @Override
    @CheckForNull

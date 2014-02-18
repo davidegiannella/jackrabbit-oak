@@ -118,7 +118,7 @@ public class PropertyIndexLookup {
         return getStrategy(indexMeta).query(filter, propertyName, indexMeta, encode(value));
     }
         
-    private static IndexStoreStrategy getStrategy(NodeState indexMeta) {
+    IndexStoreStrategy getStrategy(NodeState indexMeta) {
         if (indexMeta.getBoolean(IndexConstants.UNIQUE_PROPERTY_NAME)) {
             return UNIQUE;
         }

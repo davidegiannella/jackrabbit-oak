@@ -120,6 +120,15 @@ class PropertyIndex implements QueryIndex {
         return "property";
     }
 
+    /**
+     * return the proper implementaion of the Lookup
+     * @param root
+     * @return
+     */
+    PropertyIndexLookup getLookup(NodeState root){
+       return new PropertyIndexLookup(root);
+    }
+    
     @Override
     public double getCost(Filter filter, NodeState root) {
         if (filter.getFullTextConstraint() != null) {
@@ -127,7 +136,7 @@ class PropertyIndex implements QueryIndex {
             return Double.POSITIVE_INFINITY;
         }
 
-        PropertyIndexLookup lookup = new PropertyIndexLookup(root);
+        PropertyIndexLookup lookup = getLookup(root);
         for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
             String propertyName = PathUtils.getName(pr.propertyName);
             // TODO support indexes on a path
@@ -157,7 +166,7 @@ class PropertyIndex implements QueryIndex {
     public Cursor query(Filter filter, NodeState root) {
         Iterable<String> paths = null;
 
-        PropertyIndexLookup lookup = new PropertyIndexLookup(root);
+        PropertyIndexLookup lookup = getLookup(root);
         int depth = 1;
         for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
             String propertyName = PathUtils.getName(pr.propertyName);
@@ -202,7 +211,7 @@ class PropertyIndex implements QueryIndex {
     public String getPlan(Filter filter, NodeState root) {
         StringBuilder buff = new StringBuilder("property");
         StringBuilder notIndexed = new StringBuilder();
-        PropertyIndexLookup lookup = new PropertyIndexLookup(root);
+        PropertyIndexLookup lookup = getLookup(root);
         for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
             String propertyName = PathUtils.getName(pr.propertyName);
             // TODO support indexes on a path
