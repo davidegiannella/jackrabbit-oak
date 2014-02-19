@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.apache.jackrabbit</groupId>
     <artifactId>oak-parent</artifactId>
-    <version>0.17-SNAPSHOT</version>
+    <version>0.18-SNAPSHOT</version>
     <relativePath>../oak-parent/pom.xml</relativePath>
   </parent>
 
@@ -44,7 +44,11 @@
             <Export-Package>
               org.apache.jackrabbit.oak.plugins.index.solr.http
             </Export-Package>
-            <Embed-Dependency>solr-solrj</Embed-Dependency>
+              <Import-Package>
+                  !org.apache.solr.cloud.*,
+                  *
+              </Import-Package>
+              <DynamicImport-Package>*</DynamicImport-Package>
           </instructions>
         </configuration>
       </plugin>
