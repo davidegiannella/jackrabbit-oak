@@ -53,12 +53,26 @@ import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.apache.jackrabbit.oak.util.NodeUtil;
 import org.h2.index.IndexCondition;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableMap;
 
 public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
+   /**
+    * the property used by the index
+    */
    public final static String ORDERED_PROPERTY = "foo";
+   
+   /**
+    * number of nodes to create for testing.
+    * 
+    * It has been found during development that in some cases the order of the nodes
+    * creation within the persistence where the actual expected order.
+    * 
+    * The higher the value the lower the chance for this to happen.
+    */
+   private final static int NUMBER_OF_NODES = 50; 
 
    /**
     * convenience orderable object that represet a tuple of values and paths
@@ -216,29 +230,34 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
    @Test public void query() throws CommitFailedException, ParseException, RepositoryException{
       setTravesalEnabled(false);
       
-      Tree tree = root.getTree("/");
+      Tree rTree = root.getTree("/");
 
       IndexUtils.createIndexDefinition(
-            new NodeUtil(tree.getChild(IndexConstants.INDEX_DEFINITIONS_NAME)),
+            new NodeUtil(rTree.getChild(IndexConstants.INDEX_DEFINITIONS_NAME)),
             "indextest", 
             false, 
             new String[] { ORDERED_PROPERTY },
-            null
+            null,
+            OrderedIndex.TYPE
        );
       root.commit();
 
-      Tree test = tree.addChild("test");
-      List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(10),test);
+      Tree test = rTree.addChild("test");
+      List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES),test);
       root.commit();
+      
+      System.out.println(root.getTree("/oak:index/indextest"));
       
       //querying
       Iterator<? extends ResultRow> results;
       results = executeQuery(
-            String.format("SELECT * from [%s] WHERE foo IS NOT NULL", NT_UNSTRUCTURED , ORDERED_PROPERTY), 
+            String.format("SELECT * from [%s] WHERE foo IS NOT NULL", NT_UNSTRUCTURED), 
+//            String.format("EXPLAIN SELECT * from [%s] WHERE foo IS NOT NULL", NT_UNSTRUCTURED), 
 //            String.format("SELECT * from [%s] WHERE foo IS NOT NULL ORDER BY %s", NT_UNSTRUCTURED , ORDERED_PROPERTY), 
             SQL2, 
             null
       ).getRows().iterator();
+//      System.out.println(results.next());
       assertRightOrder(nodes, results);
 
       setTravesalEnabled(true);
@@ -251,11 +270,12 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
     * @param resultset the resultes
     */
    private void assertRightOrder(@Nonnull final List<ValuePathTuple> orderedSequence, @Nonnull final Iterator<? extends ResultRow> resultset){
-      assertTrue(resultset.hasNext());
+      assertTrue("No results returned", resultset.hasNext());
       int counter = 0;
       while(resultset.hasNext() && counter < orderedSequence.size()){
          ResultRow row = resultset.next();
-         assertEquals(orderedSequence.get(counter++).path,row.getPath());
+         assertEquals(String.format("Wrong path at the element '%d'",counter), orderedSequence.get(counter).path,row.getPath());
+         counter++;
       }
    }
 }
