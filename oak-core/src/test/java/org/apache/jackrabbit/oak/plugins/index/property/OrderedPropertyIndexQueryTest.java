@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import javax.annotation.Nonnull;
 import javax.jcr.RepositoryException;
 
 import net.sf.cglib.proxy.ProxyRefDispatcher;
@@ -59,6 +60,12 @@ import com.google.common.collect.ImmutableMap;
 public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
    public final static String ORDERED_PROPERTY = "foo";
 
+   /**
+    * convenience orderable object that represet a tuple of values and paths
+    * 
+    * where the values are the indexed keys from the index and the paths are the path 
+    * which hold the key
+    */
    private class ValuePathTuple implements Comparable<ValuePathTuple>{
       private String value;
       private String path;
@@ -120,7 +127,10 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
       }
       
    }
-   
+
+   /**
+    * testing for asserting the right comparison behaviour of the custom class
+    */
    @Test public void valuePathTupleComparison(){
       try{
          new ValuePathTuple("value", "path").compareTo(null);
@@ -136,7 +146,7 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
 
       assertEquals(-1,(new ValuePathTuple("value000", "/test/n1")).compareTo(new ValuePathTuple("value001", "/test/n0")));
       assertEquals(1,(new ValuePathTuple("value001", "/test/n0")).compareTo(new ValuePathTuple("value000", "/test/n1")));
-}
+   }
    
    @Override
    protected ContentRepository createRepository() {
@@ -167,6 +177,7 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
 
    /**
     * generate a list of values to be used as ordered set
+    * 
     * @param amount
     * @return
     */
@@ -180,6 +191,14 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
       return values;
    }
 
+   /**
+    * convenience method that adds a bunch of nodes in random order and return the order in which 
+    * they should be presented by the OrderedIndex
+    * 
+    * @param values the values of the property that will be indexed
+    * @param father the father under which add the ndoes
+    * @return
+    */
    private List<ValuePathTuple> addChildNodes(final List<String> values, final Tree father){
       List<ValuePathTuple> nodes = new ArrayList<ValuePathTuple>();
       Random rnd = new Random();
@@ -210,31 +229,33 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
 
       Tree test = tree.addChild("test");
       List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(10),test);
-      for(ValuePathTuple n : nodes){
-         System.out.println(String.format("%s - %s",n.value,n.path));
-      }
+      root.commit();
       
-      
-////      Tree forth = child(test,"d",ORDERED_PROPERTY,ORDERED_VALUES[3]);
-//      Tree second = child(test,"b",ORDERED_PROPERTY,ORDERED_VALUES[1]);
-//      root.commit();
-////      Tree third = child(test,"c",ORDERED_PROPERTY,ORDERED_VALUES[2]);
-//      Tree first = child(test,"a",ORDERED_PROPERTY,ORDERED_VALUES[0]);
-//      root.commit();
-//
-//      //querying
-//      Iterator<? extends ResultRow> results;
-//      results = executeQuery(
-//            String.format("SELECT * from [%s] WHERE foo IS NOT NULL", NT_UNSTRUCTURED , ORDERED_PROPERTY), 
-////            String.format("SELECT * from [%s] WHERE foo IS NOT NULL ORDER BY %s", NT_UNSTRUCTURED , ORDERED_PROPERTY), 
-//            SQL2, 
-//            null
-//      ).getRows().iterator();
-//      assertTrue("two elements expected",results.hasNext());
-//      System.out.println(first.getPath());
-//      assertEquals("Wrong item found. Order not respected.",first.getPath(),results.next().getPath());
-      
+      //querying
+      Iterator<? extends ResultRow> results;
+      results = executeQuery(
+            String.format("SELECT * from [%s] WHERE foo IS NOT NULL", NT_UNSTRUCTURED , ORDERED_PROPERTY), 
+//            String.format("SELECT * from [%s] WHERE foo IS NOT NULL ORDER BY %s", NT_UNSTRUCTURED , ORDERED_PROPERTY), 
+            SQL2, 
+            null
+      ).getRows().iterator();
+      assertRightOrder(nodes, results);
 
       setTravesalEnabled(true);
+   }
+   
+   /**
+    * assert the right order of the returned resultset
+    * 
+    * @param orderedSequence the right order in which the resultset should be returned
+    * @param resultset the resultes
+    */
+   private void assertRightOrder(@Nonnull final List<ValuePathTuple> orderedSequence, @Nonnull final Iterator<? extends ResultRow> resultset){
+      assertTrue(resultset.hasNext());
+      int counter = 0;
+      while(resultset.hasNext() && counter < orderedSequence.size()){
+         ResultRow row = resultset.next();
+         assertEquals(orderedSequence.get(counter++).path,row.getPath());
+      }
    }
 }
