@@ -16,9 +16,7 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
-import static junit.framework.Assert.assertEquals;
-import static junit.framework.Assert.assertTrue;
-import static junit.framework.Assert.fail;
+import static junit.framework.Assert.*;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 
@@ -29,14 +27,17 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import javax.annotation.Nonnull;
 import javax.jcr.RepositoryException;
 
+import org.apache.derby.iapi.sql.execute.ExecIndexRow;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
+import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.ResultRow;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
@@ -44,9 +45,12 @@ import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.AbstractQueryTest;
+import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.apache.jackrabbit.oak.util.NodeUtil;
 import org.junit.Test;
+
+import com.google.common.collect.ImmutableMap;
 
 public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
     /**
@@ -154,20 +158,20 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
         assertEquals(1, (new ValuePathTuple("value1", "path")).compareTo(new ValuePathTuple("value", "path")));
         assertEquals(1, (new ValuePathTuple("value1", "path1")).compareTo(new ValuePathTuple("value1", "path")));
 
-        assertEquals(-1, (new ValuePathTuple("value000", "/test/n1")).compareTo(new ValuePathTuple("value001",
-                        "/test/n0")));
-        assertEquals(1, (new ValuePathTuple("value001", "/test/n0")).compareTo(new ValuePathTuple("value000",
-                        "/test/n1")));
+        assertEquals(-1,
+            (new ValuePathTuple("value000", "/test/n1")).compareTo(new ValuePathTuple("value001", "/test/n0")));
+        assertEquals(1,
+            (new ValuePathTuple("value001", "/test/n0")).compareTo(new ValuePathTuple("value000", "/test/n1")));
     }
 
     @Override
     protected ContentRepository createRepository() {
         return new Oak().with(new InitialContent())
-                        .with(new OpenSecurityProvider())
-                        // .with(new PropertyIndexProvider())
-                        // .with(new PropertyIndexEditorProvider())
-                        .with(new OrderedPropertyIndexProvider()).with(new OrderedPropertyIndexEditorProvider())
-                        .createContentRepository();
+            .with(new OpenSecurityProvider())
+            // .with(new PropertyIndexProvider())
+            // .with(new PropertyIndexEditorProvider())
+            .with(new OrderedPropertyIndexProvider()).with(new OrderedPropertyIndexEditorProvider())
+            .createContentRepository();
     }
 
     /**
@@ -237,36 +241,8 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
     protected void createTestIndexNode() throws Exception {
         Tree index = root.getTree("/");
         IndexUtils.createIndexDefinition(new NodeUtil(index.getChild(IndexConstants.INDEX_DEFINITIONS_NAME)),
-                        TEST_INDEX_NAME, false, new String[] { ORDERED_PROPERTY }, null, OrderedIndex.TYPE);
+            TEST_INDEX_NAME, false, new String[] { ORDERED_PROPERTY }, null, OrderedIndex.TYPE);
         root.commit();
-    }
-
-    /**
-     * Query the index for retrieving all the entries
-     * 
-     * @throws CommitFailedException
-     * @throws ParseException
-     * @throws RepositoryException
-     */
-    @Test
-    public void queryAllEntries() throws CommitFailedException, ParseException, RepositoryException {
-        setTravesalEnabled(false);
-
-        // index automatically created by the framework: {@code
-        // createTestIndexNode()}
-
-        Tree rTree = root.getTree("/");
-        Tree test = rTree.addChild("test");
-        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test);
-        root.commit();
-
-        // querying
-        Iterator<? extends ResultRow> results;
-        results = executeQuery(String.format("SELECT * from [%s] WHERE foo IS NOT NULL", NT_UNSTRUCTURED), SQL2, null)
-                        .getRows().iterator();
-        assertRightOrder(nodes, results);
-
-        setTravesalEnabled(true);
     }
 
     /**
@@ -285,8 +261,70 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
         while (resultset.hasNext() && counter < orderedSequence.size()) {
             ResultRow row = resultset.next();
             assertEquals(String.format("Wrong path at the element '%d'", counter), orderedSequence.get(counter).path,
-                            row.getPath());
+                row.getPath());
             counter++;
         }
+    }
+
+    /**
+     * Query the index for retrieving all the entries
+     * 
+     * @throws CommitFailedException
+     * @throws ParseException
+     * @throws RepositoryException
+     */
+    @Test
+    public void queryAllEntries() throws CommitFailedException, ParseException, RepositoryException {
+        setTravesalEnabled(false);
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test);
+        root.commit();
+
+        // querying
+        Iterator<? extends ResultRow> results;
+        results = executeQuery(String.format("SELECT * from [%s] WHERE foo IS NOT NULL", NT_UNSTRUCTURED), SQL2, null)
+            .getRows().iterator();
+        assertRightOrder(nodes, results);
+
+        setTravesalEnabled(true);
+    }
+
+    /**
+     * test the index for returning the items related to a single key
+     * @throws CommitFailedException 
+     * @throws ParseException 
+     */
+    @Test
+    public void queryOneKey() throws CommitFailedException, ParseException{
+        setTravesalEnabled(false);
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+        
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test);
+        root.commit();
+        
+        ValuePathTuple searchfor = nodes.get((int)NUMBER_OF_NODES/2); //getting the middle of the random list of nodes.
+        Map<String, PropertyValue> filter = ImmutableMap.of(
+                ORDERED_PROPERTY, PropertyValues.newString(searchfor.value)
+            );
+        String query = "SELECT * FROM [%s] WHERE %s=$%s";
+        Iterator<? extends ResultRow> results = executeQuery(
+            String.format(query,NT_UNSTRUCTURED,ORDERED_PROPERTY,ORDERED_PROPERTY),
+            SQL2,
+            filter
+            ).getRows().iterator();
+        assertTrue("one element is expected",results.hasNext());
+        assertEquals("wrong path returned",searchfor.path,results.next().getPath());
+        assertFalse("there should be not any more items",results.hasNext());
+        
+        setTravesalEnabled(true);
     }
 }
