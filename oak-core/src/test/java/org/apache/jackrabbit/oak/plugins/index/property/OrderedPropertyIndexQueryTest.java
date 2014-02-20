@@ -16,7 +16,10 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
-import static junit.framework.Assert.*;
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertFalse;
+import static junit.framework.Assert.assertTrue;
+import static junit.framework.Assert.fail;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 
@@ -33,7 +36,6 @@ import java.util.Random;
 import javax.annotation.Nonnull;
 import javax.jcr.RepositoryException;
 
-import org.apache.derby.iapi.sql.execute.ExecIndexRow;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
@@ -61,8 +63,8 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
     /**
      * number of nodes to create for testing.
      * 
-     * It has been found during development that in some cases the order of the
-     * nodes creation within the persistence where the actual expected order.
+     * It has been found during development that in some cases the order of the nodes creation within the persistence
+     * where the actual expected order.
      * 
      * The higher the value the lower the chance for this to happen.
      */
@@ -71,8 +73,7 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
     /**
      * convenience orderable object that represet a tuple of values and paths
      * 
-     * where the values are the indexed keys from the index and the paths are
-     * the path which hold the key
+     * where the values are the indexed keys from the index and the paths are the path which hold the key
      */
     private class ValuePathTuple implements Comparable<ValuePathTuple> {
         private String value;
@@ -194,8 +195,8 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
     }
 
     /**
-     * generate a list of values to be used as ordered set. Will return
-     * something like {@code value000, value001, value002, ...}
+     * generate a list of values to be used as ordered set. Will return something like
+     * {@code value000, value001, value002, ...}
      * 
      * 
      * @param amount
@@ -214,8 +215,8 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
     }
 
     /**
-     * convenience method that adds a bunch of nodes in random order and return
-     * the order in which they should be presented by the OrderedIndex
+     * convenience method that adds a bunch of nodes in random order and return the order in which they should be
+     * presented by the OrderedIndex
      * 
      * @param values
      *            the values of the property that will be indexed
@@ -296,35 +297,72 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
 
     /**
      * test the index for returning the items related to a single key
-     * @throws CommitFailedException 
-     * @throws ParseException 
+     * 
+     * @throws CommitFailedException
+     * @throws ParseException
      */
     @Test
-    public void queryOneKey() throws CommitFailedException, ParseException{
+    public void queryOneKey() throws CommitFailedException, ParseException {
         setTravesalEnabled(false);
 
         // index automatically created by the framework:
         // {@code createTestIndexNode()}
-        
+
         Tree rTree = root.getTree("/");
         Tree test = rTree.addChild("test");
         List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test);
         root.commit();
-        
-        ValuePathTuple searchfor = nodes.get((int)NUMBER_OF_NODES/2); //getting the middle of the random list of nodes.
-        Map<String, PropertyValue> filter = ImmutableMap.of(
-                ORDERED_PROPERTY, PropertyValues.newString(searchfor.value)
-            );
+
+        ValuePathTuple searchfor = nodes.get((int) NUMBER_OF_NODES / 2); // getting the middle of the random list of
+                                                                         // nodes.
+        Map<String, PropertyValue> filter = ImmutableMap
+            .of(ORDERED_PROPERTY, PropertyValues.newString(searchfor.value));
         String query = "SELECT * FROM [%s] WHERE %s=$%s";
         Iterator<? extends ResultRow> results = executeQuery(
-            String.format(query,NT_UNSTRUCTURED,ORDERED_PROPERTY,ORDERED_PROPERTY),
-            SQL2,
-            filter
-            ).getRows().iterator();
-        assertTrue("one element is expected",results.hasNext());
-        assertEquals("wrong path returned",searchfor.path,results.next().getPath());
-        assertFalse("there should be not any more items",results.hasNext());
-        
+            String.format(query, NT_UNSTRUCTURED, ORDERED_PROPERTY, ORDERED_PROPERTY), SQL2, filter).getRows()
+            .iterator();
+        assertTrue("one element is expected", results.hasNext());
+        assertEquals("wrong path returned", searchfor.path, results.next().getPath());
+        assertFalse("there should be not any more items", results.hasNext());
+
+        setTravesalEnabled(true);
+    }
+
+    /**
+     * Querying two properties they should be returned in the right order
+     * 
+     * @throws CommitFailedException
+     * @throws ParseException
+     */
+    @Test
+    public void queryTwoProperties() throws CommitFailedException, ParseException {
+        setTravesalEnabled(false);
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test);
+        root.commit();
+
+        // picking up two random elements from the list of added nodes
+        Random rnd = new Random();
+        List<ValuePathTuple> searchfor = new ArrayList<OrderedPropertyIndexQueryTest.ValuePathTuple>();
+        searchfor.add(nodes.remove(rnd.nextInt(nodes.size())));
+        searchfor.add(nodes.remove(rnd.nextInt(nodes.size())));
+
+        String query = "SELECT * FROM [%s] WHERE %s = $%s OR %s = $%s1";
+        Map<String, PropertyValue> filter = ImmutableMap.of(ORDERED_PROPERTY,
+            PropertyValues.newString(searchfor.get(0).value), ORDERED_PROPERTY + 1,
+            PropertyValues.newString(searchfor.get(1).value));
+        Iterator<? extends ResultRow> results = executeQuery(
+            String.format(query, NT_UNSTRUCTURED, ORDERED_PROPERTY, ORDERED_PROPERTY, ORDERED_PROPERTY,
+                ORDERED_PROPERTY), SQL2, filter).getRows().iterator();
+
+        Collections.sort(searchfor); // sorting them for having the right expected order
+        assertRightOrder(searchfor, results);
+
         setTravesalEnabled(true);
     }
 }
