@@ -16,7 +16,11 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
-import static junit.framework.Assert.*;
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertTrue;
+import static junit.framework.Assert.fail;
+import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
+import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
@@ -25,45 +29,31 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 import javax.annotation.Nonnull;
 import javax.jcr.RepositoryException;
 
-import net.sf.cglib.proxy.ProxyRefDispatcher;
-
-import org.apache.jackrabbit.commons.webdav.NodeTypeConstants;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
-import org.apache.jackrabbit.oak.api.PropertyState;
-import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.ResultRow;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
-
-import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.*;
-
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.AbstractQueryTest;
-import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.apache.jackrabbit.oak.util.NodeUtil;
-import org.h2.index.IndexCondition;
-import org.junit.Ignore;
 import org.junit.Test;
-
-import com.google.common.collect.ImmutableMap;
 
 public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
    /**
     * the property used by the index
     */
    public final static String ORDERED_PROPERTY = "foo";
-   
+
    /**
     * number of nodes to create for testing.
     * 
@@ -83,12 +73,12 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
    private class ValuePathTuple implements Comparable<ValuePathTuple>{
       private String value;
       private String path;
-      
+
       ValuePathTuple(String value, String path) {
          this.value=value;
          this.path=path;
       }
-      
+
       @Override
       public int hashCode() {
          final int prime = 31;
@@ -126,20 +116,20 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
       @Override
       public int compareTo(ValuePathTuple o) {
          if(this.equals(o)) return 0;
-         
+
          if(this.value.compareTo(o.value)<0) return -1;
          if(this.value.compareTo(o.value)>0) return 1;
 
          if(this.path.compareTo(o.path)<0) return -1;
          if(this.path.compareTo(o.path)>0) return 1;
-         
+
          return 0;
       }
 
       private OrderedPropertyIndexQueryTest getOuterType() {
          return OrderedPropertyIndexQueryTest.this;
       }
-      
+
    }
 
    /**
@@ -161,13 +151,13 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
       assertEquals(-1,(new ValuePathTuple("value000", "/test/n1")).compareTo(new ValuePathTuple("value001", "/test/n0")));
       assertEquals(1,(new ValuePathTuple("value001", "/test/n0")).compareTo(new ValuePathTuple("value000", "/test/n1")));
    }
-   
+
    @Override
    protected ContentRepository createRepository() {
       return new Oak().with(new InitialContent())
             .with(new OpenSecurityProvider())
-            .with(new PropertyIndexProvider())
-            .with(new PropertyIndexEditorProvider())
+            //            .with(new PropertyIndexProvider())
+            //            .with(new PropertyIndexEditorProvider())
             .with(new OrderedPropertyIndexProvider())
             .with(new OrderedPropertyIndexEditorProvider())
             .createContentRepository();
@@ -190,18 +180,20 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
    }
 
    /**
-    * generate a list of values to be used as ordered set
+    * generate a list of values to be used as ordered set. Will return something like
+    * {@code value000, value001, value002, ...}
+    *
     * 
     * @param amount
     * @return
     */
    private List<String> generateOrderedValues(int amount){
       if(amount>1000) throw new RuntimeException("amount cannot be greater than 100");
-      
+
       List<String> values = new ArrayList<String>(amount);
       NumberFormat nf = new DecimalFormat("000");
       for(int i=0;i<amount;i++) values.add( String.format("value%s",String.valueOf(nf.format(i))) );
-      
+
       return values;
    }
 
@@ -222,47 +214,56 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
          Tree t = child(father, String.format("n%s",counter++), ORDERED_PROPERTY, v);
          nodes.add(new ValuePathTuple(v, t.getPath()));
       }
-      
+
       Collections.sort(nodes);
       return nodes;
    }
-   
-   @Test public void query() throws CommitFailedException, ParseException, RepositoryException{
-      setTravesalEnabled(false);
-      
-      Tree rTree = root.getTree("/");
 
+
+
+   @Override
+   protected void createTestIndexNode() throws Exception {
+      Tree index = root.getTree("/");
       IndexUtils.createIndexDefinition(
-            new NodeUtil(rTree.getChild(IndexConstants.INDEX_DEFINITIONS_NAME)),
-            "indextest", 
+            new NodeUtil(index.getChild(IndexConstants.INDEX_DEFINITIONS_NAME)),
+            TEST_INDEX_NAME, 
             false, 
             new String[] { ORDERED_PROPERTY },
             null,
             OrderedIndex.TYPE
-       );
+            );
       root.commit();
+   }
 
+   /**
+    * Query the index for retrieving all the entries
+    * 
+    * @throws CommitFailedException
+    * @throws ParseException
+    * @throws RepositoryException
+    */
+   @Test public void queryAllEntries() throws CommitFailedException, ParseException, RepositoryException{
+      setTravesalEnabled(false);
+
+      //index automatically created by the framework: {@code createTestIndexNode()}
+      
+      Tree rTree = root.getTree("/");
       Tree test = rTree.addChild("test");
       List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES),test);
       root.commit();
-      
-      System.out.println(root.getTree("/oak:index/indextest"));
-      
+
       //querying
       Iterator<? extends ResultRow> results;
       results = executeQuery(
             String.format("SELECT * from [%s] WHERE foo IS NOT NULL", NT_UNSTRUCTURED), 
-//            String.format("EXPLAIN SELECT * from [%s] WHERE foo IS NOT NULL", NT_UNSTRUCTURED), 
-//            String.format("SELECT * from [%s] WHERE foo IS NOT NULL ORDER BY %s", NT_UNSTRUCTURED , ORDERED_PROPERTY), 
             SQL2, 
             null
-      ).getRows().iterator();
-//      System.out.println(results.next());
+            ).getRows().iterator();
       assertRightOrder(nodes, results);
 
       setTravesalEnabled(true);
    }
-   
+
    /**
     * assert the right order of the returned resultset
     * 

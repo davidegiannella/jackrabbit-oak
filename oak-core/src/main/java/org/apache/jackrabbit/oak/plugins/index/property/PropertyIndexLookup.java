@@ -146,7 +146,7 @@ public class PropertyIndexLookup {
      *         node was found
      */
     @Nullable
-    private static NodeState getIndexNode(
+    private NodeState getIndexNode(
             NodeState node, String propertyName, Filter filter) {
         // keep a fallback to a matching index def that has *no* node type constraints
         // (initially, there is no fallback)
@@ -156,7 +156,7 @@ public class PropertyIndexLookup {
         for (ChildNodeEntry entry : state.getChildNodeEntries()) {
             NodeState index = entry.getNodeState();
             PropertyState type = index.getProperty(TYPE_PROPERTY_NAME);
-            if (type == null || type.isArray() || !TYPE.equals(type.getValue(Type.STRING))) {
+            if (type == null || type.isArray() || !getType().equals(type.getValue(Type.STRING))) {
                 continue;
             }
             if (contains(index.getNames(PROPERTY_NAMES), propertyName)) {
@@ -183,6 +183,15 @@ public class PropertyIndexLookup {
             }
         }
         return fallback;
+    }
+    
+    /**
+     * retrieve the type of the index 
+     * 
+     * @return 
+     */
+    String getType(){
+       return TYPE;
     }
     
     private static Set<String> getSuperTypes(Filter filter) {

@@ -36,4 +36,9 @@ public class OrderedPropertyIndexLookup extends PropertyIndexLookup {
    IndexStoreStrategy getStrategy(NodeState indexMeta) {
       return STORE;
    }
+
+   @Override
+   String getType() {
+      return OrderedIndex.TYPE;
+   }
 }
