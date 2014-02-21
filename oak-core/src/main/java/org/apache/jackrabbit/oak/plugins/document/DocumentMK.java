@@ -29,11 +29,11 @@ import com.mongodb.DB;
 
 import org.apache.jackrabbit.mk.api.MicroKernel;
 import org.apache.jackrabbit.mk.api.MicroKernelException;
-import org.apache.jackrabbit.mk.blobs.BlobStore;
-import org.apache.jackrabbit.mk.blobs.MemoryBlobStore;
-import org.apache.jackrabbit.mk.json.JsopReader;
-import org.apache.jackrabbit.mk.json.JsopStream;
-import org.apache.jackrabbit.mk.json.JsopTokenizer;
+import org.apache.jackrabbit.oak.spi.blob.BlobStore;
+import org.apache.jackrabbit.oak.spi.blob.MemoryBlobStore;
+import org.apache.jackrabbit.oak.commons.json.JsopReader;
+import org.apache.jackrabbit.oak.commons.json.JsopStream;
+import org.apache.jackrabbit.oak.commons.json.JsopTokenizer;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.cache.CacheLIRS;
 import org.apache.jackrabbit.oak.cache.CacheValue;
@@ -61,13 +61,19 @@ public class DocumentMK implements MicroKernel {
      * Enable the LIRS cache.
      */
     static final boolean LIRS_CACHE = Boolean.parseBoolean(
-            System.getProperty("oak.documentMK.lirsCache", "true"));
+            System.getProperty("oak.documentMK.lirsCache", "false"));
 
     /**
      * Enable fast diff operations.
      */
     static final boolean FAST_DIFF = Boolean.parseBoolean(
             System.getProperty("oak.documentMK.fastDiff", "true"));
+
+    /**
+     * The guava cache concurrency level.
+     */
+    static final int CACHE_CONCURRENCY = Integer.getInteger(
+            "oak.documentMK.cacheConcurrency", 16);
         
     /**
      * The node store.
@@ -232,7 +238,7 @@ public class DocumentMK implements MicroKernel {
             Revision baseRev = commit.getBaseRevision();
             isBranch = baseRev != null && baseRev.isBranch();
             parseJsonDiff(commit, jsonDiff, rootPath);
-            rev = nodeStore.apply(commit);
+            rev = commit.apply();
             success = true;
         } finally {
             if (!success) {
@@ -710,6 +716,7 @@ public class DocumentMK implements MicroKernel {
                         build();
             }
             return CacheBuilder.newBuilder().
+                    concurrencyLevel(CACHE_CONCURRENCY).
                     weigher(weigher).
                     maximumWeight(maxWeight).
                     recordStats().

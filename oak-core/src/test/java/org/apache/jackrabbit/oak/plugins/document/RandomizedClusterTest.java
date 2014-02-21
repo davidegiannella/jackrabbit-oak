@@ -28,10 +28,10 @@ import java.util.List;
 import java.util.Random;
 
 import org.apache.jackrabbit.mk.api.MicroKernelException;
-import org.apache.jackrabbit.mk.blobs.MemoryBlobStore;
-import org.apache.jackrabbit.mk.json.JsonObject;
-import org.apache.jackrabbit.mk.json.JsopBuilder;
-import org.apache.jackrabbit.mk.json.JsopTokenizer;
+import org.apache.jackrabbit.oak.spi.blob.MemoryBlobStore;
+import org.apache.jackrabbit.oak.commons.json.JsonObject;
+import org.apache.jackrabbit.oak.commons.json.JsopBuilder;
+import org.apache.jackrabbit.oak.commons.json.JsopTokenizer;
 import org.apache.jackrabbit.oak.plugins.document.memory.MemoryDocumentStore;
 import org.junit.Test;
 
