@@ -17,7 +17,7 @@
 package org.apache.jackrabbit.oak.benchmark;
 
 
-public class NoIndexesOrderByInsertTest extends BaseOrderByInsertTest {
+public class NoIndexesOrderByInsertTest extends BaseOrderedIndexTest {
    /*
     * this class is empty extending a base only because during benchmark testing
     * it was found that an extended class had an overhead of 4-6ms even if it was 

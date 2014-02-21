@@ -26,7 +26,7 @@ import org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEdit
 /**
  *
  */
-public class OrderedPropertyIndexOrderByInsertTest extends BaseOrderByInsertTest {
+public class OrderedPropertyIndexInsertTest extends BaseOrderedIndexTest {
    private Node index = null;
    
    @Override

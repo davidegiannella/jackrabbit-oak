@@ -99,7 +99,7 @@ public class BenchmarkRunner {
                         base.value(options), 256, cacheSize, mmap.value(options))
         };
         Benchmark[] allBenchmarks = new Benchmark[] {
-            new OrderedPropertyIndexOrderByInsertTest(),
+            new OrderedPropertyIndexInsertTest(),
             new StandardPropertyIndexOrderByInsertTest(),
             new NoIndexesOrderByInsertTest(),
             new OrderByQueryTest(),
