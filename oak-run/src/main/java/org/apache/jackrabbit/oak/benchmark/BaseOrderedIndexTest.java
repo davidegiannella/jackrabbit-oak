@@ -23,14 +23,16 @@ import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
+import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
+
 /**
  *
  */
-public abstract class BaseOrderByInsertTest extends AbstractTest {
+public abstract class BaseOrderedIndexTest extends AbstractTest {
    /**
     * type of the created node
     */
-   private final static String NODE_TYPE = "oak:Unstructured";
+   private final static String NODE_TYPE = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
       
    /**
     * property that will be indexed
