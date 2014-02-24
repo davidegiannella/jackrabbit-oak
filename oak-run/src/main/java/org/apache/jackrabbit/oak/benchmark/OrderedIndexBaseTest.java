@@ -29,10 +29,20 @@ import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
  *
  */
 public abstract class OrderedIndexBaseTest extends AbstractTest {
-   /**
+    /**
+     * the number of nodes created per iteration
+     */
+    final static int NODES_PER_ITERATION = Integer.parseInt(System.getProperty("nodesPerIteration", "100"));
+    
+    /**
+     * number of nodes that has to be added before performing the actual test
+     */
+    final static int PRE_ADDED_NODES = Integer.parseInt(System.getProperty("preAddedNodes", "0"));
+
+    /**
     * type of the created node
     */
-   private final static String NODE_TYPE = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
+   final static String NODE_TYPE = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
       
    /**
     * property that will be indexed
@@ -40,16 +50,9 @@ public abstract class OrderedIndexBaseTest extends AbstractTest {
    final static String INDEXED_PROPERTY = "indexedProperty";
    
    /**
-    * the number of nodes created per iteration
-    */
-   private final static int NODES_PER_ITERATION = Integer.parseInt(System.getProperty("nodesPerIteration", "100"));
-   
-   private final static int PRE_ADDED_NODES = Integer.parseInt(System.getProperty("preAddedNodes", "0"));
-
-   /**
     * node name below which creating the test data
     */
-   private final String DUMP_NODE = this.getClass().getSimpleName() + TEST_ID;
+   final String DUMP_NODE = this.getClass().getSimpleName() + TEST_ID;
 
    /**
     * session used for operations throughout the test
@@ -59,39 +62,9 @@ public abstract class OrderedIndexBaseTest extends AbstractTest {
    /**
     * node under which all the test data will be filled in
     */
-   private Node dump;
-   
-   @Override
-   protected void beforeTest() throws Exception {
-      session = loginWriter();
-
-      //initiate the place for writing child nodes
-      dump = session.getRootNode().addNode(DUMP_NODE,NODE_TYPE);
-      session.save();
+   Node dump;
       
-      defineIndex();
-      
-      //pre-adding nodes
-      fireNodes(PRE_ADDED_NODES);
-   }
-
-   @Override
-   protected void afterTest() throws Exception {
-      //clean-up our mess
-      dump.remove();
-      session.save();
-      session.logout();
-   }
-
-   /* (non-Javadoc)
-    * @see org.apache.jackrabbit.oak.benchmark.AbstractTest#runTest()
-    */
-   @Override
-   protected void runTest() throws Exception {
-      fireNodes(NODES_PER_ITERATION);
-   }
-   
-   void fireNodes(int numberOfNodes){
+   void insertRandomNodes(int numberOfNodes){
       try{
          for(int i=0; i<numberOfNodes; i++){
             String uuid = UUID.randomUUID().toString();

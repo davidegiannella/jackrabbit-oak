@@ -99,6 +99,7 @@ public class BenchmarkRunner {
                         base.value(options), 256, cacheSize, mmap.value(options))
         };
         Benchmark[] allBenchmarks = new Benchmark[] {
+            new OrderedIndexQueryNoIndexTest(),
             new OrderedIndexInsertOrderedPropertyTest(),
             new OrderedIndexInsertStandardPropertyTest(),
             new OrderedIndexInsertNoIndexTest(),
