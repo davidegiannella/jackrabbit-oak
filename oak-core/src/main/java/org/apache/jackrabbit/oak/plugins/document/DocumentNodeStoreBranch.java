@@ -86,7 +86,7 @@ public class DocumentNodeStoreBranch
             @Override
             public void with(Commit c) {
                 toPersist.compareAgainstBaseState(base,
-                        new CommitDiff(c, store.getBlobSerializer()));
+                        new CommitDiff(store, c, store.getBlobSerializer()));
             }
         }, base, info);
         if (base.isBranch()) {
@@ -99,7 +99,7 @@ public class DocumentNodeStoreBranch
     protected DocumentNodeState copy(final String source,
                                   final String target,
                                   DocumentNodeState base) {
-        final Node src = store.getNode(source, base.getRevision());
+        final DocumentNodeState src = store.getNode(source, base.getRevision());
         checkState(src != null, "Source node %s@%s does not exist",
                 source, base.getRevision());
         return persist(new Changes() {
@@ -114,7 +114,7 @@ public class DocumentNodeStoreBranch
     protected DocumentNodeState move(final String source,
                                   final String target,
                                   DocumentNodeState base) {
-        final Node src = store.getNode(source, base.getRevision());
+        final DocumentNodeState src = store.getNode(source, base.getRevision());
         checkState(src != null, "Source node %s@%s does not exist",
                 source, base.getRevision());
         return persist(new Changes() {

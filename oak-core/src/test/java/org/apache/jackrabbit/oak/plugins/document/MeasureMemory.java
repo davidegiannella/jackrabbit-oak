@@ -16,7 +16,7 @@
  */
 package org.apache.jackrabbit.oak.plugins.document;
 
-import static org.apache.jackrabbit.oak.plugins.document.Node.Children;
+import static org.apache.jackrabbit.oak.plugins.document.DocumentNodeState.Children;
 import static org.junit.Assert.fail;
 
 import java.util.LinkedList;
@@ -36,6 +36,9 @@ public class MeasureMemory {
     static final int TEST_COUNT = 10000;
     static final int OVERHEAD = 24;
 
+    static final DocumentNodeStore STORE = new DocumentMK.Builder()
+            .setAsyncDelay(0).getNodeStore();
+
     @Test
     public void overhead() throws Exception {
         measureMemory(new Callable<Object[]>() {
@@ -51,7 +54,7 @@ public class MeasureMemory {
         measureMemory(new Callable<Object[]>() {
             @Override
             public Object[] call() {
-                Node n = generateNode(5);
+                DocumentNodeState n = generateNode(5);
                 return new Object[]{n, n.getMemory() + OVERHEAD};
             }
         });
@@ -62,7 +65,7 @@ public class MeasureMemory {
         measureMemory(new Callable<Object[]>() {
             @Override
             public Object[] call() {
-                Node n = generateNode(0);
+                DocumentNodeState n = generateNode(0);
                 return new Object[]{n, n.getMemory() + OVERHEAD};
             }
         });
@@ -149,10 +152,11 @@ public class MeasureMemory {
         list.clear();
     }
     
-    static Node generateNode(int propertyCount) {
-        Node n = new Node(new String("/hello/world"), new Revision(1, 2, 3));
+    static DocumentNodeState generateNode(int propertyCount) {
+        DocumentNodeState n = new DocumentNodeState(STORE, new String("/hello/world"),
+                new Revision(1, 2, 3));
         for (int i = 0; i < propertyCount; i++) {
-            n.setProperty("property" + i, "values " + i);
+            n.setProperty("property" + i, "\"values " + i + "\"");
         }
         n.setLastRevision(new Revision(1, 2, 3));
         return n;

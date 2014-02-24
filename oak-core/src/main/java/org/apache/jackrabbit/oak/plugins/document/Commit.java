@@ -109,8 +109,8 @@ public class Commit {
         return baseRevision;
     }
     
-    void addNodeDiff(Node n) {
-        diff.tag('+').key(n.path);
+    void addNodeDiff(DocumentNodeState n) {
+        diff.tag('+').key(n.getPath());
         diff.object();
         n.append(diff, false);
         diff.endObject();
@@ -134,14 +134,15 @@ public class Commit {
         op.setMapEntry(key, revision, value);
     }
 
-    void addNode(Node n) {
-        if (operations.containsKey(n.path)) {
-            String msg = "Node already added: " + n.path;
+    void addNode(DocumentNodeState n) {
+        String path = n.getPath();
+        if (operations.containsKey(path)) {
+            String msg = "Node already added: " + path;
             LOG.error(msg);
             throw new MicroKernelException(msg);
         }
-        operations.put(n.path, n.asOperation(true));
-        addedNodes.add(n.path);
+        operations.put(path, n.asOperation(true));
+        addedNodes.add(path);
     }
 
     boolean isEmpty() {
