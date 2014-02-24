@@ -28,7 +28,7 @@ import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 /**
  *
  */
-public abstract class BaseOrderedIndexTest extends AbstractTest {
+public abstract class OrderedIndexBaseTest extends AbstractTest {
    /**
     * type of the created node
     */
