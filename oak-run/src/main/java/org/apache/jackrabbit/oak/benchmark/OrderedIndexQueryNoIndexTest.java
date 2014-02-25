@@ -16,41 +16,14 @@
  */
 package org.apache.jackrabbit.oak.benchmark;
 
-import javax.jcr.query.Query;
-import javax.jcr.query.QueryManager;
-import javax.jcr.query.QueryResult;
 
 /**
  * Benchmark the query performance of an ORDER BY clause when No index are involved
  */
-public class OrderedIndexQueryNoIndexTest extends OrderedIndexBaseTest {
-    /**
-     * query to execute with the ORDER BY statement
-     */
-    public final static String QUERY_WITH_ORDER = String.format(
-        "SELECT * FROM [%s] WHERE %s IS NOT NULL ORDER BY %s", NODE_TYPE, INDEXED_PROPERTY, INDEXED_PROPERTY);
+public class OrderedIndexQueryNoIndexTest extends OrderedIndexQueryBaseTest {
 
     @Override
-    protected void beforeSuite() throws Exception {
-        session = loginWriter();
-        dump = session.getRootNode().addNode(DUMP_NODE, NODE_TYPE);
-        session.save();
-        defineIndex();
-        insertRandomNodes(PRE_ADDED_NODES);
-    }
-
-    @Override
-    protected void afterSuite() throws Exception {
-        dump.remove();
-        session.save();
-        session.logout();
-    }
-
-    @Override
-    protected void runTest() throws Exception {
-        QueryManager qm = session.getWorkspace().getQueryManager();
-        Query q = qm.createQuery(QUERY_WITH_ORDER, Query.JCR_SQL2);
-        QueryResult r = q.execute();
-        r.getNodes();
+    String getQuery() {
+        return QUERY_WITH_ORDER;
     }
 }

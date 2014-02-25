@@ -16,37 +16,19 @@
  */
 package org.apache.jackrabbit.oak.benchmark;
 
+
 /**
- * intermediate class for the testing of Inserts of nodes.
+ * Benchmark the query performance of an ORDER BY clause when No index are involved
  */
-public abstract class OrderedIndexInsertBaseTest extends OrderedIndexBaseTest {
-    @Override
-    protected void beforeTest() throws Exception {
-       session = loginWriter();
+public class OrderedIndexQueryStandardIndexTest extends OrderedIndexQueryBaseTest {
 
-       //initiate the place for writing child nodes
-       dump = session.getRootNode().addNode(DUMP_NODE,NODE_TYPE);
-       session.save();
-       
-       defineIndex();
-       
-       //pre-adding nodes
-       insertRandomNodes(PRE_ADDED_NODES);
+    @Override
+    void defineIndex() throws Exception {
+        defineStandardPropertyIndex(session);
     }
 
     @Override
-    protected void afterTest() throws Exception {
-       //clean-up our mess
-       dump.remove();
-       session.save();
-       session.logout();
-    }
-
-    /* (non-Javadoc)
-     * @see org.apache.jackrabbit.oak.benchmark.AbstractTest#runTest()
-     */
-    @Override
-    protected void runTest() throws Exception {
-       insertRandomNodes(NODES_PER_ITERATION);
+    String getQuery() {
+        return QUERY_WITH_ORDER;
     }
 }

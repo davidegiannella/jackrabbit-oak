@@ -23,6 +23,9 @@ import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
+import org.apache.jackrabbit.oak.benchmark.util.OakIndexUtils;
+import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
+import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 
 /**
@@ -80,5 +83,13 @@ public abstract class OrderedIndexBaseTest extends AbstractTest {
     * override when needed to define an index
     */
    void defineIndex() throws Exception{
+   }
+   
+   static Node defineStandardPropertyIndex(Session session) throws Exception {
+       Node index = new OakIndexUtils.PropertyIndex().property(INDEXED_PROPERTY).create(session);
+       if(index == null) throw new RuntimeException("Error while creating the index definition. index node is null.");
+       if(!PropertyIndexEditorProvider.TYPE.equals(index.getProperty(IndexConstants.TYPE_PROPERTY_NAME).getString())) throw new RuntimeException("The type of the index does not match the expected");
+       session.save();
+       return index;
    }
 }
