@@ -20,15 +20,15 @@ package org.apache.jackrabbit.oak.benchmark;
 /**
  * Benchmark the query performance of an ORDER BY clause when No index are involved
  */
-public class OrderedIndexQueryStandardIndexTest extends OrderedIndexQueryBaseTest {
+public class OrderedIndexQueryOrderedIndexTest extends OrderedIndexQueryBaseTest {
 
     @Override
     void defineIndex() throws Exception {
-        index = defineStandardPropertyIndex(session);
+        index = defineOrderedPropertyIndex(session);
     }
 
     @Override
     String getQuery() {
-        return QUERY_WITH_ORDER;
+        return QUERY_WITHOUT_ORDER;
     }
 }

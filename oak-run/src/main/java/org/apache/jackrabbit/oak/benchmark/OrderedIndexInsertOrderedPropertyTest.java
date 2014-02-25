@@ -19,10 +19,6 @@ package org.apache.jackrabbit.oak.benchmark;
 
 import javax.jcr.Node;
 
-import org.apache.jackrabbit.oak.benchmark.util.OakIndexUtils;
-import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
-import org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEditorProvider;
-
 /**
  *
  */
@@ -31,10 +27,7 @@ public class OrderedIndexInsertOrderedPropertyTest extends OrderedIndexInsertBas
    
    @Override
    void defineIndex() throws Exception{
-      index = new OakIndexUtils.PropertyIndex().property(INDEXED_PROPERTY).create(session,OrderedPropertyIndexEditorProvider.TYPE);
-      if(index == null) throw new RuntimeException("Error while creating the index definition. index node is null.");
-      if(!OrderedPropertyIndexEditorProvider.TYPE.equals(index.getProperty(IndexConstants.TYPE_PROPERTY_NAME).getString())) throw new RuntimeException("The index type does not match the expected");
-      session.save();
+       index = defineOrderedPropertyIndex(session);
    }
 
    @Override
