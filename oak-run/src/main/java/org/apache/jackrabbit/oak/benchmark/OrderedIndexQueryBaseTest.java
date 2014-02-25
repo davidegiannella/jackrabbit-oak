@@ -17,6 +17,7 @@
 package org.apache.jackrabbit.oak.benchmark;
 
 import javax.jcr.Node;
+import javax.jcr.NodeIterator;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
@@ -32,7 +33,12 @@ public abstract class OrderedIndexQueryBaseTest extends OrderedIndexBaseTest {
      */
     public final static String QUERY_WITH_ORDER = String.format(
         "SELECT * FROM [%s] WHERE %s IS NOT NULL ORDER BY %s", NODE_TYPE, INDEXED_PROPERTY, INDEXED_PROPERTY);
-
+    
+    /**
+     * constant used to identify how many nodes will be fetched after the query execution
+     */
+    public final static int FETCH_NODES = 100;
+    
     /**
      * query to execute WITHOUT the ORDER BY clause
      */
@@ -61,7 +67,11 @@ public abstract class OrderedIndexQueryBaseTest extends OrderedIndexBaseTest {
         QueryManager qm = session.getWorkspace().getQueryManager();
         Query q = qm.createQuery(getQuery(), Query.JCR_SQL2);
         QueryResult r = q.execute();
-        r.getNodes();
+        NodeIterator nodes = r.getNodes();
+        int counter = 0;
+        while(nodes.hasNext() && counter++<FETCH_NODES) {
+            nodes.next();
+        }
     }
     
     abstract String getQuery();
