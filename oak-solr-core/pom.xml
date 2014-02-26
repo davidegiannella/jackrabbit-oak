@@ -108,6 +108,10 @@
   </build>
 
   <dependencies>
+    <dependency>
+      <groupId>com.google.code.findbugs</groupId>
+      <artifactId>jsr305</artifactId>
+    </dependency>
     <!-- Optional OSGi dependencies, used only when running within OSGi -->
     <dependency>
       <groupId>org.osgi</groupId>
@@ -279,6 +283,7 @@
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-core</artifactId>
       <version>${solr.version}</version>
+      <scope>test</scope>
     </dependency>
 
   </dependencies>

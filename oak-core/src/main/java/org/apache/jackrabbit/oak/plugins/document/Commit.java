@@ -325,7 +325,7 @@ public class Commit {
                     // to set isNew to false. If we get here the
                     // commitRoot document already exists and
                     // only needs an update
-                    UpdateOp commit = commitRoot.clone(commitRoot.getId());
+                    UpdateOp commit = commitRoot.shallowCopy(commitRoot.getId());
                     commit.setNew(false);
                     // only set revision on commit root when there is
                     // no collision for this commit revision
@@ -408,7 +408,9 @@ public class Commit {
             store.createOrUpdate(NODES, reverse);
         }
         for (UpdateOp op : newDocuments) {
-            store.remove(NODES, op.id);
+            UpdateOp reverse = op.getReverseOperation();
+            NodeDocument.unsetLastRev(reverse, revision.getClusterId());
+            store.createOrUpdate(NODES, reverse);
         }
         UpdateOp removeCollision = new UpdateOp(commitRoot.getId(), false);
         NodeDocument.removeCollision(removeCollision, revision);
