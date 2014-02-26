@@ -327,42 +327,4 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
 
         setTravesalEnabled(true);
     }
-
-    /**
-     * Querying two properties they should be returned in the right order
-     * 
-     * @throws CommitFailedException
-     * @throws ParseException
-     */
-    @Test
-    public void queryTwoProperties() throws CommitFailedException, ParseException {
-        setTravesalEnabled(false);
-
-        // index automatically created by the framework:
-        // {@code createTestIndexNode()}
-
-        Tree rTree = root.getTree("/");
-        Tree test = rTree.addChild("test");
-        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test);
-        root.commit();
-
-        // picking up two random elements from the list of added nodes
-        Random rnd = new Random();
-        List<ValuePathTuple> searchfor = new ArrayList<OrderedPropertyIndexQueryTest.ValuePathTuple>();
-        searchfor.add(nodes.remove(rnd.nextInt(nodes.size())));
-        searchfor.add(nodes.remove(rnd.nextInt(nodes.size())));
-
-        String query = "SELECT * FROM [%s] WHERE %s = $%s OR %s = $%s1";
-        Map<String, PropertyValue> filter = ImmutableMap.of(ORDERED_PROPERTY,
-            PropertyValues.newString(searchfor.get(0).value), ORDERED_PROPERTY + 1,
-            PropertyValues.newString(searchfor.get(1).value));
-        Iterator<? extends ResultRow> results = executeQuery(
-            String.format(query, NT_UNSTRUCTURED, ORDERED_PROPERTY, ORDERED_PROPERTY, ORDERED_PROPERTY,
-                ORDERED_PROPERTY), SQL2, filter).getRows().iterator();
-
-        Collections.sort(searchfor); // sorting them for having the right expected order
-        assertRightOrder(searchfor, results);
-
-        setTravesalEnabled(true);
-    }
 }
