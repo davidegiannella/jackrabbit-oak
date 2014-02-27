@@ -26,19 +26,19 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
  */
 public class OrderedPropertyIndexLookup extends PropertyIndexLookup {
 
-   private final static IndexStoreStrategy STORE = new OrderedContentMirrorStoreStrategy();
-   
-   public OrderedPropertyIndexLookup(NodeState root) {
-      super(root);
-   }
+    private static final IndexStoreStrategy STORE = new OrderedContentMirrorStoreStrategy();
 
-   @Override
-   IndexStoreStrategy getStrategy(NodeState indexMeta) {
-      return STORE;
-   }
+    public OrderedPropertyIndexLookup(NodeState root) {
+        super(root);
+    }
 
-   @Override
-   String getType() {
-      return OrderedIndex.TYPE;
-   }
+    @Override
+    IndexStoreStrategy getStrategy(NodeState indexMeta) {
+        return STORE;
+    }
+
+    @Override
+    String getType() {
+        return OrderedIndex.TYPE;
+    }
 }

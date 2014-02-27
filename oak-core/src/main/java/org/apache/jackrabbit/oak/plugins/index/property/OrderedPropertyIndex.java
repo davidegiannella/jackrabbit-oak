@@ -18,19 +18,20 @@
 package org.apache.jackrabbit.oak.plugins.index.property;
 
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.*;
 
 /**
  *
  */
-public class OrderedPropertyIndex extends PropertyIndex implements OrderedIndex {
+public class OrderedPropertyIndex extends PropertyIndex {
 
-   @Override
-   public String getIndexName() {
-      return TYPE;
-   }
+    @Override
+    public String getIndexName() {
+        return TYPE;
+    }
 
-   @Override
-   PropertyIndexLookup getLookup(NodeState root) {
-      return new OrderedPropertyIndexLookup(root);
-   }
+    @Override
+    PropertyIndexLookup getLookup(NodeState root) {
+        return new OrderedPropertyIndexLookup(root);
+    }
 }

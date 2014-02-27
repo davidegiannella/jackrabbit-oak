@@ -21,8 +21,8 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Strings;
 
 public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
-   private final static Logger log = LoggerFactory.getLogger(OrderedPropertyIndexEditor.class);
-   private final static IndexStoreStrategy ORDERED_MIRROR = new OrderedContentMirrorStoreStrategy();
+   private static final Logger log = LoggerFactory.getLogger(OrderedPropertyIndexEditor.class);
+   private static final IndexStoreStrategy ORDERED_MIRROR = new OrderedContentMirrorStoreStrategy();
 
    private final Set<String> propertyNames; 
    
@@ -40,7 +40,9 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
          if(Strings.isNullOrEmpty(value)){
             log.warn("Empty value passed as propertyNames. Index not properly configured. Ignoring.");
          }else{
-            if(names.isArray()) log.warn("Only single value supported. '{}' only will be used.", value);
+            if(names.isArray()){
+                log.warn("Only single value supported. '{}' only will be used.", value);
+            }
             pns = Collections.singleton(value);
             this.properlyConfigured=true;            
          }

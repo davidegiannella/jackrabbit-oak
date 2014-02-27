@@ -21,5 +21,5 @@ package org.apache.jackrabbit.oak.plugins.index.property;
  * interface for shared constants around different actors: QueryIndex, IndexEditors, IndexEditorProviders, ...
  */
 public interface OrderedIndex {
-   public final static String TYPE = "ordered";
+    String TYPE = "ordered";
 }
