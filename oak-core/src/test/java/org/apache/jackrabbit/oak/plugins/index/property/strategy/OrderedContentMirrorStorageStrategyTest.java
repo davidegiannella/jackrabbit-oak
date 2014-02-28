@@ -46,8 +46,8 @@ public class OrderedContentMirrorStorageStrategyTest {
     /**
      * ascending ordered set of keys. Useful for testing
      */
-    private final static String[] KEYS = new String[] { "donald", "goofy", "mickey", "minnie" };
-    private final static Set<String> EMPTY_KEY_SET = newHashSet();
+    private static final String[] KEYS = new String[] { "donald", "goofy", "mickey", "minnie" };
+    private static final Set<String> EMPTY_KEY_SET = newHashSet();
 
     /**
      * checks that the fist item/key is inserted with an empty property 'next'
@@ -607,7 +607,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertTrue("n0 should have /content", node.exists());
 
         node = node.getChildNode(NODES[1]);
-        assertTrue("/content should cointain /foobar", node.exists());
+        assertTrue("/content should contain /foobar", node.exists());
         assertTrue("/foobar should have match=true", node.getBoolean("match"));
 
         // Stage 2
@@ -657,6 +657,7 @@ public class OrderedContentMirrorStorageStrategyTest {
 
         NodeState indexState = index.getNodeState();
         ChildNodeEntry previous = store.findPrevious(indexState, NODE_0);
+        assertNotNull(previous);
         assertEquals("the :start node is expected", NODE_START, previous.getNodeState());
     }
 

@@ -31,18 +31,18 @@ public abstract class OrderedIndexQueryBaseTest extends OrderedIndexBaseTest {
     /**
      * query to execute with the ORDER BY statement
      */
-    public final static String QUERY_WITH_ORDER = String.format(
+    public static final String QUERY_WITH_ORDER = String.format(
         "SELECT * FROM [%s] WHERE %s IS NOT NULL ORDER BY %s", NODE_TYPE, INDEXED_PROPERTY, INDEXED_PROPERTY);
     
     /**
      * constant used to identify how many nodes will be fetched after the query execution
      */
-    public final static int FETCH_NODES = 100;
+    public static final int FETCH_NODES = 100;
     
     /**
      * query to execute WITHOUT the ORDER BY clause
      */
-    public final static String QUERY_WITHOUT_ORDER = String.format(
+    public static final String QUERY_WITHOUT_ORDER = String.format(
         "SELECT * FROM [%s] WHERE %s IS NOT NULL", NODE_TYPE, INDEXED_PROPERTY);
 
     @Override
@@ -57,7 +57,9 @@ public abstract class OrderedIndexQueryBaseTest extends OrderedIndexBaseTest {
     @Override
     protected void afterSuite() throws Exception {
         dump.remove();
-        if(index!=null) index.remove();
+        if(index!=null) {
+            index.remove();
+        }
         session.save();
         session.logout();
     }

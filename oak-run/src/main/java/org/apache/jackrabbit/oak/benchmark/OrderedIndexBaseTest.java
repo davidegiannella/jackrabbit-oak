@@ -36,22 +36,22 @@ public abstract class OrderedIndexBaseTest extends AbstractTest {
     /**
      * the number of nodes created per iteration
      */
-    final static int NODES_PER_ITERATION = Integer.parseInt(System.getProperty("nodesPerIteration", "100"));
+    static final int NODES_PER_ITERATION = Integer.parseInt(System.getProperty("nodesPerIteration", "100"));
     
     /**
      * number of nodes that has to be added before performing the actual test
      */
-    final static int PRE_ADDED_NODES = Integer.parseInt(System.getProperty("preAddedNodes", "0"));
+    static final int PRE_ADDED_NODES = Integer.parseInt(System.getProperty("preAddedNodes", "0"));
 
     /**
     * type of the created node
     */
-   final static String NODE_TYPE = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
+   static final String NODE_TYPE = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
       
    /**
     * property that will be indexed
     */
-   final static String INDEXED_PROPERTY = "indexedProperty";
+   static final String INDEXED_PROPERTY = "indexedProperty";
    
    /**
     * node name below which creating the test data
@@ -88,16 +88,24 @@ public abstract class OrderedIndexBaseTest extends AbstractTest {
    
    Node defineStandardPropertyIndex(Session session) throws Exception {
        Node index = new OakIndexUtils.PropertyIndex().property(INDEXED_PROPERTY).create(session);
-       if(index == null) throw new RuntimeException("Error while creating the index definition. index node is null.");
-       if(!PropertyIndexEditorProvider.TYPE.equals(index.getProperty(IndexConstants.TYPE_PROPERTY_NAME).getString())) throw new RuntimeException("The type of the index does not match the expected");
+       if(index == null) {
+           throw new RuntimeException("Error while creating the index definition. index node is null.");
+       }
+       if(!PropertyIndexEditorProvider.TYPE.equals(index.getProperty(IndexConstants.TYPE_PROPERTY_NAME).getString())) {
+           throw new RuntimeException("The type of the index does not match the expected");
+       }
        session.save();
        return index;
    }
    
    Node defineOrderedPropertyIndex(Session session) throws Exception {
        Node index = new OakIndexUtils.PropertyIndex().property(INDEXED_PROPERTY).create(session,OrderedPropertyIndexEditorProvider.TYPE);
-       if(index == null) throw new RuntimeException("Error while creating the index definition. index node is null.");
-       if(!OrderedPropertyIndexEditorProvider.TYPE.equals(index.getProperty(IndexConstants.TYPE_PROPERTY_NAME).getString())) throw new RuntimeException("The index type does not match the expected");
+       if(index == null) {
+           throw new RuntimeException("Error while creating the index definition. index node is null.");
+       }
+       if(!OrderedPropertyIndexEditorProvider.TYPE.equals(index.getProperty(IndexConstants.TYPE_PROPERTY_NAME).getString())) {
+           throw new RuntimeException("The index type does not match the expected");
+       }
        session.save();
        return index;
    }

@@ -58,7 +58,7 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
     /**
      * the property used by the index
      */
-    public final static String ORDERED_PROPERTY = "foo";
+    public static final String ORDERED_PROPERTY = "foo";
 
     /**
      * number of nodes to create for testing.
@@ -68,16 +68,16 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
      * 
      * The higher the value the lower the chance for this to happen.
      */
-    private final static int NUMBER_OF_NODES = 50;
+    private static final int NUMBER_OF_NODES = 50;
 
     /**
-     * convenience orderable object that represet a tuple of values and paths
+     * convenience orderable object that represents a tuple of values and paths
      * 
      * where the values are the indexed keys from the index and the paths are the path which hold the key
      */
     private class ValuePathTuple implements Comparable<ValuePathTuple> {
-        private String value;
-        private String path;
+        private final String value;
+        private final String path;
 
         ValuePathTuple(String value, String path) {
             this.value = value;
@@ -96,43 +96,53 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
 
         @Override
         public boolean equals(Object obj) {
-            if (this == obj)
+            if (this == obj){
                 return true;
-            if (obj == null)
+            }
+            if (obj == null){
                 return false;
-            if (getClass() != obj.getClass())
+            }
+            if (getClass() != obj.getClass()){
                 return false;
+            }
             ValuePathTuple other = (ValuePathTuple) obj;
-            if (!getOuterType().equals(other.getOuterType()))
+            if (!getOuterType().equals(other.getOuterType())){
                 return false;
+            }
             if (path == null) {
-                if (other.path != null)
+                if (other.path != null){
                     return false;
-            } else if (!path.equals(other.path))
+                }
+            } else if (!path.equals(other.path)){
                 return false;
+            }
             if (value == null) {
-                if (other.value != null)
+                if (other.value != null){
                     return false;
-            } else if (!value.equals(other.value))
+                }
+            } else if (!value.equals(other.value)){
                 return false;
+            }
             return true;
         }
 
         @Override
         public int compareTo(ValuePathTuple o) {
-            if (this.equals(o))
+            if (this.equals(o)){
                 return 0;
-
-            if (this.value.compareTo(o.value) < 0)
+            }
+            if (this.value.compareTo(o.value) < 0){
                 return -1;
-            if (this.value.compareTo(o.value) > 0)
+            }
+            if (this.value.compareTo(o.value) > 0){
                 return 1;
-
-            if (this.path.compareTo(o.path) < 0)
+            }
+            if (this.path.compareTo(o.path) < 0){
                 return -1;
-            if (this.path.compareTo(o.path) > 0)
+            }
+            if (this.path.compareTo(o.path) > 0){
                 return 1;
-
+            }
             return 0;
         }
 
@@ -149,7 +159,7 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
     public void valuePathTupleComparison() {
         try {
             new ValuePathTuple("value", "path").compareTo(null);
-            fail("It should have raisen a NPE");
+            fail("It should have raised a NPE");
         } catch (NullPointerException e) {
             // so far so good
         }
@@ -187,7 +197,7 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
      *            the value of the property to assign
      * @return
      */
-    private Tree child(Tree father, String name, String propName, String propValue) {
+    private static Tree child(Tree father, String name, String propName, String propValue) {
         Tree child = father.addChild(name);
         child.setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, Type.NAME);
         child.setProperty(propName, propValue, Type.STRING);
@@ -202,15 +212,15 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
      * @param amount
      * @return
      */
-    private List<String> generateOrderedValues(int amount) {
-        if (amount > 1000)
+    private static List<String> generateOrderedValues(int amount) {
+        if (amount > 1000){
             throw new RuntimeException("amount cannot be greater than 100");
-
+        }
         List<String> values = new ArrayList<String>(amount);
         NumberFormat nf = new DecimalFormat("000");
-        for (int i = 0; i < amount; i++)
+        for (int i = 0; i < amount; i++){
             values.add(String.format("value%s", String.valueOf(nf.format(i))));
-
+        }
         return values;
     }
 
@@ -221,14 +231,14 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
      * @param values
      *            the values of the property that will be indexed
      * @param father
-     *            the father under which add the ndoes
+     *            the father under which add the nodes
      * @return
      */
     private List<ValuePathTuple> addChildNodes(final List<String> values, final Tree father) {
         List<ValuePathTuple> nodes = new ArrayList<ValuePathTuple>();
         Random rnd = new Random();
         int counter = 0;
-        while (values.size() > 0) {
+        while (!values.isEmpty()) {
             String v = values.remove(rnd.nextInt(values.size()));
             Tree t = child(father, String.format("n%s", counter++), ORDERED_PROPERTY, v);
             nodes.add(new ValuePathTuple(v, t.getPath()));
@@ -252,7 +262,7 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
      * @param orderedSequence
      *            the right order in which the resultset should be returned
      * @param resultset
-     *            the resultes
+     *            the resultset
      */
     private void assertRightOrder(@Nonnull
     final List<ValuePathTuple> orderedSequence, @Nonnull
@@ -313,7 +323,7 @@ public class OrderedPropertyIndexQueryTest extends AbstractQueryTest {
         List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test);
         root.commit();
 
-        ValuePathTuple searchfor = nodes.get((int) NUMBER_OF_NODES / 2); // getting the middle of the random list of
+        ValuePathTuple searchfor = nodes.get(NUMBER_OF_NODES / 2); // getting the middle of the random list of
                                                                          // nodes.
         Map<String, PropertyValue> filter = ImmutableMap
             .of(ORDERED_PROPERTY, PropertyValues.newString(searchfor.value));
