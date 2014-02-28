@@ -16,13 +16,10 @@
  */
 package org.apache.jackrabbit.oak.jcr.version;
 
-import static com.google.common.collect.Iterators.transform;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-
 import javax.jcr.AccessDeniedException;
 import javax.jcr.NodeIterator;
 import javax.jcr.ReferentialIntegrityException;
@@ -42,7 +39,8 @@ import org.apache.jackrabbit.oak.jcr.delegate.VersionHistoryDelegate;
 import org.apache.jackrabbit.oak.jcr.session.NodeImpl;
 import org.apache.jackrabbit.oak.jcr.session.SessionContext;
 import org.apache.jackrabbit.oak.jcr.session.operation.SessionOperation;
-import org.apache.jackrabbit.oak.util.TODO;
+
+import static com.google.common.collect.Iterators.transform;
 
 /**
  * {@code VersionHistoryImpl}...
@@ -222,10 +220,18 @@ public class VersionHistoryImpl extends NodeImpl<VersionHistoryDelegate>
     }
 
     @Override
-    public void removeVersion(String versionName)
+    public void removeVersion(final String versionName)
             throws ReferentialIntegrityException, AccessDeniedException,
             UnsupportedRepositoryOperationException, VersionException,
             RepositoryException {
-        TODO.unimplemented().doNothing();
+
+        perform(new SessionOperation<Void>(true) {
+            @Override
+            public Void perform() throws RepositoryException {
+                String oakName = sessionContext.getOakName(versionName);
+                dlg.removeVersion(oakName);
+                return null;
+            }
+        });
     }
 }

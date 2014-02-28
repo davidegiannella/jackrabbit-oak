@@ -16,8 +16,11 @@
  */
 package org.apache.jackrabbit.oak.security.authentication.token;
 
+import java.util.Map;
+
 import javax.annotation.Nonnull;
 
+import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.Root;
@@ -41,7 +44,12 @@ public class TokenConfigurationImpl extends ConfigurationBase implements TokenCo
     }
 
     public TokenConfigurationImpl(SecurityProvider securityProvider) {
-        super(securityProvider);
+        super(securityProvider, securityProvider.getParameters(NAME));
+    }
+
+    @Activate
+    private void activate(Map<String, Object> properties) {
+        setParameters(ConfigurationParameters.of(properties));
     }
 
     //----------------------------------------------< SecurityConfiguration >---

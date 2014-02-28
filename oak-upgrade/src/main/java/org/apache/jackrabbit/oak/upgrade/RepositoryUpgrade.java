@@ -22,7 +22,6 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 import javax.jcr.NamespaceException;
 import javax.jcr.NamespaceRegistry;
@@ -68,8 +67,6 @@ import org.apache.jackrabbit.spi.QValue;
 import org.apache.jackrabbit.spi.QValueConstraint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.ImmutableSet;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Lists.newArrayListWithCapacity;
@@ -139,84 +136,7 @@ public class RepositoryUpgrade {
      */
     private final NodeStore target;
 
-    /**
-     * the set of oak built-in nodetypes
-     * todo: load from file or from repo
-     */
-    private static final Set<String> BUILT_IN_NODE_TYPES = ImmutableSet.of(
-            "mix:created",
-            "mix:etag",
-            "mix:language",
-            "mix:lastModified",
-            "mix:lifecycle",
-            "mix:lockable",
-            "mix:mimeType",
-            "mix:referenceable",
-            "mix:shareable",
-            "mix:simpleVersionable",
-            "mix:title",
-            "mix:versionable",
-            "nt:activity",
-            "nt:address",
-            "nt:base",
-            "nt:childNodeDefinition",
-            "nt:configuration",
-            "nt:file",
-            "nt:folder",
-            "nt:frozenNode",
-            "nt:hierarchyNode",
-            "nt:linkedFile",
-            "nt:nodeType",
-            "nt:propertyDefinition",
-            "nt:query",
-            "nt:resource",
-            "nt:unstructured",
-            "nt:version",
-            "nt:versionHistory",
-            "nt:versionLabels",
-            "nt:versionedChild",
-            "rep:ChildNodeDefinition",
-            "rep:ChildNodeDefinitions",
-            "rep:NamedChildNodeDefinitions",
-            "rep:NamedPropertyDefinitions",
-            "rep:NodeType",
-            "rep:PropertyDefinition",
-            "rep:PropertyDefinitions",
-            "oak:QueryIndexDefinition",
-            "oak:Unstructured",
-            "rep:ACE",
-            "rep:ACL",
-            "rep:AccessControl",
-            "rep:AccessControllable",
-            "rep:Activities",
-            "rep:Authorizable",
-            "rep:AuthorizableFolder",
-            "rep:Configurations",
-            "rep:DenyACE",
-            "rep:GrantACE",
-            "rep:Group",
-            "rep:Impersonatable",
-            "rep:MemberReferences",
-            "rep:MemberReferencesList",
-            "rep:Members",
-            "rep:MergeConflict",
-            "rep:PermissionStore",
-            "rep:Permissions",
-            "rep:Policy",
-            "rep:PrincipalAccessControl",
-            "rep:Privilege",
-            "rep:Privileges",
-            "rep:RepoAccessControllable",
-            "rep:Restrictions",
-            "rep:RetentionManageable",
-            "rep:Token",
-            "rep:User",
-            "rep:VersionReference",
-            "rep:nodeTypes",
-            "rep:root",
-            "rep:system",
-            "rep:versionStorage"
-    );
+    private boolean copyBinariesByReference = false;
 
     /**
      * Copies the contents of the repository in the given source directory
@@ -260,6 +180,14 @@ public class RepositoryUpgrade {
     public RepositoryUpgrade(RepositoryContext source, NodeStore target) {
         this.source = source;
         this.target = target;
+    }
+
+    public boolean isCopyBinariesByReference() {
+        return copyBinariesByReference;
+    }
+
+    public void setCopyBinariesByReference(boolean copyBinariesByReference) {
+        this.copyBinariesByReference = copyBinariesByReference;
     }
 
     /**
@@ -460,15 +388,13 @@ public class RepositoryUpgrade {
 
         logger.info("Copying registered node types");
         for (Name name : sourceRegistry.getRegisteredNodeTypes()) {
-            // skip built-in nodetypes (OAK-1235)
             String oakName = getOakName(name);
-            if (BUILT_IN_NODE_TYPES.contains(oakName)) {
-                logger.info("skipping built-on nodetype: {}", name);
-                continue;
+            // skip built-in nodetypes (OAK-1235)
+            if (!types.hasChildNode(oakName)) {
+                QNodeTypeDefinition def = sourceRegistry.getNodeTypeDef(name);
+                NodeBuilder type = types.child(oakName);
+                copyNodeType(def, type);
             }
-            QNodeTypeDefinition def = sourceRegistry.getNodeTypeDef(name);
-            NodeBuilder type = types.child(oakName);
-            copyNodeType(def, type);
         }
     }
 
@@ -506,14 +432,14 @@ public class RepositoryUpgrade {
         // + jcr:propertyDefinition (nt:propertyDefinition) = nt:propertyDefinition protected sns
         QPropertyDefinition[] properties = def.getPropertyDefs();
         for (int i = 0; i < properties.length; i++) {
-            String name = JCR_PROPERTYDEFINITION + '[' + i + ']';
+            String name = JCR_PROPERTYDEFINITION + '[' + (i + 1) + ']';
             copyPropertyDefinition(properties[i], builder.child(name));
         }
 
         // + jcr:childNodeDefinition (nt:childNodeDefinition) = nt:childNodeDefinition protected sns
         QNodeDefinition[] childNodes = def.getChildNodeDefs();
         for (int i = 0; i < childNodes.length; i++) {
-            String name = JCR_CHILDNODEDEFINITION + '[' + i + ']';
+            String name = JCR_CHILDNODEDEFINITION + '[' + (i + 1) + ']';
             copyChildNodeDefinition(childNodes[i], builder.child(name));
         }
     }
@@ -612,9 +538,9 @@ public class RepositoryUpgrade {
 
         NodeBuilder system = root.child(JCR_SYSTEM);
         system.setChildNode(JCR_VERSIONSTORAGE, new JackrabbitNodeState(
-                pm, nr, VERSION_STORAGE_NODE_ID));
+                pm, nr, VERSION_STORAGE_NODE_ID, copyBinariesByReference));
         system.setChildNode("jcr:activities", new JackrabbitNodeState(
-                pm, nr, ACTIVITIES_NODE_ID));
+                pm, nr, ACTIVITIES_NODE_ID, copyBinariesByReference));
     }   
 
     private void copyWorkspaces(
@@ -630,7 +556,8 @@ public class RepositoryUpgrade {
                 source.getWorkspaceInfo(name).getPersistenceManager();
         NamespaceRegistryImpl nr = source.getNamespaceRegistry();
 
-        NodeState state = new JackrabbitNodeState(pm, nr, ROOT_NODE_ID);
+        NodeState state = new JackrabbitNodeState(
+                pm, nr, ROOT_NODE_ID, copyBinariesByReference);
         for (PropertyState property : state.getProperties()) {
             root.setProperty(property);
         }

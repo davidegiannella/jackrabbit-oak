@@ -69,11 +69,12 @@ public class Activator implements BundleActivator, ServiceTrackerCustomizer {
 
     private final WhiteboardExecutor executor = new WhiteboardExecutor();
 
-    // TODO should not be hardcoded
+    // FIXME OAK-1476 : SecurityProvider implementation should not be hardcoded
     private final SecurityProvider securityProvider =
             new SecurityProviderImpl(buildSecurityConfig());
 
     private static ConfigurationParameters buildSecurityConfig() {
+        // FIXME OAK-1476: review configuration default values which are Adobe specific
         Map<String, Object> userConfig = new HashMap<String, Object>();
         userConfig.put(UserConstants.PARAM_GROUP_PATH, "/home/groups");
         userConfig.put(UserConstants.PARAM_USER_PATH, "/home/users");

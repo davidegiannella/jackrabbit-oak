@@ -27,10 +27,12 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.util.List;
 
+import javax.jcr.Binary;
 import javax.jcr.NamespaceRegistry;
 import javax.jcr.PropertyType;
 import javax.jcr.RepositoryException;
 
+import org.apache.jackrabbit.api.ReferenceBinary;
 import org.apache.jackrabbit.core.id.NodeId;
 import org.apache.jackrabbit.core.id.PropertyId;
 import org.apache.jackrabbit.core.persistence.PersistenceManager;
@@ -71,16 +73,20 @@ class JackrabbitNodeState extends AbstractNodeState {
 
     private final NodeState state;
 
+    private final boolean useBinaryReferences;
+
     private JackrabbitNodeState(
             PersistenceManager source, NamespaceRegistry registry,
-            NodeState state) {
+            NodeState state, boolean useBinaryReferences) {
         this.source = source;
         this.registry = registry;
         this.state = state;
+        this.useBinaryReferences = useBinaryReferences;
     }
 
     JackrabbitNodeState(
-            PersistenceManager source, NamespaceRegistry registry, NodeId id) {
+            PersistenceManager source, NamespaceRegistry registry,
+            NodeId id, boolean useBinaryReferences) {
         this.source = source;
         this.registry = registry;
         try {
@@ -88,6 +94,7 @@ class JackrabbitNodeState extends AbstractNodeState {
         } catch (ItemStateException e) {
             throw new IllegalStateException("Unable to access node " + id, e);
         }
+        this.useBinaryReferences = useBinaryReferences;
     }
 
     //---------------------------------------------------------< NodeState >--
@@ -152,8 +159,9 @@ class JackrabbitNodeState extends AbstractNodeState {
             }
 
             try {
+                NodeState childState = source.load(entry.getId());
                 JackrabbitNodeState child = new JackrabbitNodeState(
-                        source, registry, source.load(entry.getId()));
+                        source, registry, childState, useBinaryReferences);
                 entries.add(new MemoryChildNodeEntry(name, child));
             } catch (ItemStateException e) {
                 warn("Unable to access child entry " + name, e);
@@ -314,6 +322,27 @@ class JackrabbitNodeState extends AbstractNodeState {
                 } catch (RepositoryException e) {
                     warn("Unable to access blob contents", e);
                     return new ByteArrayInputStream(new byte[0]);
+                }
+            }
+            @Override
+            public String getReference() {
+                if (!useBinaryReferences) {
+                    return null;
+                }
+                try {
+                    Binary binary = value.getBinary();
+                    try {
+                        if (binary instanceof ReferenceBinary) {
+                            return ((ReferenceBinary) binary).getReference();
+                        } else {
+                            return null;
+                        }
+                    } finally {
+                        binary.dispose();
+                    }
+                } catch (RepositoryException e) {
+                    warn("Unable to get blob reference", e);
+                    return null;
                 }
             }
         };

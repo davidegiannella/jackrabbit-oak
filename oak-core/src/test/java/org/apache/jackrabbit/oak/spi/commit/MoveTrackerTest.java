@@ -27,9 +27,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * MoveTrackerTest... TODO
- */
 public class MoveTrackerTest {
 
     @Test
@@ -143,7 +140,7 @@ public class MoveTrackerTest {
      * Line 237
      */
     @Test
-    @Ignore("OAK-710")  // FIXME see OAK-710
+    @Ignore("Known Limitation of OAK-710")
     public void test12() {
         MoveTracker mt4 = new MoveTracker();
         mt4.addMove("/a", "/b/c");
