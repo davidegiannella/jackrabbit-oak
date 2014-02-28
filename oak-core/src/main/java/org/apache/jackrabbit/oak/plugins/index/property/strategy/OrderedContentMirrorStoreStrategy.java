@@ -38,22 +38,22 @@ import com.google.common.base.Strings;
 
 
 public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrategy {
-   private final static Logger log = LoggerFactory.getLogger(OrderedContentMirrorStoreStrategy.class);
+   private static final Logger log = LoggerFactory.getLogger(OrderedContentMirrorStoreStrategy.class);
    
    /**
     * the property linking to the next node
     */
-   public final static String NEXT = ":next";
+   public static final String NEXT = ":next";
    
    /**
     * node that works as root of the index (start point or 0 element)
     */
-   public final static String START = ":start";
+   public static final String START = ":start";
    
    /**
     * a NodeState used for easy creating of an empty :start
     */
-   public final static NodeState EMPTY_START_NODE = EmptyNodeState.EMPTY_NODE.builder().setProperty(NEXT, "").getNodeState(); 
+   public static final NodeState EMPTY_START_NODE = EmptyNodeState.EMPTY_NODE.builder().setProperty(NEXT, "").getNodeState(); 
    
    @Override
    NodeBuilder fetchKeyNode(@Nonnull NodeBuilder index, @Nonnull String key) {
@@ -76,7 +76,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             _key.setProperty(NEXT,nextKey);
             start.setProperty(NEXT, key);
          }else{
-            @SuppressWarnings("unchecked") Iterable<ChildNodeEntry> children = (Iterable<ChildNodeEntry>)getChildNodeEntries(index.getNodeState());
+            Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(index.getNodeState());
             for(ChildNodeEntry child : children){
                nextKey = child.getNodeState().getString(NEXT);
                if(Strings.isNullOrEmpty(nextKey)){
@@ -110,7 +110,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                ChildNodeEntry previous = findPrevious(index.getNodeState(), node.getNodeState()); //(1) find the previous element
                log.debug("previous: {}",previous);
                String next = node.getString(NEXT); //(2) find the next element
-               if(next==null) next = "";
+               if(next==null) {
+                   next = "";
+               }
                index.getChildNode(previous.getName()).setProperty(NEXT, next); //(3) re-link the previous to the next
                node.remove(); //(4) remove the current node
             }else{
@@ -120,12 +122,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
       }
    }
 
-   @SuppressWarnings("unchecked")
    @Nullable ChildNodeEntry findPrevious(@Nonnull final NodeState index, @Nonnull final NodeState node){
       ChildNodeEntry previous = null;
       ChildNodeEntry current = null; 
       boolean found = false;
-      Iterator<ChildNodeEntry> it = (Iterator<ChildNodeEntry>) getChildNodeEntries(index,true).iterator();
+      Iterator<? extends ChildNodeEntry> it = getChildNodeEntries(index,true).iterator();
       
       while(!found && it.hasNext()){
          current = it.next();
@@ -134,7 +135,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             previous = current;
          }else{
             found = node.equals(current.getNodeState());
-            if(!found) previous = current;
+            if(!found) {
+                previous = current;
+            }
          }
       }
       
@@ -157,6 +160,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     * @param index the root of the index (:index)
     * @return
     */
+   @Override
    @Nonnull Iterable<? extends ChildNodeEntry> getChildNodeEntries(@Nonnull final NodeState index){
       return getChildNodeEntries(index, false);
    }
@@ -223,7 +227,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
       return cne;   
    }
    
-   private final class OrderedChildNodeEntry extends AbstractChildNodeEntry {
+   private static final class OrderedChildNodeEntry extends AbstractChildNodeEntry {
       private final String name;
       private final NodeState state;
       
