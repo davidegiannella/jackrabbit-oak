@@ -38,7 +38,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 /**
- * <code>ConcurrentAddIT</code> adds nodes with multiple sessions in separate
+ * <code>ConcurrentAddReferenceTest</code> adds nodes with multiple sessions in separate
  * locations of the repository and creates references to a single node.
  */
 public class ConcurrentAddReferenceTest extends AbstractRepositoryTest {
@@ -73,7 +73,7 @@ public class ConcurrentAddReferenceTest extends AbstractRepositoryTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    @Ignore("OAK-1472") // FIXME OAK-1472
+    @Ignore
     public void addReferences() throws Exception {
         List<Exception> exceptions = Collections.synchronizedList(new ArrayList<Exception>());
         Node test = getAdminSession().getRootNode().addNode("test");
