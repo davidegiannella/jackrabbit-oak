@@ -19,10 +19,7 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.util.Arrays;
 
@@ -31,6 +28,10 @@ import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.junit.Test;
+
+import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.*;
+
+import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 
 public class OrderedPropertyIndexEditorTest {
    
@@ -79,5 +80,37 @@ public class OrderedPropertyIndexEditorTest {
       assertEquals("When multiple properties are a passed only the first one is taken", 1,ie.getPropertyNames().size());
       assertEquals("jcr:lastModified",ie.getPropertyNames().iterator().next());
       assertTrue("Expecting a properly configured index",ie.isProperlyConfigured());
-   }   
+   }
+   
+   @Test
+   public void orderedDirectionFromString(){
+       assertNull("A non-existing order direction should result in null",OrderDirection.fromString("foobar"));
+       assertEquals(OrderDirection.ASC, OrderDirection.fromString("ascending"));
+       assertFalse(OrderDirection.ASC.equals(OrderDirection.fromString("descending")));
+       assertEquals(OrderDirection.DESC,OrderDirection.fromString("descending"));
+       assertFalse(OrderDirection.DESC.equals(OrderDirection.fromString("ascending")));
+   }
+   
+   @Test
+   public void orderDirectionDefinitionNotSpecified(){
+       final String PROPERTY = "foobar";
+       NodeBuilder definition = EmptyNodeState.EMPTY_NODE.builder();
+       definition.setProperty(IndexConstants.PROPERTY_NAMES, PROPERTY);
+       OrderedPropertyIndexEditor editor = new OrderedPropertyIndexEditor(definition, null, null);
+       assertNotNull(editor.getPropertyNames());
+       assertEquals(PROPERTY,editor.getPropertyNames().iterator().next());
+       assertEquals(OrderedIndex.OrderDirection.ASC,editor.getDirection());
+   }
+
+   @Test
+   public void orderDirectionDefinitionDescending(){
+       final String PROPERTY = "foobar";
+       NodeBuilder definition = EmptyNodeState.EMPTY_NODE.builder();
+       definition.setProperty(IndexConstants.PROPERTY_NAMES, PROPERTY);
+       definition.setProperty(OrderedIndex.DIRECTION,"descending");
+       OrderedPropertyIndexEditor editor = new OrderedPropertyIndexEditor(definition, null, null);
+       assertNotNull(editor.getPropertyNames());
+       assertEquals(PROPERTY,editor.getPropertyNames().iterator().next());
+       assertEquals(OrderedIndex.OrderDirection.DESC,editor.getDirection());
+   }
 }
