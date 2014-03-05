@@ -22,7 +22,8 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 /**
- * interface for shared constants around different actors: QueryIndex, IndexEditors, IndexEditorProviders, ...
+ * interface for shared constants around different actors: QueryIndex, IndexEditors,
+ * IndexEditorProviders, ...
  */
 public interface OrderedIndex {
     /**

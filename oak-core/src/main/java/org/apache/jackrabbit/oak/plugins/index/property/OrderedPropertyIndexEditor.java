@@ -103,9 +103,8 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
     }
 
     @Override
-    PropertyIndexEditor getChildIndexEditor(@Nonnull
-    PropertyIndexEditor parent, @Nonnull
-    String name) {
+    PropertyIndexEditor getChildIndexEditor(@Nonnull PropertyIndexEditor parent, 
+                                            @Nonnull String name) {
         return new OrderedPropertyIndexEditor(this, name);
     }
 
