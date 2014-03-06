@@ -51,8 +51,8 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
     public OrderedPropertyIndexEditor(NodeBuilder definition, NodeState root, IndexUpdateCallback callback) {
         super(definition, root, callback);
 
+        //configuring propertyNames
         Set<String> pns = null;
-
         PropertyState names = definition.getProperty(IndexConstants.PROPERTY_NAMES);
         if (names != null) {
             String value = names.getValue(Type.NAME, 0);
@@ -66,8 +66,13 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
                 this.properlyConfigured = true;
             }
         }
-
         this.propertyNames = pns;
+        
+        //configuring direction
+        OrderDirection dir = OrderDirection.fromString(definition.getString(OrderedIndex.DIRECTION));
+        if(dir!=null){
+            this.direction = dir;
+        }
     }
 
     OrderedPropertyIndexEditor(OrderedPropertyIndexEditor parent, String name) {

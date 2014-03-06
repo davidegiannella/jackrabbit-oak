@@ -19,20 +19,21 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
 
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
-import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
-import org.junit.Ignore;
-import org.junit.Test;
-
-import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.*;
-
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
+import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
+import org.junit.Test;
 
 public class OrderedPropertyIndexEditorTest {
    
@@ -94,25 +95,36 @@ public class OrderedPropertyIndexEditorTest {
    
    @Test
    public void orderDirectionDefinitionNotSpecified(){
-       final String PROPERTY = "foobar";
+       final String property = "foobar";
        NodeBuilder definition = EmptyNodeState.EMPTY_NODE.builder();
-       definition.setProperty(IndexConstants.PROPERTY_NAMES, PROPERTY);
+       definition.setProperty(IndexConstants.PROPERTY_NAMES, property);
        OrderedPropertyIndexEditor editor = new OrderedPropertyIndexEditor(definition, null, null);
        assertNotNull(editor.getPropertyNames());
-       assertEquals(PROPERTY,editor.getPropertyNames().iterator().next());
+       assertEquals(property,editor.getPropertyNames().iterator().next());
        assertEquals(OrderedIndex.OrderDirection.ASC,editor.getDirection());
    }
 
    @Test 
-   @Ignore("disabling for merge")
    public void orderDirectionDefinitionDescending(){
-       final String PROPERTY = "foobar";
+       final String property = "foobar";
        NodeBuilder definition = EmptyNodeState.EMPTY_NODE.builder();
-       definition.setProperty(IndexConstants.PROPERTY_NAMES, PROPERTY);
+       definition.setProperty(IndexConstants.PROPERTY_NAMES, property);
        definition.setProperty(OrderedIndex.DIRECTION,"descending");
        OrderedPropertyIndexEditor editor = new OrderedPropertyIndexEditor(definition, null, null);
        assertNotNull(editor.getPropertyNames());
-       assertEquals(PROPERTY,editor.getPropertyNames().iterator().next());
+       assertEquals(property,editor.getPropertyNames().iterator().next());
        assertEquals(OrderedIndex.OrderDirection.DESC,editor.getDirection());
+   }
+   
+   @Test
+   public void orderDirectionUnknownDefinition(){
+       final String property = "foobar";
+       NodeBuilder definition = EmptyNodeState.EMPTY_NODE.builder();
+       definition.setProperty(IndexConstants.PROPERTY_NAMES, property);
+       definition.setProperty(OrderedIndex.DIRECTION,"bazbaz");
+       OrderedPropertyIndexEditor editor = new OrderedPropertyIndexEditor(definition, null, null);
+       assertNotNull(editor.getPropertyNames());
+       assertEquals(property,editor.getPropertyNames().iterator().next());
+       assertEquals("if we provide a non-valid definition for order the Ascending is expected",OrderedIndex.OrderDirection.ASC,editor.getDirection());
    }
 }
