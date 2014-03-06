@@ -158,7 +158,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             }
         }
 
-        return ((found) ? previous : null);
+        return (found) ? previous : null;
     }
 
     @Override

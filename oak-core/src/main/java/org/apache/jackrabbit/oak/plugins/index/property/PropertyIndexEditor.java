@@ -325,7 +325,7 @@ class PropertyIndexEditor implements IndexEditor {
      * @param name the name of the child node
      * @return an instance of the PropertyIndexEditor
      */
-    PropertyIndexEditor getChildIndexEditor(@Nonnull PropertyIndexEditor parent, @Nonnull String name){
+    PropertyIndexEditor getChildIndexEditor(@Nonnull PropertyIndexEditor parent, @Nonnull String name) {
        return new PropertyIndexEditor(parent, name);
     }
     

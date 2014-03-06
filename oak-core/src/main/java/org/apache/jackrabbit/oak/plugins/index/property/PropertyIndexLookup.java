@@ -99,7 +99,7 @@ public class PropertyIndexLookup {
         }
 
         NodeState node = root;
-        for(String s : PathUtils.elements(path)){
+        for (String s : PathUtils.elements(path)) {
             if (getIndexNode(node, propertyName, filter) != null) {
                 return true;
             }
