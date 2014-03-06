@@ -138,6 +138,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
     }
 
+    /**
+     * find the previous item (ChildNodeEntry) in the index given the provided NodeState for
+     * comparison
+     * 
+     * @param index the index we want to look into ({@code :index})
+     * @param node the node we want to compare
+     * @return the previous item or null if not found.
+     */
     @Nullable
     ChildNodeEntry findPrevious(@Nonnull final NodeState index, @Nonnull final NodeState node) {
         ChildNodeEntry previous = null;
