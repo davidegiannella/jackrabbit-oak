@@ -48,10 +48,11 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
 
     private OrderDirection direction = OrderDirection.ASC;
 
-    public OrderedPropertyIndexEditor(NodeBuilder definition, NodeState root, IndexUpdateCallback callback) {
+    public OrderedPropertyIndexEditor(NodeBuilder definition, NodeState root,
+                                      IndexUpdateCallback callback) {
         super(definition, root, callback);
 
-        //configuring propertyNames
+        // configuring propertyNames
         Set<String> pns = null;
         PropertyState names = definition.getProperty(IndexConstants.PROPERTY_NAMES);
         if (names != null) {
@@ -67,17 +68,26 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
             }
         }
         this.propertyNames = pns;
-        
-        //configuring direction
-        OrderDirection dir = OrderDirection.fromString(definition.getString(OrderedIndex.DIRECTION));
-        if(dir!=null){
-            this.direction = dir;
+
+        // configuring direction
+        String propertyDirection = definition.getString(OrderedIndex.DIRECTION);
+        if (propertyDirection == null) {
+            log.info("Using default direction for sorting: {}",this.direction);
+        } else {
+            OrderDirection dir = OrderDirection.fromString(propertyDirection);
+            if (dir == null) {
+                log.warn("An unknown direction has been specified for sorting: '{}'. Using default one. {}",
+                         propertyDirection, this.direction);
+            } else {
+                this.direction = dir;
+            }
         }
     }
 
     OrderedPropertyIndexEditor(OrderedPropertyIndexEditor parent, String name) {
         super(parent, name);
         this.propertyNames = parent.getPropertyNames();
+        this.direction = parent.getDirection();
     }
 
     /**
