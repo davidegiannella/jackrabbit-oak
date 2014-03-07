@@ -42,12 +42,12 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
     /**
      * the default Ascending ordered StoreStrategy
      */
-    private static final IndexStoreStrategy ORDERED_MIRROR = new OrderedContentMirrorStoreStrategy();
+    static final IndexStoreStrategy ORDERED_MIRROR = new OrderedContentMirrorStoreStrategy();
     
     /**
      * the Descending ordered StoreStrategy
      */
-    private static final IndexStoreStrategy ORDERED_MIRROR_DESCENDING = new OrderedContentMirrorStoreStrategy(OrderDirection.DESC);
+    static final IndexStoreStrategy ORDERED_MIRROR_DESCENDING = new OrderedContentMirrorStoreStrategy(OrderDirection.DESC);
 
     private final Set<String> propertyNames;
 

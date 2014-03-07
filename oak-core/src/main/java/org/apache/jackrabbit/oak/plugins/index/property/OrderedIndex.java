@@ -44,7 +44,7 @@ public interface OrderedIndex {
         private OrderDirection(String direction){
             this.direction = direction;
         }
-        private String getDirection(){
+        public String getDirection(){
             return direction;
         }
         
