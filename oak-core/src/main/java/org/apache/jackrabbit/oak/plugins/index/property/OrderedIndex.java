@@ -72,4 +72,9 @@ public interface OrderedIndex {
      * {@code  { "propertyNames"="foobar", "direction"="ascending" } }
      */
     String DIRECTION = "direction";
+    
+    /**
+     * the default direction for sorting the index
+     */
+    OrderDirection DEFAULT_DIRECTION = OrderDirection.ASC;
 }

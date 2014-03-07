@@ -38,13 +38,22 @@ import com.google.common.base.Strings;
 
 public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
     private static final Logger log = LoggerFactory.getLogger(OrderedPropertyIndexEditor.class);
+    
+    /**
+     * the default Ascending ordered StoreStrategy
+     */
     private static final IndexStoreStrategy ORDERED_MIRROR = new OrderedContentMirrorStoreStrategy();
+    
+    /**
+     * the Descending ordered StoreStrategy
+     */
+    private static final IndexStoreStrategy ORDERED_MIRROR_DESCENDING = new OrderedContentMirrorStoreStrategy(OrderDirection.DESC);
 
     private final Set<String> propertyNames;
 
     private boolean properlyConfigured;
 
-    private OrderDirection direction = OrderDirection.ASC;
+    private OrderDirection direction = OrderedIndex.DEFAULT_DIRECTION;
 
     public OrderedPropertyIndexEditor(NodeBuilder definition, NodeState root,
                                       IndexUpdateCallback callback) {
@@ -95,7 +104,11 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
      */
     @Override
     IndexStoreStrategy getStrategy(boolean unique) {
-        return ORDERED_MIRROR;
+        IndexStoreStrategy store = ORDERED_MIRROR;
+        if(!OrderedIndex.DEFAULT_DIRECTION.equals(getDirection())){
+            store = ORDERED_MIRROR_DESCENDING;
+        }
+        return store;
     }
 
     public boolean isProperlyConfigured() {
