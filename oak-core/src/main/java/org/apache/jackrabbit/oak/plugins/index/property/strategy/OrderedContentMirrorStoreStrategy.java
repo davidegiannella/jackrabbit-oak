@@ -86,26 +86,21 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         } else {
             // specific use-case where the item has to be added as first of the list
             String nextKey = n;
-            if (key.compareTo(nextKey) < 0) {
-                localkey = index.child(key);
-                localkey.setProperty(NEXT, nextKey);
-                start.setProperty(NEXT, key);
-            } else {
-                Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(index.getNodeState());
-                for (ChildNodeEntry child : children) {
-                    nextKey = child.getNodeState().getString(NEXT);
-                    if (Strings.isNullOrEmpty(nextKey)) {
-                        // we're at the last element, therefore our 'key' has to be appended
+            Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(index.getNodeState(),
+                                                                              true);
+            for (ChildNodeEntry child : children) {
+                nextKey = child.getNodeState().getString(NEXT);
+                if (Strings.isNullOrEmpty(nextKey)) {
+                    // we're at the last element, therefore our 'key' has to be appended
+                    index.getChildNode(child.getName()).setProperty(NEXT, key);
+                    localkey = index.child(key);
+                    localkey.setProperty(NEXT, "");
+                } else {
+                    if (key.compareTo(nextKey) < 0) {
                         index.getChildNode(child.getName()).setProperty(NEXT, key);
                         localkey = index.child(key);
-                        localkey.setProperty(NEXT, "");
-                    } else {
-                        if (key.compareTo(nextKey) < 0) {
-                            index.getChildNode(child.getName()).setProperty(NEXT, key);
-                            localkey = index.child(key);
-                            localkey.setProperty(NEXT, nextKey);
-                            break;
-                        }
+                        localkey.setProperty(NEXT, nextKey);
+                        break;
                     }
                 }
             }
