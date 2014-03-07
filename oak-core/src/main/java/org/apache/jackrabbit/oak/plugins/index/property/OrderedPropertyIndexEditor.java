@@ -22,7 +22,6 @@ import java.util.Set;
 
 import javax.annotation.Nonnull;
 
-import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
@@ -30,7 +29,6 @@ import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy;
-import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
@@ -91,14 +89,6 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
     }
 
     /**
-     * 
-     * @return the direction of the index configuration
-     */
-    public OrderDirection getDirection() {
-        return direction;
-    }
-
-    /**
      * Same as {@link PropertyIndexEditor#getStrategy(boolean)} but ignores the boolean flag.
      * 
      * @return the proper index strategy
@@ -123,51 +113,11 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
         return new OrderedPropertyIndexEditor(this, name);
     }
 
-    @Override
-    public void enter(NodeState before, NodeState after) {
-        log.debug("enter() - before: {} - after: {}", before, after);
-        super.enter(before, after);
-    }
-
-    @Override
-    public void leave(NodeState before, NodeState after) throws CommitFailedException {
-        log.debug("leave() - before: {} - after: {}", before, after);
-        super.leave(before, after);
-    }
-
-    @Override
-    public void propertyAdded(PropertyState after) {
-        log.debug("propertyAdded() - after: {}", after);
-        super.propertyAdded(after);
-    }
-
-    @Override
-    public void propertyChanged(PropertyState before, PropertyState after) {
-        log.debug("propertyChanged() - before: {} - after: {}", before, after);
-        super.propertyChanged(before, after);
-    }
-
-    @Override
-    public void propertyDeleted(PropertyState before) {
-        log.debug("propertyDeleted() -  before: {}", before);
-        super.propertyDeleted(before);
-    }
-
-    @Override
-    public Editor childNodeAdded(String name, NodeState after) {
-        log.debug("childNodeAdded() - name: {} - after: {}", name, after);
-        return super.childNodeAdded(name, after);
-    }
-
-    @Override
-    public Editor childNodeChanged(String name, NodeState before, NodeState after) {
-        log.debug("childNodeChanged() - name: {} - before: {} - after: {}", new Object[] { name, before, after });
-        return super.childNodeChanged(name, before, after);
-    }
-
-    @Override
-    public Editor childNodeDeleted(String name, NodeState before) {
-        log.debug("childNodeDeleted() - name: {} - before: {}", name, before);
-        return super.childNodeDeleted(name, before);
+    /**
+     * 
+     * @return the direction of the index configuration
+     */
+    public OrderDirection getDirection() {
+        return direction;
     }
 }
