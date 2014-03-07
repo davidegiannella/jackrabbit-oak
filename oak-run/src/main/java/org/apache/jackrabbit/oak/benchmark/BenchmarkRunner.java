@@ -157,6 +157,14 @@ public class BenchmarkRunner {
                     runAsAdmin.value(options),
                     itemsToRead.value(options),
                     report.value(options)),
+            new ConcurrentHasPermissionTest(
+                    runAsAdmin.value(options),
+                    itemsToRead.value(options),
+                    report.value(options)),
+            new ConcurrentHasPermissionTest2(
+                    runAsAdmin.value(options),
+                    itemsToRead.value(options),
+                    report.value(options)),
             new ManyUserReadTest(
                     runAsAdmin.value(options),
                     itemsToRead.value(options),
@@ -167,7 +175,7 @@ public class BenchmarkRunner {
                     itemsToRead.value(options),
                     report.value(options),
                     randomUser.value(options)),
-            new ConcurrentWriteACLTest(),
+            new ConcurrentWriteACLTest(itemsToRead.value(options)),
             new ConcurrentEveryoneACLTest(runAsAdmin.value(options), itemsToRead.value(options)),
             ReadManyTest.linear("LinearReadEmpty", 1, ReadManyTest.EMPTY),
             ReadManyTest.linear("LinearReadFiles", 1, ReadManyTest.FILES),

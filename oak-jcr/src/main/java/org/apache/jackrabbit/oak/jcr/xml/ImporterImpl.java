@@ -184,8 +184,8 @@ public class ImporterImpl implements Importer {
 
     private Tree createTree(@Nonnull Tree parent, @Nonnull NodeInfo nInfo, @CheckForNull String uuid) throws RepositoryException {
         String ntName = nInfo.getPrimaryTypeName();
-        String value = (ntName != null) ? ntName : TreeUtil.getDefaultChildType(ntTypesRoot, parent, nInfo.getName());
-        Tree child = TreeUtil.addChild(parent, nInfo.getName(), value, ntTypesRoot, userID);
+        Tree child = TreeUtil.addChild(
+                parent, nInfo.getName(), ntName, ntTypesRoot, userID);
         if (ntName != null) {
             accessManager.checkPermissions(child, child.getProperty(JcrConstants.JCR_PRIMARYTYPE), Permissions.NODE_TYPE_MANAGEMENT);
         }

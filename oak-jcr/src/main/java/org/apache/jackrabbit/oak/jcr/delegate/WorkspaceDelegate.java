@@ -24,7 +24,6 @@ import javax.annotation.Nonnull;
 import javax.jcr.ItemExistsException;
 import javax.jcr.PathNotFoundException;
 import javax.jcr.RepositoryException;
-import javax.jcr.nodetype.ConstraintViolationException;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
@@ -136,13 +135,8 @@ public class WorkspaceDelegate {
         private void copy(Tree source, Tree destParent, String destName, Tree typeRoot, String userId)
                 throws RepositoryException {
             String primaryType = TreeUtil.getPrimaryTypeName(source);
-            if (primaryType == null) {
-                primaryType = TreeUtil.getDefaultChildType(typeRoot, destParent, destName);
-                if (primaryType == null) {
-                    throw new ConstraintViolationException("Cannot determine default node type.");
-                }
-            }
-            Tree dest = TreeUtil.addChild(destParent, destName, primaryType, typeRoot, userId);
+            Tree dest = TreeUtil.addChild(
+                    destParent, destName, primaryType, typeRoot, userId);
             for (PropertyState property : source.getProperties()) {
                 String propName = property.getName();
                 if (JCR_MIXINTYPES.equals(propName)) {
