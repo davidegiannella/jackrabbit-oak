@@ -17,6 +17,8 @@
 package org.apache.jackrabbit.oak.plugins.segment.http;
 
 import static com.google.common.base.Charsets.UTF_8;
+import static com.google.common.collect.Sets.newHashSet;
+import static org.apache.jackrabbit.oak.plugins.segment.SegmentIdFactory.isBulkSegmentId;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -27,23 +29,45 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
+import java.util.Set;
 import java.util.UUID;
 
 import javax.annotation.CheckForNull;
 
-import org.apache.jackrabbit.oak.plugins.segment.AbstractStore;
-import org.apache.jackrabbit.oak.plugins.segment.Journal;
+import org.apache.jackrabbit.oak.api.Blob;
+import org.apache.jackrabbit.oak.cache.CacheLIRS;
 import org.apache.jackrabbit.oak.plugins.segment.RecordId;
 import org.apache.jackrabbit.oak.plugins.segment.Segment;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentIdFactory;
+import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeState;
+import org.apache.jackrabbit.oak.plugins.segment.SegmentStore;
+import org.apache.jackrabbit.oak.plugins.segment.SegmentWriter;
 
+import com.google.common.cache.Cache;
 import com.google.common.io.ByteStreams;
 
-public class HttpStore extends AbstractStore {
+public class HttpStore implements SegmentStore {
+
+    protected static final int MB = 1024 * 1024;
 
     private final SegmentIdFactory factory = new SegmentIdFactory();
 
+    private final SegmentWriter writer = new SegmentWriter(this, factory);
+
     private final URL base;
+
+    private final Cache<UUID, Segment> segments;
+
+    /**
+     * Identifiers of the segments that are currently being loaded.
+     */
+    private final Set<UUID> currentlyLoading = newHashSet();
+
+    /**
+     * Number of threads that are currently waiting for segments to be loaded.
+     * Used to avoid extra {@link #notifyAll()} calls when nobody is waiting.
+     */
+    private int currentlyWaiting = 0;
 
     /**
      * @param base
@@ -52,61 +76,106 @@ public class HttpStore extends AbstractStore {
      * @param cacheSizeMB
      */
     public HttpStore(URL base, int cacheSizeMB) {
-        super(cacheSizeMB);
         this.base = base;
-    }
-
-    protected URLConnection get(String fragment) throws MalformedURLException,
-            IOException {
-        return new URL(base, fragment).openConnection();
+        this.segments = CacheLIRS.newBuilder()
+                .weigher(Segment.WEIGHER)
+                .maximumWeight(cacheSizeMB * MB)
+                .build();
     }
 
     @Override
-    public Journal getJournal(final String name) {
-        return new Journal() {
-            @Override
-            public RecordId getHead() {
+    public SegmentWriter getWriter() {
+        return writer;
+    }
+
+    @Override
+    public SegmentNodeState getHead() {
+        try {
+            URLConnection connection = base.openConnection();
+            InputStream stream = connection.getInputStream();
+            try {
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(stream, UTF_8));
+                return new SegmentNodeState(
+                        getWriter().getDummySegment(),
+                        RecordId.fromString(reader.readLine()));
+            } finally {
+                stream.close();
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(e);
+        } catch (MalformedURLException e) {
+            throw new IllegalStateException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public boolean setHead(SegmentNodeState base, SegmentNodeState head) {
+        // TODO throw new UnsupportedOperationException();
+        return true;
+    }
+
+    @Override
+    public Segment readSegment(UUID id) {
+        if (isBulkSegmentId(id)) {
+            return loadSegment(id);
+        }
+
+        Segment segment = getWriter().getCurrentSegment(id);
+        if (segment != null) {
+            return segment;
+        }
+
+        synchronized (segments) {
+            // check if the segment is already cached
+            segment = segments.getIfPresent(id);
+            // ... or currently being loaded
+            while (segment == null && currentlyLoading.contains(id)) {
+                currentlyWaiting++;
                 try {
-                    final URLConnection connection = get("j/" + name);
-                    InputStream stream = connection.getInputStream();
-                    try {
-                        BufferedReader reader = new BufferedReader(
-                                new InputStreamReader(stream, UTF_8));
-                        return RecordId.fromString(reader.readLine());
-                    } finally {
-                        stream.close();
-                    }
-                } catch (IllegalArgumentException e) {
-                    throw new IllegalStateException(e);
-                } catch (MalformedURLException e) {
-                    throw new IllegalStateException(e);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    segments.wait(); // for another thread to load the segment
+                } catch (InterruptedException e) {
+                    throw new RuntimeException("Interrupted", e);
+                } finally {
+                    currentlyWaiting--;
+                }
+                segment = segments.getIfPresent(id);
+            }
+            if (segment != null) {
+                // found the segment in the cache
+                return segment;
+            }
+            // not yet cached, so start let others know that we're loading it
+            currentlyLoading.add(id);
+        }
+
+        try {
+            segment = loadSegment(id);
+        } finally {
+            synchronized (segments) {
+                if (segment != null) {
+                    segments.put(id, segment);
+                }
+                currentlyLoading.remove(id);
+                if (currentlyWaiting > 0) {
+                    segments.notifyAll();
                 }
             }
+        }
 
-            @Override
-            public boolean setHead(RecordId base, RecordId head) {
-                // TODO throw new UnsupportedOperationException();
-                return true;
-            }
-
-            @Override
-            public void merge() {
-                throw new UnsupportedOperationException();
-            }
-        };
+        return segment;
     }
 
-    @Override
-    @CheckForNull
-    protected Segment loadSegment(UUID id) {
+    private Segment loadSegment(UUID uuid) {
         try {
-            final URLConnection connection = get("s/" + id);
+            URLConnection connection =
+                    new URL(base, uuid.toString()).openConnection();
             InputStream stream = connection.getInputStream();
             try {
                 byte[] data = ByteStreams.toByteArray(stream);
-                return new Segment(this, factory, id, ByteBuffer.wrap(data));
+                return new Segment(this, factory, uuid, ByteBuffer.wrap(data));
             } finally {
                 stream.close();
             }
@@ -121,7 +190,8 @@ public class HttpStore extends AbstractStore {
     public void writeSegment(UUID segmentId, byte[] bytes, int offset,
             int length) {
         try {
-            URLConnection connection = get("s/" + segmentId);
+            URLConnection connection =
+                    new URL(base, segmentId.toString()).openConnection();
             connection.setDoInput(false);
             connection.setDoOutput(true);
             OutputStream stream = connection.getOutputStream();
@@ -135,6 +205,25 @@ public class HttpStore extends AbstractStore {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public void close() {
+        synchronized (segments) {
+            while (!currentlyLoading.isEmpty()) {
+                try {
+                    segments.wait(); // for concurrent loads to finish
+                } catch (InterruptedException e) {
+                    throw new RuntimeException("Interrupted", e);
+                }
+            }
+            segments.invalidateAll();
+        }
+    }
+
+    @Override @CheckForNull
+    public Blob readBlob(String reference) {
+        return null;
     }
 
 }

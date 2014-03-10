@@ -19,6 +19,7 @@ package org.apache.jackrabbit.oak.plugins.segment;
 import java.util.UUID;
 
 import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.Blob;
 
@@ -27,13 +28,14 @@ public interface SegmentStore {
     SegmentWriter getWriter();
 
     /**
-     * Returns the named journal.
+     * Returns the head state.
      *
-     * @param name journal name
-     * @return named journal, or {@code null} if not found
+     * @return head state
      */
-    @CheckForNull
-    Journal getJournal(String name);
+    @Nonnull
+    SegmentNodeState getHead();
+
+    boolean setHead(SegmentNodeState base, SegmentNodeState head);
 
     /**
      * Reads the identified segment from this store.
@@ -55,17 +57,6 @@ public interface SegmentStore {
     void writeSegment(UUID segmentId, byte[] bytes, int offset, int length);
 
     void close();
-
-    /**
-     * Checks whether the given object is a record of the given type and
-     * is stored in this segment store.
-     *
-     * @param object possible record object
-     * @param type record type
-     * @return {@code true} if the object is a record of the given type
-     *         from this store, {@code false} otherwise
-     */
-    boolean isInstance(Object object, Class<? extends Record> type);
 
     /**
      * Read a blob from external storage.
