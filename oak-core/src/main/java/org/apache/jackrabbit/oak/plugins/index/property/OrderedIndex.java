@@ -90,7 +90,7 @@ public interface OrderedIndex {
         }
 
         /**
-         * convenience method that tells if the provided index definition is descending
+         * convenience method that tells if the provided index definition is ascending
          * 
          * @param indexMeta
          * @return true if descending
