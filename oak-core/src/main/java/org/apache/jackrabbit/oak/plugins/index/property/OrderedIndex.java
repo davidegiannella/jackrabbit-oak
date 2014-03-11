@@ -51,14 +51,17 @@ public interface OrderedIndex {
         }
         
         /**
-         * retrieve an {@code OrderDirection} from a provided String. Will return null in case of no-match
+         * retrieve an {@code OrderDirection} from a provided String. Will return null in case of
+         * no-match
          * 
          * @param direction the direction of the sorting: ascending or descending
          * @return
          */
-        public static @Nullable @CheckForNull OrderDirection fromString(@Nonnull final String direction){
-            for(OrderDirection d : OrderDirection.values()){
-                if(d.getDirection().equalsIgnoreCase(direction)){
+        @Nullable
+        @CheckForNull
+        public static OrderDirection fromString(@Nonnull final String direction) {
+            for (OrderDirection d : OrderDirection.values()) {
+                if (d.getDirection().equalsIgnoreCase(direction)) {
                     return d;
                 }
             }
