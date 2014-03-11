@@ -22,7 +22,6 @@ import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
@@ -86,16 +85,7 @@ public class OrderedPropertyIndexEditorTest {
       assertEquals("jcr:lastModified", ie.getPropertyNames().iterator().next());
       assertTrue("Expecting a properly configured index", ie.isProperlyConfigured());
    }
-   
-   @Test
-   public void orderedDirectionFromString(){
-       assertNull("A non-existing order direction should result in null",OrderDirection.fromString("foobar"));
-       assertEquals(OrderDirection.ASC, OrderDirection.fromString("ascending"));
-       assertFalse(OrderDirection.ASC.equals(OrderDirection.fromString("descending")));
-       assertEquals(OrderDirection.DESC,OrderDirection.fromString("descending"));
-       assertFalse(OrderDirection.DESC.equals(OrderDirection.fromString("ascending")));
-   }
-   
+      
    @Test
    public void orderDirectionDefinitionNotSpecified(){
        final String property = "foobar";

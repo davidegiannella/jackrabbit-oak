@@ -24,6 +24,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertTrue;
+import static junit.framework.Assert.assertNull;
 
 /**
  * tests the Enumeration for the index direction
@@ -72,4 +73,15 @@ public class OrderDirectionEnumTest {
             .setProperty(OrderedIndex.DIRECTION, OrderDirection.DESC.getDirection()).getNodeState();
         assertFalse(OrderDirection.isAscending(indexMeta));
     }
+    
+    @Test
+    public void orderedDirectionFromString() {
+        assertNull("A non-existing order direction should result in null",
+            OrderDirection.fromString("foobar"));
+        assertEquals(OrderDirection.ASC, OrderDirection.fromString("ascending"));
+        assertFalse(OrderDirection.ASC.equals(OrderDirection.fromString("descending")));
+        assertEquals(OrderDirection.DESC, OrderDirection.fromString("descending"));
+        assertFalse(OrderDirection.DESC.equals(OrderDirection.fromString("ascending")));
+    }
+
 }
