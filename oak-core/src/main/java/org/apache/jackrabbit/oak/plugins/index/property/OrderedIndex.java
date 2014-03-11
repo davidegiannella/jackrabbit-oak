@@ -93,7 +93,7 @@ public interface OrderedIndex {
          * convenience method that tells if the provided index definition is ascending
          * 
          * @param indexMeta
-         * @return true if descending
+         * @return true if ascending
          */
         public static boolean isAscending(NodeState indexMeta) {
             return ASC.equals(fromIndexMeta(indexMeta));
