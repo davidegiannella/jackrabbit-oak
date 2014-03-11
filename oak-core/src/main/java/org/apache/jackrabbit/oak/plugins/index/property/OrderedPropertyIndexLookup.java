@@ -17,6 +17,7 @@
 
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -26,15 +27,27 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
  */
 public class OrderedPropertyIndexLookup extends PropertyIndexLookup {
 
+    /**
+     * the standard Ascending ordered index
+     */
     private static final IndexStoreStrategy STORE = new OrderedContentMirrorStoreStrategy();
 
+    /**
+     * the descending ordered index
+     */
+    private static final IndexStoreStrategy REVERSED_STORE = new OrderedContentMirrorStoreStrategy(OrderDirection.DESC);
+    
     public OrderedPropertyIndexLookup(NodeState root) {
         super(root);
     }
 
     @Override
     IndexStoreStrategy getStrategy(NodeState indexMeta) {
-        return STORE;
+        if (OrderDirection.isAscending(indexMeta)) {
+            return STORE;
+        } else {
+            return REVERSED_STORE;
+        }
     }
 
     @Override
