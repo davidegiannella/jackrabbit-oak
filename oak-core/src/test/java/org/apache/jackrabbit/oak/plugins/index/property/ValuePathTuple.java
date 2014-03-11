@@ -98,4 +98,14 @@ public class ValuePathTuple implements Comparable<ValuePathTuple> {
     public String getPath() {
         return path;
     }
+
+    @Override
+    public String toString() {
+        return String.format(
+            "value: %s - path: %s - hash: %s",
+            value,
+            path,
+            super.toString()
+        );
+    }
 }
