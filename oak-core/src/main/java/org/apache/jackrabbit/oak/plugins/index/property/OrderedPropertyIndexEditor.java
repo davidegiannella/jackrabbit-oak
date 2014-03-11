@@ -36,9 +36,10 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Strings;
 
-public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
-    private static final Logger log = LoggerFactory.getLogger(OrderedPropertyIndexEditor.class);
-    
+/**
+ * Index editor for keeping an ordered property index up to date.
+ */
+public class OrderedPropertyIndexEditor extends PropertyIndexEditor {    
     /**
      * the default Ascending ordered StoreStrategy
      */
@@ -49,6 +50,8 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
      */
     static final IndexStoreStrategy ORDERED_MIRROR_DESCENDING = new OrderedContentMirrorStoreStrategy(OrderDirection.DESC);
 
+    private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexEditor.class);
+    
     private final Set<String> propertyNames;
 
     private boolean properlyConfigured;
@@ -65,10 +68,10 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
         if (names != null) {
             String value = names.getValue(Type.NAME, 0);
             if (Strings.isNullOrEmpty(value)) {
-                log.warn("Empty value passed as propertyNames. Index not properly configured. Ignoring.");
+                LOG.warn("Empty value passed as propertyNames. Index not properly configured. Ignoring.");
             } else {
                 if (names.isArray()) {
-                    log.warn("Only single value supported. '{}' only will be used.", value);
+                    LOG.warn("Only single value supported. '{}' only will be used.", value);
                 }
                 pns = Collections.singleton(value);
                 this.properlyConfigured = true;
@@ -79,11 +82,11 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
         // configuring direction
         String propertyDirection = definition.getString(OrderedIndex.DIRECTION);
         if (propertyDirection == null) {
-            log.info("Using default direction for sorting: {}",this.direction);
+            LOG.info("Using default direction for sorting: {}", this.direction);
         } else {
             OrderDirection dir = OrderDirection.fromString(propertyDirection);
             if (dir == null) {
-                log.warn("An unknown direction has been specified for sorting: '{}'. Using default one. {}",
+                LOG.warn("An unknown direction has been specified for sorting: '{}'. Using default one. {}",
                          propertyDirection, this.direction);
             } else {
                 this.direction = dir;
@@ -105,7 +108,7 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
     @Override
     IndexStoreStrategy getStrategy(boolean unique) {
         IndexStoreStrategy store = ORDERED_MIRROR;
-        if(!OrderedIndex.DEFAULT_DIRECTION.equals(getDirection())){
+        if (!OrderedIndex.DEFAULT_DIRECTION.equals(getDirection())) {
             store = ORDERED_MIRROR_DESCENDING;
         }
         return store;

@@ -53,7 +53,6 @@ import com.google.common.base.Strings;
  * </code>
  */
 public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrategy {
-    private static final Logger log = LoggerFactory.getLogger(OrderedContentMirrorStoreStrategy.class);
 
     /**
      * the property linking to the next node
@@ -71,6 +70,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     public static final NodeState EMPTY_START_NODE = EmptyNodeState.EMPTY_NODE.builder()
                                                                               .setProperty(NEXT, "")
                                                                               .getNodeState();
+
+    private static final Logger LOG = LoggerFactory.getLogger(OrderedContentMirrorStoreStrategy.class);
     
     /**
      * the direction of the index.
@@ -88,7 +89,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     
     @Override
     NodeBuilder fetchKeyNode(@Nonnull NodeBuilder index, @Nonnull String key) {
-        log.debug("fetchKeyNode() - index: {} - key: {}", index, key);
+        LOG.debug("fetchKeyNode() - index: {} - key: {}", index, key);
         NodeBuilder localkey = null;
         NodeBuilder start = index.child(START);
 
@@ -148,11 +149,12 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             } else if (node.exists()) {
                 if (node.hasProperty(NEXT)) {
                     // it's an index key and we have to relink the list
-                    ChildNodeEntry previous = findPrevious(index.getNodeState(),
-                                                           node.getNodeState()); // (1) find the
-                                                                                 // previous element
-                    log.debug("previous: {}", previous);
-                    String next = node.getString(NEXT); // (2) find the next element
+                    // (1) find the previous element
+                    ChildNodeEntry previous = findPrevious(
+                            index.getNodeState(), node.getNodeState());
+                    LOG.debug("previous: {}", previous);
+                    // (2) find the next element
+                    String next = node.getString(NEXT); 
                     if (next == null) {
                         next = "";
                     }
@@ -198,16 +200,16 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             }
         }
 
-        return (found) ? previous : null;
+        return found ? previous : null;
     }
 
     @Override
     public void update(NodeBuilder index, String path, Set<String> beforeKeys,
                        Set<String> afterKeys) {
-        log.debug("update() - index     : {}", index);
-        log.debug("update() - path      : {}", path);
-        log.debug("update() - beforeKeys: {}", beforeKeys);
-        log.debug("update() - afterKeys : {}", afterKeys);
+        LOG.debug("update() - index     : {}", index);
+        LOG.debug("update() - path      : {}", path);
+        LOG.debug("update() - beforeKeys: {}", beforeKeys);
+        LOG.debug("update() - afterKeys : {}", afterKeys);
         super.update(index, path, beforeKeys, afterKeys);
     }
 
@@ -243,8 +245,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         } else {
             cne = new Iterable<ChildNodeEntry>() {
                 private NodeState localIndex = index;
-                private NodeState localStart = ((includeStart && !start.exists()) ? EMPTY_START_NODE
-                                                                             : start);
+                private NodeState localStart = includeStart && !start.exists() ? EMPTY_START_NODE
+                                                                             : start;
                 private NodeState current = localStart;
                 private boolean localIncludeStart = includeStart;
 
@@ -254,7 +256,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 
                         @Override
                         public boolean hasNext() {
-                            return ((localIncludeStart && localStart.equals(current)) || (!localIncludeStart && !Strings.isNullOrEmpty(current.getString(NEXT))));
+                            return (localIncludeStart && localStart.equals(current)) || (!localIncludeStart && !Strings.isNullOrEmpty(current.getString(NEXT)));
                         }
 
                         @Override

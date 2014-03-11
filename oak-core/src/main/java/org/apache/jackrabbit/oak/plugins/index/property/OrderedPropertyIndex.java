@@ -24,8 +24,11 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * A property index that supports ordering keys.
+ */
 public class OrderedPropertyIndex extends PropertyIndex {
-    private static final Logger log = LoggerFactory.getLogger(OrderedPropertyIndex.class);
+    private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndex.class);
     @Override
     public String getIndexName() {
         return TYPE;
@@ -39,7 +42,7 @@ public class OrderedPropertyIndex extends PropertyIndex {
     @Override
     public double getCost(Filter filter, NodeState root) {
         //we don't want the index to be used yet
-        log.warn("this index will always return Double.POSITIVE_INFINITY and therefore never work");
+        LOG.warn("this index will always return Double.POSITIVE_INFINITY and therefore never work");
         return Double.POSITIVE_INFINITY;
     }
 }

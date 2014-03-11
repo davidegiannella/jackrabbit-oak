@@ -120,8 +120,8 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test, OrderDirection.ASC);
         root.commit();
 
-        ValuePathTuple searchfor = nodes.get(NUMBER_OF_NODES / 2); // getting the middle of the random list of
-                                                                         // nodes.
+        // getting the middle of the random list of nodes.
+        ValuePathTuple searchfor = nodes.get(NUMBER_OF_NODES / 2); 
         Map<String, PropertyValue> filter = ImmutableMap
             .of(ORDERED_PROPERTY, PropertyValues.newString(searchfor.getValue()));
         String query = "SELECT * FROM [%s] WHERE %s=$%s";

@@ -154,15 +154,16 @@
     <plugins>
       <plugin>
         <groupId>org.apache.felix</groupId>
+        <artifactId>maven-scr-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.felix</groupId>
         <artifactId>maven-bundle-plugin</artifactId>
         <configuration>
           <instructions>
             <Export-Package>
               org.apache.jackrabbit.oak.jcr
             </Export-Package>
-            <Bundle-Activator>
-              org.apache.jackrabbit.oak.jcr.osgi.Activator
-            </Bundle-Activator>
           </instructions>
         </configuration>
       </plugin>
@@ -340,6 +341,12 @@
       <groupId>org.apache.jackrabbit</groupId>
       <artifactId>oak-mk</artifactId>
       <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.googlecode.json-simple</groupId>
+      <artifactId>json-simple</artifactId>
+      <version>1.1.1</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

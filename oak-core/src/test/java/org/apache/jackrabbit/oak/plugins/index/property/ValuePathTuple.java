@@ -44,28 +44,28 @@ public class ValuePathTuple implements Comparable<ValuePathTuple> {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj){
+        if (this == obj) {
             return true;
         }
-        if (obj == null){
+        if (obj == null) {
             return false;
         }
-        if (getClass() != obj.getClass()){
+        if (getClass() != obj.getClass()) {
             return false;
         }
         ValuePathTuple other = (ValuePathTuple) obj;
         if (path == null) {
-            if (other.getPath() != null){
+            if (other.getPath() != null) {
                 return false;
             }
-        } else if (!path.equals(other.getPath())){
+        } else if (!path.equals(other.getPath())) {
             return false;
         }
         if (value == null) {
-            if (other.getValue() != null){
+            if (other.getValue() != null) {
                 return false;
             }
-        } else if (!value.equals(other.getValue())){
+        } else if (!value.equals(other.getValue())) {
             return false;
         }
         return true;
@@ -73,19 +73,19 @@ public class ValuePathTuple implements Comparable<ValuePathTuple> {
 
     @Override
     public int compareTo(ValuePathTuple o) {
-        if (this.equals(o)){
+        if (this.equals(o)) {
             return 0;
         }
-        if (this.value.compareTo(o.getValue()) < 0){
+        if (this.value.compareTo(o.getValue()) < 0) {
             return -1;
         }
-        if (this.value.compareTo(o.getValue()) > 0){
+        if (this.value.compareTo(o.getValue()) > 0) {
             return 1;
         }
-        if (this.path.compareTo(o.getPath()) < 0){
+        if (this.path.compareTo(o.getPath()) < 0) {
             return -1;
         }
-        if (this.path.compareTo(o.getPath()) > 0){
+        if (this.path.compareTo(o.getPath()) > 0) {
             return 1;
         }
         return 0;
