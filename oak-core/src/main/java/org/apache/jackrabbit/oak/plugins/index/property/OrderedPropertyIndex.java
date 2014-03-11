@@ -20,15 +20,13 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.TYPE;
 
 import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A property index that supports ordering keys.
  */
 public class OrderedPropertyIndex extends PropertyIndex {
-    private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndex.class);
     @Override
     public String getIndexName() {
         return TYPE;
@@ -39,10 +37,27 @@ public class OrderedPropertyIndex extends PropertyIndex {
         return new OrderedPropertyIndexLookup(root);
     }
 
+    /**
+     * retrieve the cost for the query.
+     * 
+     * !!! for now we want to skip the use-case of NON range-queries !!!
+     */
     @Override
     public double getCost(Filter filter, NodeState root) {
-        //we don't want the index to be used yet
-        LOG.warn("this index will always return Double.POSITIVE_INFINITY and therefore never work");
-        return Double.POSITIVE_INFINITY;
+        double cost = Double.POSITIVE_INFINITY;
+
+        if (filter.getFullTextConstraint() == null && !filter.containsNativeConstraint()) {
+            PropertyIndexLookup lookup = getLookup(root);
+            for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
+                String propertyName = pr.propertyName;
+                if (lookup.isIndexed(propertyName, "/", filter)) {
+                    if (pr.first != null && !pr.first.equals(pr.last)) {
+                        // we're in the '>' case
+                        cost = 0; // TODO use the lookup here for assessing the right cost
+                    }
+                }
+            }
+        }
+        return cost;
     }
 }

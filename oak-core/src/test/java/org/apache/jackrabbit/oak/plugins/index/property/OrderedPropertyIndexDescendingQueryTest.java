@@ -32,6 +32,7 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.ResultRow;
 import org.apache.jackrabbit.oak.api.Tree;
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
@@ -77,7 +78,8 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
         Tree rTree = root.getTree("/");
         Tree test = rTree.addChild("test");
         List<ValuePathTuple> nodes = addChildNodes(
-            generateOrderedValues(NUMBER_OF_NODES, OrderDirection.DESC), test, OrderDirection.DESC);
+            generateOrderedValues(NUMBER_OF_NODES, OrderDirection.DESC), test, OrderDirection.DESC,
+            Type.STRING);
         root.commit();
         
         // querying
@@ -106,7 +108,7 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
         Tree rTree = root.getTree("/");
         Tree test = rTree.addChild("test");
         List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test,
-            OrderDirection.DESC);
+            OrderDirection.DESC, Type.STRING);
         root.commit();
 
         // getting the middle of the random list of nodes

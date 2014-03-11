@@ -33,6 +33,7 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.ResultRow;
 import org.apache.jackrabbit.oak.api.Tree;
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
@@ -90,7 +91,8 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         Tree rTree = root.getTree("/");
         Tree test = rTree.addChild("test");
-        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test, OrderDirection.ASC);
+        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test,
+            OrderDirection.ASC, Type.STRING);
         root.commit();
 
         // querying
@@ -117,21 +119,23 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         Tree rTree = root.getTree("/");
         Tree test = rTree.addChild("test");
-        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test, OrderDirection.ASC);
+        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test,
+            OrderDirection.ASC, Type.STRING);
         root.commit();
 
         // getting the middle of the random list of nodes.
-        ValuePathTuple searchfor = nodes.get(NUMBER_OF_NODES / 2); 
-        Map<String, PropertyValue> filter = ImmutableMap
-            .of(ORDERED_PROPERTY, PropertyValues.newString(searchfor.getValue()));
+        ValuePathTuple searchfor = nodes.get(NUMBER_OF_NODES / 2);
+        
+        Map<String, PropertyValue> filter = ImmutableMap.of(ORDERED_PROPERTY,
+            PropertyValues.newString(searchfor.getValue()));
         String query = "SELECT * FROM [%s] WHERE %s=$%s";
         Iterator<? extends ResultRow> results = executeQuery(
-            String.format(query, NT_UNSTRUCTURED, ORDERED_PROPERTY, ORDERED_PROPERTY), SQL2, filter).getRows()
-            .iterator();
+            String.format(query, NT_UNSTRUCTURED, ORDERED_PROPERTY, ORDERED_PROPERTY), SQL2, filter)
+            .getRows().iterator();
         assertTrue("one element is expected", results.hasNext());
         assertEquals("wrong path returned", searchfor.getPath(), results.next().getPath());
         assertFalse("there should be not any more items", results.hasNext());
 
         setTravesalEnabled(true);
-    }
+    }    
 }
