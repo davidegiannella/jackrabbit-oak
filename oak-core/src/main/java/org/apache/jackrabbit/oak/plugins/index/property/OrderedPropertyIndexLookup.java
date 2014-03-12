@@ -40,6 +40,11 @@ public class OrderedPropertyIndexLookup extends PropertyIndexLookup {
      */
     private static final IndexStoreStrategy REVERSED_STORE = new OrderedContentMirrorStoreStrategy(OrderDirection.DESC);
     
+    /**
+     * we're slightly more expensive than the standard PropertyIndex.
+     */
+    private static final int COST_OVERHEAD = 3;
+    
     public OrderedPropertyIndexLookup(NodeState root) {
         super(root);
         this.root = root;
@@ -69,7 +74,9 @@ public class OrderedPropertyIndexLookup extends PropertyIndexLookup {
         double cost = Double.POSITIVE_INFINITY;
         NodeState indexMeta = getIndexNode(root, propertyName, filter);
         if (indexMeta != null) {
-            cost = 0; //TODO implement this
+            // we relay then on the standard property index for the cost
+            cost = COST_OVERHEAD
+                   + getStrategy(indexMeta).count(indexMeta, PropertyIndex.encode(value), MAX_COST);
         }
         return cost;
     }

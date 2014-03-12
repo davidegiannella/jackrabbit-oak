@@ -67,7 +67,7 @@ public class PropertyIndexLookup {
     /**
      * The maximum cost when the index can be used.
      */
-    private static final int MAX_COST = 100;
+    static final int MAX_COST = 100;
 
     /** Index storage strategy */
     private static final IndexStoreStrategy MIRROR =
