@@ -32,6 +32,7 @@ import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.ConfigurationPolicy;
 import org.apache.felix.scr.annotations.Deactivate;
 import org.apache.felix.scr.annotations.Property;
+import org.apache.jackrabbit.oak.commons.PropertiesUtil;
 import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.api.jmx.CacheStatsMBean;
 import org.apache.jackrabbit.oak.kernel.KernelNodeStore;
@@ -123,7 +124,7 @@ public class DocumentNodeStoreService {
         MongoClientOptions.Builder builder = MongoConnection.getDefaultBuilder();
         MongoClientURI mongoURI = new MongoClientURI(uri, builder);
 
-        if (logger.isInfoEnabled()){
+        if (logger.isInfoEnabled()) {
             // Take care around not logging the uri directly as it
             // might contain passwords
             String type = useMK ? "MK" : "NodeStore";
@@ -189,11 +190,11 @@ public class DocumentNodeStoreService {
         return blobStore;
     }
 
-    private Object prop(Map<String, ?> config, String propName){
+    private Object prop(Map<String, ?> config, String propName) {
         return prop(config, propName, PREFIX + propName);
     }
 
-    private Object prop(Map<String, ?> config, String propName, String fwkPropName){
+    private Object prop(Map<String, ?> config, String propName, String fwkPropName) {
         //Prefer framework property first
         Object value = bundleContext.getProperty(fwkPropName);
         if (value != null) {
