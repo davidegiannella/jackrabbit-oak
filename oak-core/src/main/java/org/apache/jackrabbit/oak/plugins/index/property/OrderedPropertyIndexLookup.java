@@ -17,16 +17,19 @@
 
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy;
+import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
 /**
  *
  */
 public class OrderedPropertyIndexLookup extends PropertyIndexLookup {
-
+    private NodeState root;
+    
     /**
      * the standard Ascending ordered index
      */
@@ -39,6 +42,7 @@ public class OrderedPropertyIndexLookup extends PropertyIndexLookup {
     
     public OrderedPropertyIndexLookup(NodeState root) {
         super(root);
+        this.root = root;
     }
 
     @Override
@@ -49,9 +53,24 @@ public class OrderedPropertyIndexLookup extends PropertyIndexLookup {
             return REVERSED_STORE;
         }
     }
+    
+    public boolean isAscending(NodeState root, String propertyName, Filter filter){
+        NodeState indexMeta = getIndexNode(root, propertyName, filter);
+        return OrderDirection.isAscending(indexMeta);
+    }
 
     @Override
     String getType() {
         return OrderedIndex.TYPE;
+    }
+    
+    @Override
+    public double getCost(Filter filter, String propertyName, PropertyValue value) {
+        double cost = Double.POSITIVE_INFINITY;
+        NodeState indexMeta = getIndexNode(root, propertyName, filter);
+        if (indexMeta != null) {
+            cost = 0; //TODO implement this
+        }
+        return cost;
     }
 }

@@ -144,7 +144,7 @@ public class PropertyIndexLookup {
      *         node was found
      */
     @Nullable
-    private NodeState getIndexNode(NodeState node, String propertyName, Filter filter) {
+    NodeState getIndexNode(NodeState node, String propertyName, Filter filter) {
         // keep a fallback to a matching index def that has *no* node type constraints
         // (initially, there is no fallback)
         NodeState fallback = null;

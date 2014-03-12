@@ -22,15 +22,22 @@ import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
+import javax.jcr.RepositoryException;
+
+import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
+import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
+import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.easymock.EasyMock;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 /**
  * tests the Cost-related part of the provider/strategy
@@ -39,13 +46,12 @@ public class OrderedIndexCostTest extends BasicOrderedPropertyIndexQueryTest {
     /**
      * convenience class that return an always indexed strategy
      */
-    private static class AlwaysIndexedOrderedPropertyIndex extends OrderedPropertyIndex {
-
+    private static class AlwaysIndexedOrderedPropertyIndex extends OrderedPropertyIndex {        
         @Override
         PropertyIndexLookup getLookup(NodeState root) {
             return new AlwaysIndexedLookup(root);
         }
-
+        
         /**
          * convenience class that always return true at the isIndexed test
          */
@@ -60,6 +66,51 @@ public class OrderedIndexCostTest extends BasicOrderedPropertyIndexQueryTest {
             }
         }
       }
+
+    @Override
+    protected void createTestIndexNode() throws Exception {
+        // intentionally left blank. Each test will have to define its own index configuration
+    }
+
+    private static void defineIndex(NodeBuilder root, OrderDirection direction) throws IllegalArgumentException, RepositoryException {
+        IndexUtils
+            .createIndexDefinition(
+                root.child(IndexConstants.INDEX_DEFINITIONS_NAME),
+                TEST_INDEX_NAME,
+                false,
+                ImmutableList.of(ORDERED_PROPERTY),
+                null,
+                OrderedIndex.TYPE,
+                ImmutableMap.of(OrderedIndex.DIRECTION,
+                    direction.getDirection()));
+        // forcing the existence of :index
+        root.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME).getChildNode(TEST_INDEX_NAME)
+            .child(IndexConstants.INDEX_CONTENT_NODE_NAME);
+    }
+    
+    /**
+     * define e descending ordered index in the provided root
+     * 
+     * @param root
+     * @throws IllegalArgumentException
+     * @throws RepositoryException
+     */
+    private static void defineDescendingIndex(NodeBuilder root) throws IllegalArgumentException,
+                                                               RepositoryException {
+        defineIndex(root, OrderDirection.DESC);
+    }
+
+    /**
+     * define e Ascending ordered index in the provided root
+     * 
+     * @param root
+     * @throws IllegalArgumentException
+     * @throws RepositoryException
+     */
+    private static void defineAscendingIndex(NodeBuilder root) throws IllegalArgumentException,
+                                                               RepositoryException {
+        defineIndex(root, OrderDirection.ASC);
+    }
 
     @Test 
     public void costFullTextConstraint() {
@@ -96,10 +147,13 @@ public class OrderedIndexCostTest extends BasicOrderedPropertyIndexQueryTest {
     @Test
     public void costGreaterThanAscendingDirection() throws Exception {
         OrderedPropertyIndex index = new AlwaysIndexedOrderedPropertyIndex();
-        NodeState root = InitialContent.INITIAL_CONTENT;
+        NodeBuilder builder = InitialContent.INITIAL_CONTENT.builder();
+        defineAscendingIndex(builder);
+        NodeState root = builder.getNodeState();
         Filter filter = createNiceMock(Filter.class);
         Filter.PropertyRestriction restriction = new Filter.PropertyRestriction();
         restriction.first = PropertyValues.newDate("2013-01-01");
+        restriction.propertyName = ORDERED_PROPERTY;
         expect(filter.getPropertyRestrictions()).andReturn(ImmutableList.of(restriction))
             .anyTimes();
         expect(filter.containsNativeConstraint()).andReturn(false).anyTimes();
@@ -107,6 +161,203 @@ public class OrderedIndexCostTest extends BasicOrderedPropertyIndexQueryTest {
 
         assertFalse("In ascending order we're expeting to serve this kind of queries",
             Double.POSITIVE_INFINITY == index.getCost(filter, root));
+    }
+    
+    /**
+     * test that the '>=' use case is served from the index
+     * @throws RepositoryException 
+     * @throws IllegalArgumentException 
+     */
+    @Test
+    public void costGreaterThanEqualAscendingDirection() throws IllegalArgumentException, RepositoryException {
+        OrderedPropertyIndex index = new AlwaysIndexedOrderedPropertyIndex();
+        NodeBuilder builder = InitialContent.INITIAL_CONTENT.builder();
+        defineAscendingIndex(builder);
+        NodeState root = builder.getNodeState();
+        Filter filter = createNiceMock(Filter.class);
+        Filter.PropertyRestriction restriction = new Filter.PropertyRestriction();
+        restriction.first = PropertyValues.newDate("2013-01-01");
+        restriction.firstIncluding = true;
+        restriction.propertyName = ORDERED_PROPERTY;
+        expect(filter.getPropertyRestrictions()).andReturn(ImmutableList.of(restriction))
+            .anyTimes();
+        expect(filter.containsNativeConstraint()).andReturn(false).anyTimes();
+        replay(filter);
+
+        assertFalse("In ascending order we're expeting to serve this kind of queries",
+            Double.POSITIVE_INFINITY == index.getCost(filter, root));
+    }
+    
+    /**
+     * when we run a '<' in an Ascending index it should not serve it
+     * @throws RepositoryException 
+     * @throws IllegalArgumentException 
+     */
+    @Test
+    public void costLessThanAscendingDirection() throws IllegalArgumentException, RepositoryException {
+        OrderedPropertyIndex index = new AlwaysIndexedOrderedPropertyIndex();
+        NodeBuilder builder = InitialContent.INITIAL_CONTENT.builder();
+        defineAscendingIndex(builder);
+        NodeState root = builder.getNodeState();
+        Filter filter = createNiceMock(Filter.class);
+        Filter.PropertyRestriction restriction = new Filter.PropertyRestriction();
+        restriction.last = PropertyValues.newDate("2013-01-01");
+        restriction.propertyName = ORDERED_PROPERTY;
+        expect(filter.getPropertyRestrictions()).andReturn(ImmutableList.of(restriction))
+            .anyTimes();
+        expect(filter.containsNativeConstraint()).andReturn(false).anyTimes();
+        replay(filter);
+
+        assertEquals("in ascending index we're not expecting to serve '<' queries",
+            Double.POSITIVE_INFINITY, index.getCost(filter, root), 0);
+    }
+
+    @Test
+    public void costLessThanEqualsAscendingDirection() throws IllegalArgumentException, RepositoryException {
+        OrderedPropertyIndex index = new AlwaysIndexedOrderedPropertyIndex();
+        NodeBuilder builder = InitialContent.INITIAL_CONTENT.builder();
+        defineAscendingIndex(builder);
+        NodeState root = builder.getNodeState();
+        Filter filter = createNiceMock(Filter.class);
+        Filter.PropertyRestriction restriction = new Filter.PropertyRestriction();
+        restriction.last = PropertyValues.newDate("2013-01-01");
+        restriction.lastIncluding = true;
+        restriction.propertyName = ORDERED_PROPERTY;
+        expect(filter.getPropertyRestrictions()).andReturn(ImmutableList.of(restriction))
+            .anyTimes();
+        expect(filter.containsNativeConstraint()).andReturn(false).anyTimes();
+        replay(filter);
+
+        assertEquals("in ascending index we're not expecting to serve '<=' queries",
+            Double.POSITIVE_INFINITY, index.getCost(filter, root), 0);
+    }
+    
+    @Test
+    public void costGreaterThanDescendingDirection() throws IllegalArgumentException, RepositoryException {
+        OrderedPropertyIndex index = new AlwaysIndexedOrderedPropertyIndex();
+        NodeBuilder builder = InitialContent.INITIAL_CONTENT.builder();
+        defineDescendingIndex(builder);
+        NodeState root = builder.getNodeState();
+        Filter filter = createNiceMock(Filter.class);
+        Filter.PropertyRestriction restriction = new Filter.PropertyRestriction();
+        restriction.first = PropertyValues.newDate("2013-01-01");
+        restriction.propertyName = ORDERED_PROPERTY;
+        expect(filter.getPropertyRestrictions()).andReturn(ImmutableList.of(restriction))
+            .anyTimes();
+        expect(filter.containsNativeConstraint()).andReturn(false).anyTimes();
+        replay(filter);
+
+        assertEquals("in descending index we're not expecting to serve '>' queries",
+            Double.POSITIVE_INFINITY, index.getCost(filter, root), 0);
+        
+    }
+
+    @Test
+    public void costGreaterEqualThanDescendingDirection() throws IllegalArgumentException, RepositoryException {
+        OrderedPropertyIndex index = new AlwaysIndexedOrderedPropertyIndex();
+        NodeBuilder builder = InitialContent.INITIAL_CONTENT.builder();
+        defineDescendingIndex(builder);
+        NodeState root = builder.getNodeState();
+        Filter filter = createNiceMock(Filter.class);
+        Filter.PropertyRestriction restriction = new Filter.PropertyRestriction();
+        restriction.first = PropertyValues.newDate("2013-01-01");
+        restriction.firstIncluding = true;
+        restriction.propertyName = ORDERED_PROPERTY;
+        expect(filter.getPropertyRestrictions()).andReturn(ImmutableList.of(restriction))
+            .anyTimes();
+        expect(filter.containsNativeConstraint()).andReturn(false).anyTimes();
+        replay(filter);
+
+        assertEquals("in descending index we're not expecting to serve '>' queries",
+            Double.POSITIVE_INFINITY, index.getCost(filter, root), 0);
+        
+    }
+
+    @Test
+    public void costLessThanDescendingDirection() throws IllegalArgumentException, RepositoryException {
+        OrderedPropertyIndex index = new AlwaysIndexedOrderedPropertyIndex();
+        NodeBuilder builder = InitialContent.INITIAL_CONTENT.builder();
+        defineDescendingIndex(builder);
+        NodeState root = builder.getNodeState();
+        Filter filter = createNiceMock(Filter.class);
+        Filter.PropertyRestriction restriction = new Filter.PropertyRestriction();
+        restriction.last = PropertyValues.newDate("2013-01-01");
+        restriction.propertyName = ORDERED_PROPERTY;
+        expect(filter.getPropertyRestrictions()).andReturn(ImmutableList.of(restriction))
+            .anyTimes();
+        expect(filter.containsNativeConstraint()).andReturn(false).anyTimes();
+        replay(filter);
+
+        assertFalse("In descending order we're expeting to serve this kind of queries",
+            Double.POSITIVE_INFINITY == index.getCost(filter, root));
+        
+    }
+
+    @Test
+    public void costLessThanEqualDescendingDirection() throws IllegalArgumentException, RepositoryException {
+        OrderedPropertyIndex index = new AlwaysIndexedOrderedPropertyIndex();
+        NodeBuilder builder = InitialContent.INITIAL_CONTENT.builder();
+        defineDescendingIndex(builder);
+        NodeState root = builder.getNodeState();
+        Filter filter = createNiceMock(Filter.class);
+        Filter.PropertyRestriction restriction = new Filter.PropertyRestriction();
+        restriction.last = PropertyValues.newDate("2013-01-01");
+        restriction.lastIncluding = true;
+        restriction.propertyName = ORDERED_PROPERTY;
+        expect(filter.getPropertyRestrictions()).andReturn(ImmutableList.of(restriction))
+            .anyTimes();
+        expect(filter.containsNativeConstraint()).andReturn(false).anyTimes();
+        replay(filter);
+
+        assertFalse("In descending order we're expeting to serve this kind of queries",
+            Double.POSITIVE_INFINITY == index.getCost(filter, root));
+        
+    }
+
+    @Test
+    public void costBetweenDescendingDirection() throws IllegalArgumentException, RepositoryException {
+        OrderedPropertyIndex index = new AlwaysIndexedOrderedPropertyIndex();
+        NodeBuilder builder = InitialContent.INITIAL_CONTENT.builder();
+        defineDescendingIndex(builder);
+        NodeState root = builder.getNodeState();
+        Filter filter = createNiceMock(Filter.class);
+        Filter.PropertyRestriction restriction = new Filter.PropertyRestriction();
+        restriction.first = PropertyValues.newDate("2013-01-01"); 
+        restriction.last = PropertyValues.newDate("2013-01-02");
+        restriction.firstIncluding = true;
+        restriction.lastIncluding = true;
+        restriction.propertyName = ORDERED_PROPERTY;
+        expect(filter.getPropertyRestrictions()).andReturn(ImmutableList.of(restriction))
+            .anyTimes();
+        expect(filter.containsNativeConstraint()).andReturn(false).anyTimes();
+        replay(filter);
+
+        assertFalse("In descending order we're expeting to serve this kind of queries",
+            Double.POSITIVE_INFINITY == index.getCost(filter, root));
+        
+    }
+
+    @Test
+    public void costBetweenAscendingDirection() throws IllegalArgumentException, RepositoryException {
+        OrderedPropertyIndex index = new AlwaysIndexedOrderedPropertyIndex();
+        NodeBuilder builder = InitialContent.INITIAL_CONTENT.builder();
+        defineAscendingIndex(builder);
+        NodeState root = builder.getNodeState();
+        Filter filter = createNiceMock(Filter.class);
+        Filter.PropertyRestriction restriction = new Filter.PropertyRestriction();
+        restriction.first = PropertyValues.newDate("2013-01-01"); 
+        restriction.last = PropertyValues.newDate("2013-01-02");
+        restriction.firstIncluding = true;
+        restriction.lastIncluding = true;
+        restriction.propertyName = ORDERED_PROPERTY;
+        expect(filter.getPropertyRestrictions()).andReturn(ImmutableList.of(restriction))
+            .anyTimes();
+        expect(filter.containsNativeConstraint()).andReturn(false).anyTimes();
+        replay(filter);
+
+        assertFalse("In descending order we're expeting to serve this kind of queries",
+            Double.POSITIVE_INFINITY == index.getCost(filter, root));
+        
     }
 
  // =================================================
@@ -148,26 +399,7 @@ public class OrderedIndexCostTest extends BasicOrderedPropertyIndexQueryTest {
 //    private static final EditorHook HOOK = new EditorHook(
 //        new IndexUpdateProvider(new OrderedPropertyIndexEditorProvider()));
     
-//    @Override
-//    protected void createTestIndexNode() throws Exception {
-//        // intentionally left blank. Each test will have to define its own index configuration
-//    }
     
-//    private void defineAscendingIndex(NodeBuilder oakIndexNode) throws Exception {
-//        Tree index = root.getTree("/");
-//        IndexUtils.createIndexDefinition(
-//            new NodeUtil(index.getChild(IndexConstants.INDEX_DEFINITIONS_NAME)),
-//            TEST_INDEX_NAME, 
-//            false, 
-//            new String[] { ORDERED_PROPERTY }, 
-//            null, 
-//            OrderedIndex.TYPE,
-//            ImmutableMap.of(
-//                OrderedIndex.DIRECTION, OrderedIndex.OrderDirection.ASC.getDirection()
-//            )
-//        );
-//        root.commit();
-//    }
 
 //    @Test
 //    public void costGreaterThanAscendingIndex() {

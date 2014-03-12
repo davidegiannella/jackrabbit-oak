@@ -19,6 +19,7 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.TYPE;
 
+import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -47,13 +48,22 @@ public class OrderedPropertyIndex extends PropertyIndex {
         double cost = Double.POSITIVE_INFINITY;
 
         if (filter.getFullTextConstraint() == null && !filter.containsNativeConstraint()) {
-            PropertyIndexLookup lookup = getLookup(root);
-            for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
-                String propertyName = pr.propertyName;
-                if (lookup.isIndexed(propertyName, "/", filter)) {
-                    if (pr.first != null && !pr.first.equals(pr.last)) {
-                        // we're in the '>' case
-                        cost = 0; // TODO use the lookup here for assessing the right cost
+            PropertyIndexLookup pil = getLookup(root);
+            if (pil instanceof OrderedPropertyIndexLookup) {
+                OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
+                for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
+                    String propertyName = PathUtils.getName(pr.propertyName);
+                    if (lookup.isIndexed(propertyName, "/", filter)) {
+                        // '>' && '>=' case
+                        if (pr.first != null && !pr.first.equals(pr.last)
+                            && lookup.isAscending(root, propertyName, filter)) {
+                            cost = lookup.getCost(filter, propertyName, pr.first);
+                        }
+                        // '<'  && '<=' case
+                        else if (pr.last != null && !pr.last.equals(pr.first)
+                                   && !lookup.isAscending(root, propertyName, filter)) {
+                            cost = lookup.getCost(filter, propertyName, pr.last);
+                        }
                     }
                 }
             }
