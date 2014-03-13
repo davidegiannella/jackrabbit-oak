@@ -20,6 +20,8 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.TYPE;
 
 import org.apache.jackrabbit.oak.commons.PathUtils;
+import org.apache.jackrabbit.oak.spi.query.Cursor;
+import org.apache.jackrabbit.oak.spi.query.Cursors;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -70,5 +72,43 @@ public class OrderedPropertyIndex extends PropertyIndex {
         }
 
         return cost;
+    }
+    
+    @Override
+    public Cursor query(Filter filter, NodeState root) {
+        Iterable<String> paths = null;
+        Cursor cursor = null;
+        PropertyIndexLookup pil = getLookup(root);
+        if (pil instanceof OrderedPropertyIndexLookup) {
+            OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
+            int depth = 1;
+            for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
+                String propertyName = PathUtils.getName(pr.propertyName);
+                depth = PathUtils.getDepth(pr.propertyName);
+                if (lookup.isIndexed(propertyName, "/", filter)) {
+//                    if (pr.first != null && !pr.first.equals(pr.last)) {
+//                        // '>' & '>=' case
+//                        paths = lookup.query(filter, propertyName, pr);
+//                    } else {
+                        // processed as "[property] is not null"
+                        paths = lookup.query(filter, propertyName, pr);
+//                        break;
+//                    }
+                } 
+            }
+            if (paths == null) {
+                throw new IllegalStateException(
+                    "OrderedPropertyIndex index is used even when no index is available for filter "
+                        + filter);
+            }
+            cursor = Cursors.newPathCursor(paths);
+            if (depth > 1) {
+                cursor = Cursors.newAncestorCursor(cursor, depth - 1);
+            }
+        } else {
+            // if for some reasons it's not an Ordered Lookup we delegate up the chain
+            cursor = super.query(filter, root);
+        }
+        return cursor;
     }
 }

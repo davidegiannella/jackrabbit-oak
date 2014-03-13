@@ -22,6 +22,7 @@ import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirect
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy;
 import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
 /**
@@ -79,5 +80,22 @@ public class OrderedPropertyIndexLookup extends PropertyIndexLookup {
                    + getStrategy(indexMeta).count(indexMeta, PropertyIndex.encode(value), MAX_COST);
         }
         return cost;
+    }
+
+    /**
+     * query the strategy for the provided constrains
+     * 
+     * @param filter
+     * @param propertyName
+     * @param pr
+     * @return the resultset
+     */
+    public Iterable<String> query(Filter filter, String propertyName, PropertyRestriction pr) {
+        NodeState indexMeta = getIndexNode(root, propertyName, filter);
+        if (indexMeta == null) {
+            throw new IllegalArgumentException("No index for " + propertyName);
+        }
+        return ((OrderedContentMirrorStoreStrategy) getStrategy(indexMeta)).query(filter,
+            propertyName, indexMeta, pr);
     }
 }

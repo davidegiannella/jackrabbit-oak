@@ -17,6 +17,8 @@
 
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
+
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
@@ -26,9 +28,12 @@ import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
+import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.AbstractChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -36,7 +41,9 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
+import com.google.common.collect.Iterators;
 
 /**
  * Same as for {@link ContentMirrorStoreStrategy} but the order of the keys is kept by using the
@@ -287,6 +294,64 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             };
         }
         return cne;
+    }
+
+    /**
+     * search the index for the provided PropertyRestriction
+     * 
+     * @param filter
+     * @param indexName
+     * @param indexMeta
+     * @param pr
+     * @return
+     */
+    public Iterable<String> query(final Filter filter, final String indexName,
+                                  final NodeState indexMeta, final PropertyRestriction pr) {
+        return query(filter, indexName, indexMeta, INDEX_CONTENT_NODE_NAME, pr);
+    }
+
+    /**
+     * queries through the index as other query() but provides the PropertyRestriction to be applied
+     * for advanced cases like range queries
+     * 
+     * @param filter
+     * @param indexName
+     * @param indexMeta
+     * @param indexStorageNodeName
+     * @param pr
+     * @return
+     */
+    public Iterable<String> query(final Filter filter, final String indexName,
+                                  final NodeState indexMeta, final String indexStorageNodeName,
+                                  final PropertyRestriction pr) {
+
+        final NodeState index = indexMeta.getChildNode(indexStorageNodeName);
+
+        if (pr.first != null && !pr.first.equals(pr.last)) {
+            // '>' & '>=' use case
+            return new Iterable<String>() {
+                private PropertyRestriction lpr = pr;
+
+                @Override
+                public Iterator<String> iterator() {
+                    PathIterator pi = new PathIterator(filter, indexName);
+                    Iterator<? extends ChildNodeEntry> children = getChildNodeEntries(index)
+                        .iterator();
+                    pi.setPathContainsValue(true);
+                    pi.enqueue(Iterators.filter(children, new Predicate<ChildNodeEntry>() {
+                        @Override
+                        public boolean apply(ChildNodeEntry entry) {
+                            return (lpr.first.getValue(Type.STRING).compareTo(entry.getName()) < 0);
+                        }
+                    }));
+                    return pi;
+                }
+            };
+        } else {
+            // property is not null. AKA "open query"
+            Iterable<String> values = null;
+            return query(filter, indexName, indexMeta, values);
+        }        
     }
 
     private static final class OrderedChildNodeEntry extends AbstractChildNodeEntry {

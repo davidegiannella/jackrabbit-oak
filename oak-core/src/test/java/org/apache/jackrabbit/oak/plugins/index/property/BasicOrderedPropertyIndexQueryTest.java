@@ -59,6 +59,12 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
      * The higher the value the lower the chance for this to happen.
      */
     protected static final int NUMBER_OF_NODES = 50;
+    
+    /**
+     * formatter for date conversions
+     */
+    protected static final SimpleDateFormat ISO_8601_2000 = new SimpleDateFormat(
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
 
     /**
      * generate a list of values to be used as ordered set. Will return something like
@@ -190,11 +196,10 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
             throw new RuntimeException("amount cannot be greater than 1000");
         }
         List<String> values = new ArrayList<String>(amount);
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
         Calendar lstart = (Calendar)start.clone();
         int hours = (OrderDirection.DESC.equals(direction)) ? -12 : 12;
         for (int i = 0; i < amount; i++) {
-            values.add(sdf.format(lstart.getTime()));
+            values.add(ISO_8601_2000.format(lstart.getTime()));
             lstart.add(Calendar.HOUR_OF_DAY, hours);
         }
 
