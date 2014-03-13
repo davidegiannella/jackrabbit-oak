@@ -68,6 +68,7 @@ public class OrderedPropertyIndex extends PropertyIndex {
                 }
             }
         }
+
         return cost;
     }
 }

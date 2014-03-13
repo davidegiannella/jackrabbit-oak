@@ -57,6 +57,7 @@ import org.apache.jackrabbit.oak.jcr.session.operation.SessionOperation;
 import org.apache.jackrabbit.oak.namepath.NamePathMapper;
 import org.apache.jackrabbit.oak.namepath.NamePathMapperImpl;
 import org.apache.jackrabbit.oak.plugins.nodetype.ReadOnlyNodeTypeManager;
+import org.apache.jackrabbit.oak.plugins.observation.CommitRateLimiter;
 import org.apache.jackrabbit.oak.plugins.value.ValueFactoryImpl;
 import org.apache.jackrabbit.oak.spi.security.SecurityConfiguration;
 import org.apache.jackrabbit.oak.spi.security.SecurityProvider;
@@ -87,6 +88,8 @@ public class SessionContext implements NamePathMapper {
     private final Whiteboard whiteboard;
     private final Map<String, Object> attributes;
     private final SessionDelegate delegate;
+    private final int observationQueueLength;
+    private final CommitRateLimiter commitRateLimiter;
 
     private final SessionNamespaces namespaces;
     private final NamePathMapper namePathMapper;
@@ -112,13 +115,16 @@ public class SessionContext implements NamePathMapper {
     public SessionContext(
             @Nonnull Repository repository, @Nonnull StatisticManager statisticManager,
             @Nonnull SecurityProvider securityProvider, @Nonnull Whiteboard whiteboard,
-            @Nonnull Map<String, Object> attributes, @Nonnull final SessionDelegate delegate) {
+            @Nonnull Map<String, Object> attributes, @Nonnull final SessionDelegate delegate,
+            int observationQueueLength, CommitRateLimiter commitRateLimiter) {
         this.repository = checkNotNull(repository);
         this.statisticManager = statisticManager;
         this.securityProvider = checkNotNull(securityProvider);
         this.whiteboard = checkNotNull(whiteboard);
         this.attributes = checkNotNull(attributes);
         this.delegate = checkNotNull(delegate);
+        this.observationQueueLength = observationQueueLength;
+        this.commitRateLimiter = commitRateLimiter;
         SessionStats sessionStats = delegate.getSessionStats();
         sessionStats.setAttributes(attributes);
 
@@ -264,8 +270,7 @@ public class SessionContext implements NamePathMapper {
             observationManager = new ObservationManagerImpl(
                 this,
                 ReadOnlyNodeTypeManager.getInstance(delegate.getRoot(), namePathMapper),
-                getPermissionProvider(),
-                whiteboard);
+                getPermissionProvider(), whiteboard, observationQueueLength, commitRateLimiter);
         }
         return observationManager;
     }

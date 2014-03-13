@@ -23,6 +23,7 @@ import javax.jcr.Session;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.jcr.repository.RepositoryImpl;
+import org.apache.jackrabbit.oak.plugins.observation.CommitRateLimiter;
 import org.apache.jackrabbit.oak.spi.security.SecurityProvider;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 
@@ -35,8 +36,10 @@ public class OsgiRepository extends RepositoryImpl {
 
     public OsgiRepository(ContentRepository repository,
                           Whiteboard whiteboard,
-                          SecurityProvider securityProvider) {
-        super(repository, whiteboard, securityProvider);
+                          SecurityProvider securityProvider,
+                          int observationQueueLength,
+                          CommitRateLimiter commitRateLimiter) {
+        super(repository, whiteboard, securityProvider, observationQueueLength, commitRateLimiter);
     }
 
     @Override

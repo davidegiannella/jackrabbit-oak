@@ -51,6 +51,8 @@ import org.slf4j.LoggerFactory;
  * to just one change.
  */
 public class BackgroundObserver implements Observer, Closeable {
+    private static final Logger LOG = LoggerFactory.getLogger(BackgroundObserver.class);
+
     /**
      * Signal for the background thread to stop processing changes.
      */
@@ -75,6 +77,11 @@ public class BackgroundObserver implements Observer, Closeable {
      * The queue of content changes to be processed.
      */
     private final BlockingQueue<ContentChange> queue;
+
+    /**
+     * Maximal number of elements before queue will start to block
+     */
+    private final int queueLength;
 
     private static class ContentChange {
         private final NodeState root;
@@ -116,6 +123,7 @@ public class BackgroundObserver implements Observer, Closeable {
                         observer.contentChanged(change.root, change.info);
                         change = queue.poll();
                     }
+                    queueEmpty();
                 } catch (Throwable t) {
                     exceptionHandler.uncaughtException(Thread.currentThread(), t);
                 }
@@ -144,6 +152,7 @@ public class BackgroundObserver implements Observer, Closeable {
         this.executor = checkNotNull(executor);
         this.exceptionHandler = checkNotNull(exceptionHandler);
         this.queue = newArrayBlockingQueue(queueLength);
+        this.queueLength = queueLength;
     }
 
     public BackgroundObserver(
@@ -163,6 +172,9 @@ public class BackgroundObserver implements Observer, Closeable {
             @Nonnull Executor executor) {
         this(observer, executor, 1000);
     }
+
+    protected void queueNearlyFull() {}
+    protected void queueEmpty() {}
 
     /**
      * Clears the change queue and signals the background thread to stop
@@ -213,12 +225,20 @@ public class BackgroundObserver implements Observer, Closeable {
 
         // Try to add this change to the queue without blocking, and
         // mark the queue as full if there wasn't enough space
+        boolean wasFull = full;
         full = !queue.offer(change);
+        if (full && !wasFull) {
+            LOG.warn("Revision queue is full. Further revisions will be compacted.");
+        }
 
         if (!full) {
             // Keep track of the last change added, so we can do the
             // compacting of external changes shown above.
             last = change;
+        }
+
+        if (10 * queue.remainingCapacity() < queueLength) {
+            queueNearlyFull();
         }
 
         // Set the completion handler on the currently running task. Multiple calls

@@ -19,13 +19,19 @@
 
 package org.apache.jackrabbit.oak.plugins.observation;
 
+import static java.util.Collections.addAll;
+
+import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.jcr.RepositoryException;
 
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.core.ImmutableRoot;
 import org.apache.jackrabbit.oak.namepath.GlobalNameMapper;
@@ -35,22 +41,29 @@ import org.apache.jackrabbit.oak.plugins.observation.filter.VisibleFilter;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Base class for {@code Observer} instances that group changes
  * by node instead of tracking them down to individual properties.
  */
 public abstract class NodeObserver implements Observer {
+    private static final Logger LOG = LoggerFactory.getLogger(NodeObserver.class);
+
     private final String path;
+    private final Set<String> propertyNames = Sets.newHashSet();
 
     private NodeState previousRoot;
 
     /**
      * Create a new instance for observing the given path.
      * @param path
+     * @param propertyNames  names of properties to report even without a change
      */
-    protected NodeObserver(String path) {
+    protected NodeObserver(String path, String... propertyNames) {
         this.path = path;
+        addAll(this.propertyNames, propertyNames);
     }
 
     /**
@@ -59,6 +72,7 @@ public abstract class NodeObserver implements Observer {
      * @param added      Names of the added properties.
      * @param deleted    Names of the deleted properties.
      * @param changed    Names of the changed properties.
+     * @param properties Properties as specified in the constructor
      * @param commitInfo commit info associated with this change.
      */
     protected abstract void added(
@@ -66,6 +80,7 @@ public abstract class NodeObserver implements Observer {
             @Nonnull Set<String> added,
             @Nonnull Set<String> deleted,
             @Nonnull Set<String> changed,
+            @Nonnull Map<String, String> properties,
             @Nonnull CommitInfo commitInfo);
 
     /**
@@ -74,6 +89,7 @@ public abstract class NodeObserver implements Observer {
      * @param added      Names of the added properties.
      * @param deleted    Names of the deleted properties.
      * @param changed    Names of the changed properties.
+     * @param properties Properties as specified in the constructor
      * @param commitInfo commit info associated with this change.
      */
     protected abstract void deleted(
@@ -81,6 +97,7 @@ public abstract class NodeObserver implements Observer {
             @Nonnull Set<String> added,
             @Nonnull Set<String> deleted,
             @Nonnull Set<String> changed,
+            @Nonnull Map<String, String> properties,
             @Nonnull CommitInfo commitInfo);
 
     /**
@@ -89,6 +106,7 @@ public abstract class NodeObserver implements Observer {
      * @param added      Names of the added properties.
      * @param deleted    Names of the deleted properties.
      * @param changed    Names of the changed properties.
+     * @param properties Properties as specified in the constructor
      * @param commitInfo commit info associated with this change.
      */
     protected abstract void changed(
@@ -96,32 +114,42 @@ public abstract class NodeObserver implements Observer {
             @Nonnull Set<String> added,
             @Nonnull Set<String> deleted,
             @Nonnull Set<String> changed,
+            @Nonnull Map<String, String> properties,
             @Nonnull CommitInfo commitInfo);
 
     @Override
     public void contentChanged(@Nonnull NodeState root, @Nullable CommitInfo info) {
-        if (previousRoot != null) {
-            NamePathMapper namePathMapper = new NamePathMapperImpl(
-                    new GlobalNameMapper(new ImmutableRoot(root)));
+        try {
+            if (previousRoot != null) {
+                NamePathMapper namePathMapper = new NamePathMapperImpl(
+                        new GlobalNameMapper(new ImmutableRoot(root)));
 
-            NodeState before = previousRoot;
-            NodeState after = root;
-            EventHandler handler = new FilteredHandler(
-                    new VisibleFilter(),
-                    new NodeEventHandler("/", info, namePathMapper));
-            for (String name : PathUtils.elements(path)) {
-                before = before.getChildNode(name);
-                after = after.getChildNode(name);
-                handler = handler.getChildHandler(name, before, after);
+                Set<String> oakPropertyNames = Sets.newHashSet();
+                for (String name : propertyNames) {
+                    oakPropertyNames.add(namePathMapper.getJcrName(name));
+                }
+                NodeState before = previousRoot;
+                NodeState after = root;
+                EventHandler handler = new FilteredHandler(
+                        new VisibleFilter(),
+                        new NodeEventHandler("/", info, namePathMapper, oakPropertyNames));
+                for (String name : PathUtils.elements(path)) {
+                    String oakName = namePathMapper.getOakName(name);
+                    before = before.getChildNode(oakName);
+                    after = after.getChildNode(oakName);
+                    handler = handler.getChildHandler(oakName, before, after);
+                }
+
+                EventGenerator generator = new EventGenerator(before, after, handler);
+                while (!generator.isDone()) {
+                    generator.generate();
+                }
             }
 
-            EventGenerator generator = new EventGenerator(previousRoot, root, handler);
-            while (!generator.isDone()) {
-                generator.generate();
-            }
+            previousRoot = root;
+        } catch (RepositoryException e) {
+            LOG.warn("Error while handling content change", e);
         }
-
-        previousRoot = root;
     }
 
     private enum EventType {ADDED, DELETED, CHANGED}
@@ -130,15 +158,18 @@ public abstract class NodeObserver implements Observer {
         private final String path;
         private final CommitInfo commitInfo;
         private final NamePathMapper namePathMapper;
+        private final Set<String> propertyNames;
         private final EventType eventType;
         private final Set<String> added = Sets.newHashSet();
         private final Set<String> deleted = Sets.newHashSet();
         private final Set<String> changed = Sets.newHashSet();
 
-        public NodeEventHandler(String path, CommitInfo commitInfo, NamePathMapper namePathMapper) {
+        public NodeEventHandler(String path, CommitInfo commitInfo, NamePathMapper namePathMapper,
+                Set<String> propertyNames) {
             this.path = path;
             this.commitInfo = commitInfo == null ? CommitInfo.EMPTY : commitInfo;
             this.namePathMapper = namePathMapper;
+            this.propertyNames = propertyNames;
             this.eventType = EventType.CHANGED;
         }
 
@@ -146,6 +177,7 @@ public abstract class NodeObserver implements Observer {
             this.path = "/".equals(parent.path) ? '/' + name : parent.path + '/' + name;
             this.commitInfo = parent.commitInfo;
             this.namePathMapper = parent.namePathMapper;
+            this.propertyNames = parent.propertyNames;
             this.eventType = eventType;
         }
 
@@ -153,17 +185,31 @@ public abstract class NodeObserver implements Observer {
         public void leave(NodeState before, NodeState after) {
             switch (eventType) {
                 case ADDED:
-                    added(namePathMapper.getJcrPath(path), added, deleted, changed, commitInfo);
+                    added(namePathMapper.getJcrPath(path), added, deleted, changed,
+                            collectProperties(after), commitInfo);
                     break;
                 case DELETED:
-                    deleted(namePathMapper.getJcrPath(path), added, deleted, changed, commitInfo);
+                    deleted(namePathMapper.getJcrPath(path), added, deleted, changed,
+                            collectProperties(before), commitInfo);
                     break;
                 case CHANGED:
                     if (!added.isEmpty() || ! deleted.isEmpty() || !changed.isEmpty()) {
-                        changed(namePathMapper.getJcrPath(path), added, deleted, changed, commitInfo);
+                        changed(namePathMapper.getJcrPath(path), added, deleted, changed,
+                                collectProperties(after), commitInfo);
                     }
                     break;
             }
+        }
+
+        private Map<String, String> collectProperties(NodeState node) {
+            Map<String, String> properties = Maps.newHashMap();
+            for (String name : propertyNames) {
+                PropertyState p = node.getProperty(name);
+                if (p != null && !p.isArray()) {
+                    properties.put(name, p.getValue(Type.STRING));
+                }
+            }
+            return properties;
         }
 
         @Override
