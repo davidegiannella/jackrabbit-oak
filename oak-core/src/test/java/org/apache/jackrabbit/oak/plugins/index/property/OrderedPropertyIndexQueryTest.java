@@ -19,7 +19,6 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertTrue;
-import static junit.framework.Assert.fail;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 
 import java.text.ParseException;
@@ -30,6 +29,7 @@ import java.util.Map;
 
 import javax.jcr.RepositoryException;
 
+import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.ResultRow;
@@ -38,7 +38,9 @@ import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
+import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
+import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.apache.jackrabbit.oak.util.NodeUtil;
 import org.junit.Test;
 
@@ -209,15 +211,58 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
     }
 
     /**
+     * initiate the environment for testing with proper OrderedPropertyIndexProvider
+     * @throws Exception
+     */
+    private void initWithProperProvider() throws Exception {
+        session = new Oak().with(new InitialContent())
+            .with(new OpenSecurityProvider())
+            .with(new OrderedPropertyIndexProvider())
+            .with(new OrderedPropertyIndexEditorProvider())
+            .createContentRepository().login(null, null);
+        root = session.getLatestRoot();
+        qe = root.getQueryEngine();
+        createTestIndexNode();
+    }
+        
+    /**
      * test the range query in case of '<' condition
      * 
      * in this case as we're ascending we're expecting an empty resultset with the proper
      * provider. not the lowcost one.
+     * @throws Exception 
      */
     @Test
-    public void queryLessThan() {
+    public void queryLessThan() throws Exception {
+        initWithProperProvider();
         setTravesalEnabled(false);
-        fail("Still to be implemented");
+        final OrderDirection direction = OrderDirection.DESC;
+        final String query = "SELECT * FROM [nt:base] AS n WHERE n.%s < $%s";
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+
+        // initialising the data
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        Calendar start = midnightFirstJan2013();
+        List<ValuePathTuple> nodes = addChildNodes(
+            generateOrderedDates(NUMBER_OF_NODES, direction, start), test, direction, Type.DATE);
+        root.commit();
+
+        Calendar searchForCalendar = Calendar.getInstance();
+        searchForCalendar.setTime(ISO_8601_2000.parse(nodes.get(nodes.size()-1).getValue()));
+        searchForCalendar.add(Calendar.HOUR_OF_DAY, -36);
+        String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+        Map<String, PropertyValue> filter = ImmutableMap.of(ORDERED_PROPERTY,
+            PropertyValues.newDate(searchFor));
+        Iterator<? extends ResultRow> results = executeQuery(
+            String.format(query, ORDERED_PROPERTY, ORDERED_PROPERTY), SQL2, filter).getRows()
+            .iterator();
+//        Iterator<ValuePathTuple> filtered = Iterables.filter(nodes,
+//            new ValuePathTuple.GreaterThanPredicate(searchFor,true)).iterator();
+        assertFalse("We should have no results as of the cost and index direction", results.hasNext());
+
         setTravesalEnabled(true);
     }
 
@@ -226,11 +271,39 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
      * 
      * in this case as we're ascending we're expecting an empty resultset with the proper
      * provider. not the lowcost one.
+     * @throws Exception 
      */
     @Test
-    public void queryLessEqualThan() {
+    public void queryLessEqualThan() throws Exception {
+        initWithProperProvider();
         setTravesalEnabled(false);
-        fail("Still to be implemented");
+        final OrderDirection direction = OrderDirection.DESC;
+        final String query = "SELECT * FROM [nt:base] AS n WHERE n.%s <= $%s";
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+
+        // initialising the data
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        Calendar start = midnightFirstJan2013();
+        List<ValuePathTuple> nodes = addChildNodes(
+            generateOrderedDates(NUMBER_OF_NODES, direction, start), test, direction, Type.DATE);
+        root.commit();
+
+        Calendar searchForCalendar = Calendar.getInstance();
+        searchForCalendar.setTime(ISO_8601_2000.parse(nodes.get(nodes.size()-1).getValue()));
+        searchForCalendar.add(Calendar.HOUR_OF_DAY, -36);
+        String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+        Map<String, PropertyValue> filter = ImmutableMap.of(ORDERED_PROPERTY,
+            PropertyValues.newDate(searchFor));
+        Iterator<? extends ResultRow> results = executeQuery(
+            String.format(query, ORDERED_PROPERTY, ORDERED_PROPERTY), SQL2, filter).getRows()
+            .iterator();
+//        Iterator<ValuePathTuple> filtered = Iterables.filter(nodes,
+//            new ValuePathTuple.GreaterThanPredicate(searchFor,true)).iterator();
+        assertFalse("We should have no results as of the cost and index direction", results.hasNext());
+
         setTravesalEnabled(true);
     }
 }
