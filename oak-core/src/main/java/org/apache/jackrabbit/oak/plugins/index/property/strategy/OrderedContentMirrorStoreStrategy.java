@@ -341,7 +341,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     pi.enqueue(Iterators.filter(children, new Predicate<ChildNodeEntry>() {
                         @Override
                         public boolean apply(ChildNodeEntry entry) {
-                            return (lpr.first.getValue(Type.STRING).compareTo(entry.getName()) < 0);
+                            String value = lpr.first.getValue(Type.STRING);
+                            String name = convert(entry.getName());
+                            return (value.compareTo(name) < 0 || (lpr.firstIncluding && value
+                                .equals(name)));
                         }
                     }));
                     return pi;
@@ -351,9 +354,13 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             // property is not null. AKA "open query"
             Iterable<String> values = null;
             return query(filter, indexName, indexMeta, values);
-        }        
+        }
     }
 
+    private static String convert(String value){
+        return value.replaceAll("%3A", ":");
+    }
+    
     private static final class OrderedChildNodeEntry extends AbstractChildNodeEntry {
         private final String name;
         private final NodeState state;
