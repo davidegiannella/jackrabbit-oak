@@ -30,7 +30,7 @@ public class ValuePathTuple implements Comparable<ValuePathTuple> {
     private String path;
 
     /**
-     * convenience Predicate for easying the testing
+     * convenience Predicate for easing the testing
      */
     public static class GreaterThanPredicate implements Predicate<ValuePathTuple> {
         /** 
