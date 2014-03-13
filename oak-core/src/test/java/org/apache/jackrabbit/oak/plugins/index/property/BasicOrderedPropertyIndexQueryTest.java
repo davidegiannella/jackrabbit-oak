@@ -226,6 +226,15 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
     }
 
     /**
+     * @return a Calendar set for midnight of 1st January 2013
+     */
+    protected static Calendar midnightFirstJan2013() {
+        Calendar c = Calendar.getInstance();
+        c.set(2013, Calendar.JANUARY, 1, 0, 0);
+        return c;
+    }
+
+    /**
      * convenience method that adds a bunch of nodes in random order and return the order in which
      * they should be presented by the OrderedIndex
      * 
@@ -244,5 +253,20 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
             father.child(String.format("n%s", counter++))
                 .setProperty(ORDERED_PROPERTY, v, propertyType);
         }
+    }
+
+    /**
+     * initiate the environment for testing with proper OrderedPropertyIndexProvider
+     * @throws Exception
+     */
+    protected void initWithProperProvider() throws Exception {
+        session = new Oak().with(new InitialContent())
+            .with(new OpenSecurityProvider())
+            .with(new OrderedPropertyIndexProvider())
+            .with(new OrderedPropertyIndexEditorProvider())
+            .createContentRepository().login(null, null);
+        root = session.getLatestRoot();
+        qe = root.getQueryEngine();
+        createTestIndexNode();
     }
 }

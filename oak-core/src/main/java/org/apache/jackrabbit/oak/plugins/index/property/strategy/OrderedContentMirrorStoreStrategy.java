@@ -350,6 +350,30 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     return pi;
                 }
             };
+        } 
+        else if (pr.last != null && !pr.last.equals(pr.first)) {  
+            // '<' & '<=' use case
+            return new Iterable<String>() {
+                private PropertyRestriction lpr = pr;
+
+                @Override
+                public Iterator<String> iterator() {
+                    PathIterator pi = new PathIterator(filter, indexName);
+                    Iterator<? extends ChildNodeEntry> children = getChildNodeEntries(index)
+                        .iterator();
+                    pi.setPathContainsValue(true);
+                    pi.enqueue(Iterators.filter(children, new Predicate<ChildNodeEntry>() {
+                        @Override
+                        public boolean apply(ChildNodeEntry entry) {
+                            String value = lpr.last.getValue(Type.STRING);
+                            String name = convert(entry.getName());
+                            return (value.compareTo(name) > 0) 
+                                || (lpr.lastIncluding && value.equals(name));
+                        }
+                    }));
+                    return pi;
+                }
+            };
         } else {
             // property is not null. AKA "open query"
             Iterable<String> values = null;
