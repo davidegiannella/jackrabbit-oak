@@ -29,15 +29,33 @@ public class ValuePathTuple implements Comparable<ValuePathTuple> {
     private String value;
     private String path;
 
+    /**
+     * convenience Predicate for easying the testing
+     */
     public static class GreaterThanPredicate implements Predicate<ValuePathTuple> {
+        /** 
+         * the value for comparison 
+         */
         private String value;
+        
+        /**
+         * whether we should include the value in the result
+         */
+        private boolean include = false;
+        
         public GreaterThanPredicate(String value) {
             this.value = value;
         }
-        
+
+        public GreaterThanPredicate(String value, boolean include) {
+            this.value = value;
+            this.include = include;
+        }
+
         @Override
         public boolean apply(ValuePathTuple arg0) {
-            return ( value.compareTo(arg0.getValue()) < 0);
+            return (value.compareTo(arg0.getValue()) < 0)
+                   || (include && value.equals(arg0.getValue()));
         }
     };
     
