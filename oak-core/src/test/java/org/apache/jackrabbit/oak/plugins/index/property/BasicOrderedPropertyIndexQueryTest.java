@@ -194,7 +194,7 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
         Calendar lstart = (Calendar)start.clone();
         int hours = (OrderDirection.DESC.equals(direction)) ? -12 : 12;
         for (int i = 0; i < amount; i++) {
-            values.add(sdf.format(start.getTime()));
+            values.add(sdf.format(lstart.getTime()));
             lstart.add(Calendar.HOUR_OF_DAY, hours);
         }
 
