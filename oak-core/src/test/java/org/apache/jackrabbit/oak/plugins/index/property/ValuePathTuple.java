@@ -16,6 +16,8 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import com.google.common.base.Predicate;
+
 
 /**
  * convenience orderable object that represents a tuple of values and paths
@@ -27,6 +29,18 @@ public class ValuePathTuple implements Comparable<ValuePathTuple> {
     private String value;
     private String path;
 
+    public static class GreaterThanPredicate implements Predicate<ValuePathTuple> {
+        private String value;
+        public GreaterThanPredicate(String value) {
+            this.value = value;
+        }
+        
+        @Override
+        public boolean apply(ValuePathTuple arg0) {
+            return ( value.compareTo(arg0.getValue()) < 0);
+        }
+    };
+    
     ValuePathTuple(String value, String path) {
         this.value = value;
         this.path = path;
