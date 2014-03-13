@@ -59,6 +59,28 @@ public class ValuePathTuple implements Comparable<ValuePathTuple> {
         }
     };
     
+    public static class LessThanPredicate implements Predicate<ValuePathTuple> {
+        /** 
+         * the value for comparison 
+         */
+        private String value;
+        
+        /**
+         * whether we should include the value in the result
+         */
+        private boolean include = false;
+
+        public LessThanPredicate(String value){
+            this.value = value;
+        }
+        
+        @Override
+        public boolean apply(ValuePathTuple arg0) {
+            return (value.compareTo(arg0.getValue()) > 0);
+        }
+        
+    }
+    
     ValuePathTuple(String value, String path) {
         this.value = value;
         this.path = path;
