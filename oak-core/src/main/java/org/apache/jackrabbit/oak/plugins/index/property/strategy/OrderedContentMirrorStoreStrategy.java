@@ -23,7 +23,6 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import java.util.Set;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -96,7 +95,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     
     @Override
     NodeBuilder fetchKeyNode(@Nonnull NodeBuilder index, @Nonnull String key) {
-        LOG.debug("fetchKeyNode() - index: {} - key: {}", index, key);
         NodeBuilder localkey = null;
         NodeBuilder start = index.child(START);
 
@@ -208,16 +206,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
 
         return found ? previous : null;
-    }
-
-    @Override
-    public void update(NodeBuilder index, String path, Set<String> beforeKeys,
-                       Set<String> afterKeys) {
-        LOG.debug("update() - index     : {}", index);
-        LOG.debug("update() - path      : {}", path);
-        LOG.debug("update() - beforeKeys: {}", beforeKeys);
-        LOG.debug("update() - afterKeys : {}", afterKeys);
-        super.update(index, path, beforeKeys, afterKeys);
     }
 
     /**
