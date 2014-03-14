@@ -63,6 +63,8 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
 public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQueryTest {
+    private static final EditorHook HOOK = new EditorHook(new IndexUpdateProvider(
+        new OrderedPropertyIndexEditorProvider()));
 
     @Override
     protected void createTestIndexNode() throws Exception {
@@ -342,10 +344,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         setTravesalEnabled(true);
     }
-    
-    private static final EditorHook HOOK = new EditorHook(new IndexUpdateProvider(
-        new OrderedPropertyIndexEditorProvider()));
-    
+        
     @Test
     public void planOderByNoWhere() throws IllegalArgumentException, RepositoryException,
                                    CommitFailedException {
@@ -358,6 +357,9 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         NodeState before = root.getNodeState();
         final OrderDirection direction = OrderDirection.ASC;
+        final QueryIndex.OrderEntry.Order order = OrderDirection.ASC.equals(direction) ? QueryIndex.OrderEntry.Order.ASCENDING
+                                                                                      : QueryIndex.OrderEntry.Order.DESCENDING;
+
         List<String> values = generateOrderedValues(NUMBER_OF_NODES, direction);
         addChildNodes(values, root, Type.STRING);
         NodeState after = root.getNodeState();
@@ -367,25 +369,89 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         final OrderedPropertyIndex index = new OrderedPropertyIndex();
         final String nodeTypeName = JcrConstants.NT_BASE;
 
-        NodeState system = indexed.getChildNode(JCR_SYSTEM);
-        NodeState types = system.getChildNode(JCR_NODE_TYPES);
-        NodeState type = types.getChildNode(nodeTypeName);
-        SelectorImpl selector = new SelectorImpl(type, nodeTypeName);
-        Filter filter = new FilterImpl(selector, "SELECT * FROM [" + nodeTypeName + "]");
+        Filter filter = createFilter(indexed, nodeTypeName);
 
-        List<QueryIndex.OrderEntry> sortOrder = ImmutableList.of(new QueryIndex.OrderEntry(
-            ORDERED_PROPERTY, Type.UNDEFINED, QueryIndex.OrderEntry.Order.ASCENDING));
+        List<QueryIndex.OrderEntry> sortOrder = ImmutableList.of(createOrderEntry(ORDERED_PROPERTY,
+            order));
         List<IndexPlan> plans = index.getPlans(filter, sortOrder, indexed);
-        
+
         assertNotNull(plans);
         assertEquals(1, plans.size());
         IndexPlan p = plans.get(0);
         assertTrue(p.getEstimatedEntryCount() > 0);
         assertNotNull(p.getSortOrder());
-        assertEquals(1,p.getSortOrder().size());
+        assertEquals(1, p.getSortOrder().size());
         QueryIndex.OrderEntry oe = p.getSortOrder().get(0);
         assertNotNull(oe);
-        assertEquals(ORDERED_PROPERTY,oe.getPropertyName());
+        assertEquals(ORDERED_PROPERTY, oe.getPropertyName());
         assertEquals(QueryIndex.OrderEntry.Order.ASCENDING, oe.getOrder());
+    }
+    
+    @Test
+    public void queryOrderByNonIndexedProperty() throws CommitFailedException, ParseException {
+        setTravesalEnabled(false);
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test,
+            OrderDirection.ASC, Type.STRING);
+        root.commit();
+
+        // querying
+        Iterator<? extends ResultRow> results;
+        String query = "SELECT * from [nt:base] ORDER BY somethingnotindexed";
+        results = executeQuery(query, SQL2, null)
+            .getRows().iterator();
+        assertFalse("An empty resultset is expected",results.hasNext());
+
+        setTravesalEnabled(true);
+    }
+
+    private static Filter createFilter(NodeState indexed, String nodeTypeName) {
+        NodeState system = indexed.getChildNode(JCR_SYSTEM);
+        NodeState types = system.getChildNode(JCR_NODE_TYPES);
+        NodeState type = types.getChildNode(nodeTypeName);
+        SelectorImpl selector = new SelectorImpl(type, nodeTypeName);
+        return new FilterImpl(selector, "SELECT * FROM [" + nodeTypeName + "]");
+    }
+
+    private static QueryIndex.OrderEntry createOrderEntry(String property,
+                                                          QueryIndex.OrderEntry.Order order) {
+        return new QueryIndex.OrderEntry(property, Type.UNDEFINED, order);
+    }
+
+    @Test
+    public void planOrderByNonIndexedProperty() throws IllegalArgumentException,
+                                               RepositoryException, CommitFailedException {
+        NodeBuilder root = EmptyNodeState.EMPTY_NODE.builder();
+
+        IndexUtils.createIndexDefinition(root.child(IndexConstants.INDEX_DEFINITIONS_NAME),
+            TEST_INDEX_NAME, false, ImmutableList.of(ORDERED_PROPERTY), null, OrderedIndex.TYPE,
+            ImmutableMap.<String, String> of());
+
+        NodeState before = root.getNodeState();
+        final OrderDirection direction = OrderDirection.ASC;
+        final QueryIndex.OrderEntry.Order order = OrderDirection.ASC.equals(direction) ? QueryIndex.OrderEntry.Order.ASCENDING
+                                                                                      : QueryIndex.OrderEntry.Order.DESCENDING;
+        List<String> values = generateOrderedValues(NUMBER_OF_NODES, direction);
+        addChildNodes(values, root, Type.STRING);
+        NodeState after = root.getNodeState();
+
+        NodeState indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
+
+        final OrderedPropertyIndex index = new OrderedPropertyIndex();
+        final String nodeTypeName = JcrConstants.NT_BASE;
+        Filter filter = createFilter(indexed, nodeTypeName);
+
+        List<QueryIndex.OrderEntry> sortOrder = ImmutableList.of(createOrderEntry(
+            "somethingnotindexed", order));
+
+        List<IndexPlan> plans = index.getPlans(filter, sortOrder, indexed);
+
+        assertNotNull(plans);
+        assertEquals(0, plans.size());
     }
 }
