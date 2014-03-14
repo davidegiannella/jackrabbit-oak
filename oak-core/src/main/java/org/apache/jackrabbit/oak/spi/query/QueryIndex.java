@@ -250,7 +250,7 @@ public interface QueryIndex {
             protected boolean isDelayed;
             protected boolean isFulltextIndex;
             protected boolean includesNodeData;
-            protected List<OrderEntry> sortOrder;
+            protected List<OrderEntry> sortOrder;            
 
             public Builder setCostPerExecution(double costPerExecution) {
                 this.costPerExecution = costPerExecution;
@@ -314,6 +314,27 @@ public interface QueryIndex {
                             Builder.this.sortOrder == null ?
                             null : new ArrayList<OrderEntry>(
                                     Builder.this.sortOrder);                  
+                    @Override
+                    public String toString() {
+                        return String.format(
+                              "{ costPerExecution : %s,"
+                            + " costPerEntry : %s,"
+                            + " estimatedEntryCount : %s,"
+                            + " filter : %s,"
+                            + " isDelayed : %s,"
+                            + " isFulltextIndex : %s,"
+                            + " includesNodeData : %s,"
+                            + " sortOrder : %s }",
+                            costPerExecution,
+                            costPerEntry,
+                            estimatedEntryCount,
+                            filter,
+                            isDelayed,
+                            isFulltextIndex,
+                            includesNodeData,
+                            sortOrder
+                            );
+                    }
 
                     @Override
                     public double getCostPerExecution() {

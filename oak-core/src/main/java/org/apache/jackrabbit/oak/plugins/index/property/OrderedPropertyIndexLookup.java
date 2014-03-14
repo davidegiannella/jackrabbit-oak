@@ -98,4 +98,20 @@ public class OrderedPropertyIndexLookup extends PropertyIndexLookup {
         return ((OrderedContentMirrorStoreStrategy) getStrategy(indexMeta)).query(filter,
             propertyName, indexMeta, pr);
     }
+
+    /**
+     * return an estimated count to be used in IndexPlans.
+     * 
+     * @param propertyName
+     * @param value
+     * @param filter
+     * @param pr
+     * @return
+     */
+    public long getEstimatedEntryCount(String propertyName, PropertyValue value, Filter filter,
+                                       PropertyRestriction pr) {
+        NodeState indexMeta = getIndexNode(root, propertyName, filter);
+        OrderedContentMirrorStoreStrategy strategy = (OrderedContentMirrorStoreStrategy) getStrategy(indexMeta);
+        return strategy.count(indexMeta, pr, MAX_COST);
+    }
 }

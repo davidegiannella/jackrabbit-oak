@@ -407,79 +407,86 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @param max
      * @return the estimated number of nodes
      */
-    long count(NodeState indexMeta, Filter.PropertyRestriction pr, int max){
+    public long count(NodeState indexMeta, Filter.PropertyRestriction pr, int max) {
         long count = 0;
         NodeState content = indexMeta.getChildNode(INDEX_CONTENT_NODE_NAME);
-        if(content.exists()){
-            //the index is not empty
+        if (content.exists()) {
+            // the index is not empty
             String value;
-            if(pr.firstIncluding && pr.lastIncluding && pr.first!=null && pr.first.equals(pr.last)){
+            if (pr.firstIncluding && pr.lastIncluding && pr.first != null
+                && pr.first.equals(pr.last)) {
                 // property==value case
                 value = pr.first.getValue(Type.STRING);
-                NodeState n = content.getChildNode(value); 
-                if(n.exists()){
+                NodeState n = content.getChildNode(value);
+                if (n.exists()) {
                     CountingNodeVisitor v = new CountingNodeVisitor(max);
                     v.visit(n);
                     count = v.getEstimatedCount();
                 }
-            } else if (pr.first == null && pr.last ==null) {
+            } else if (pr.first == null && pr.last == null) {
                 // property not null case
                 PropertyState ec = indexMeta.getProperty(ENTRY_COUNT_PROPERTY_NAME);
                 if (ec != null) {
                     count = ec.getValue(Type.LONG);
-                }else{
+                } else {
                     CountingNodeVisitor v = new CountingNodeVisitor(max);
                     v.visit(content);
                     count = v.getEstimatedCount();
                 }
-            } else if (pr.first != null && !pr.first.equals(pr.last) && OrderDirection.ASC.equals(direction)) {
+            } else if (pr.first != null && !pr.first.equals(pr.last)
+                       && OrderDirection.ASC.equals(direction)) {
                 // > & >= in ascending index
                 Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(content);
                 CountingNodeVisitor v;
                 value = pr.first.getValue(Type.STRING);
                 int depthTotal = 0;
-                //seeking the right starting point
-                for(ChildNodeEntry child : children) {
+                // seeking the right starting point
+                for (ChildNodeEntry child : children) {
                     String converted = convert(child.getName());
-                    if (value.compareTo(converted) < 0 || (pr.firstIncluding && value.equals(converted))) {
+                    if (value.compareTo(converted) < 0
+                        || (pr.firstIncluding && value.equals(converted))) {
                         // here we are let's start counting
                         v = new CountingNodeVisitor(max);
                         v.visit(content.getChildNode(child.getName()));
                         count += v.getCount();
                         depthTotal += v.depthTotal;
-                        if(count>max) break;
+                        if (count > max)
+                            break;
                     }
                 }
-                //small hack for having a common way of counting
+                // small hack for having a common way of counting
                 v = new CountingNodeVisitor(max);
                 v.depthTotal = depthTotal;
-                v.count = (int) Math.min(count,Integer.MAX_VALUE);
+                v.count = (int) Math.min(count, Integer.MAX_VALUE);
                 count = v.getEstimatedCount();
-            } else if (pr.last != null && !pr.last.equals(pr.first) && OrderDirection.DESC.equals(direction)) {
+            } else if (pr.last != null && !pr.last.equals(pr.first)
+                       && OrderDirection.DESC.equals(direction)) {
                 // > & >= in ascending index
                 Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(content);
                 CountingNodeVisitor v;
                 value = pr.last.getValue(Type.STRING);
                 int depthTotal = 0;
-                //seeking the right starting point
-                for(ChildNodeEntry child : children) {
+                // seeking the right starting point
+                for (ChildNodeEntry child : children) {
                     String converted = convert(child.getName());
-                    if (value.compareTo(converted) > 0 || (pr.lastIncluding && value.equals(converted))) {
+                    if (value.compareTo(converted) > 0
+                        || (pr.lastIncluding && value.equals(converted))) {
                         // here we are let's start counting
                         v = new CountingNodeVisitor(max);
                         v.visit(content.getChildNode(child.getName()));
                         count += v.getCount();
                         depthTotal += v.depthTotal;
-                        if(count>max) break;
+                        if (count > max)
+                            break;
                     }
                 }
-                //small hack for having a common way of counting
+                // small hack for having a common way of counting
                 v = new CountingNodeVisitor(max);
                 v.depthTotal = depthTotal;
-                v.count = (int) Math.min(count,Integer.MAX_VALUE);
+                v.count = (int) Math.min(count, Integer.MAX_VALUE);
                 count = v.getEstimatedCount();
             }
-            
+
         }
         return count;
     }
