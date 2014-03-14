@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.jackrabbit.oak.api.PropertyValue;
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.spi.query.Cursor;
 import org.apache.jackrabbit.oak.spi.query.Cursors;
@@ -32,6 +33,8 @@ import org.apache.jackrabbit.oak.spi.query.QueryIndex.AdvancedQueryIndex;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.ImmutableList;
 
 /**
  * A property index that supports ordering keys.
@@ -128,7 +131,7 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
         LOG.debug("getPlans() - sortOrder: {} - ", sortOrder);
         LOG.debug("getPlans() - rootState: {} - ", root);
         List<IndexPlan> plans = new ArrayList<IndexPlan>();
-
+        
         PropertyIndexLookup pil = getLookup(root);
         if (pil instanceof OrderedPropertyIndexLookup) {
             OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
@@ -169,8 +172,12 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
                         b.setFilter(filter);
                         // TODO it's synch for now but we should investigate the indexMeta
                         b.setDelayed(false);
-                        // TODO for now but we should get this information from somewhere
-                        b.setSortOrder(null);
+                        // we always return a sorted set
+                        b.setSortOrder(ImmutableList.of(new OrderEntry(
+                            propertyName,
+                            Type.UNDEFINED,
+                            (lookup.isAscending(root, propertyName, filter) ? OrderEntry.Order.ASCENDING
+                                                                           : OrderEntry.Order.DESCENDING))));
                         long count = lookup.getEstimatedEntryCount(propertyName, value, filter, pr);
                         b.setEstimatedEntryCount(count);
                         LOG.debug("estimatedCount: {}", count);
