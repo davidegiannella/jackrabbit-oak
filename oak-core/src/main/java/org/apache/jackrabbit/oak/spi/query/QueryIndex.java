@@ -423,6 +423,14 @@ public interface QueryIndex {
             return propertyType;
         }
 
+        @Override
+        public String toString() {
+            return String.format(
+                "{ propertyName : %s, propertyType : %s, order : %s }",
+                propertyName,
+                propertyType,
+                order);
+        }
     }
 
 }
