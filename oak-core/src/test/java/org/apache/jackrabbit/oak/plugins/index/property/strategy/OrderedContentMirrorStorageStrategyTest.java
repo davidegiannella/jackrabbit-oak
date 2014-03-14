@@ -1353,5 +1353,11 @@ public class OrderedContentMirrorStorageStrategyTest {
         // code
         assertTrue(descendingStore.count(descendingMeta, pr, maxNodeCount) > 0);
         assertEquals(0, store.count(ascendingMeta, pr, maxNodeCount));
-}
+        
+        // when no conditions has been asked but just an ORDER BY
+        pr = null;
+        assertTrue(store.count(ascendingMeta, pr, maxNodeCount) > 0);
+        assertEquals(store.count(ascendingMeta, pr, maxNodeCount),
+            descendingStore.count(descendingMeta, pr, maxNodeCount));
+    }
 }

@@ -410,20 +410,26 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     public long count(NodeState indexMeta, Filter.PropertyRestriction pr, int max) {
         long count = 0;
         NodeState content = indexMeta.getChildNode(INDEX_CONTENT_NODE_NAME);
+        Filter.PropertyRestriction lpr = pr;
+        
         if (content.exists()) {
+            if(lpr==null){
+                // it means we have no restriction and we should return the whole lot
+                lpr = new Filter.PropertyRestriction();
+            }
             // the index is not empty
             String value;
-            if (pr.firstIncluding && pr.lastIncluding && pr.first != null
-                && pr.first.equals(pr.last)) {
+            if (lpr.firstIncluding && lpr.lastIncluding && lpr.first != null
+                && lpr.first.equals(lpr.last)) {
                 // property==value case
-                value = pr.first.getValue(Type.STRING);
+                value = lpr.first.getValue(Type.STRING);
                 NodeState n = content.getChildNode(value);
                 if (n.exists()) {
                     CountingNodeVisitor v = new CountingNodeVisitor(max);
                     v.visit(n);
                     count = v.getEstimatedCount();
                 }
-            } else if (pr.first == null && pr.last == null) {
+            } else if (lpr.first == null && lpr.last == null) {
                 // property not null case
                 PropertyState ec = indexMeta.getProperty(ENTRY_COUNT_PROPERTY_NAME);
                 if (ec != null) {
@@ -433,18 +439,18 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     v.visit(content);
                     count = v.getEstimatedCount();
                 }
-            } else if (pr.first != null && !pr.first.equals(pr.last)
+            } else if (lpr.first != null && !lpr.first.equals(lpr.last)
                        && OrderDirection.ASC.equals(direction)) {
                 // > & >= in ascending index
                 Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(content);
                 CountingNodeVisitor v;
-                value = pr.first.getValue(Type.STRING);
+                value = lpr.first.getValue(Type.STRING);
                 int depthTotal = 0;
                 // seeking the right starting point
                 for (ChildNodeEntry child : children) {
                     String converted = convert(child.getName());
                     if (value.compareTo(converted) < 0
-                        || (pr.firstIncluding && value.equals(converted))) {
+                        || (lpr.firstIncluding && value.equals(converted))) {
                         // here we are let's start counting
                         v = new CountingNodeVisitor(max);
                         v.visit(content.getChildNode(child.getName()));
@@ -459,18 +465,18 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 v.depthTotal = depthTotal;
                 v.count = (int) Math.min(count, Integer.MAX_VALUE);
                 count = v.getEstimatedCount();
-            } else if (pr.last != null && !pr.last.equals(pr.first)
+            } else if (lpr.last != null && !lpr.last.equals(lpr.first)
                        && OrderDirection.DESC.equals(direction)) {
                 // > & >= in ascending index
                 Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(content);
                 CountingNodeVisitor v;
-                value = pr.last.getValue(Type.STRING);
+                value = lpr.last.getValue(Type.STRING);
                 int depthTotal = 0;
                 // seeking the right starting point
                 for (ChildNodeEntry child : children) {
                     String converted = convert(child.getName());
                     if (value.compareTo(converted) > 0
-                        || (pr.lastIncluding && value.equals(converted))) {
+                        || (lpr.lastIncluding && value.equals(converted))) {
                         // here we are let's start counting
                         v = new CountingNodeVisitor(max);
                         v.visit(content.getChildNode(child.getName()));
