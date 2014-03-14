@@ -18,6 +18,8 @@ package org.apache.jackrabbit.oak.stats;
 
 import static junit.framework.Assert.assertTrue;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -25,10 +27,32 @@ import org.junit.Test;
 
 public class ClockTest {
 
+    /**
+     * Helper for checking how accurate the system clock is.
+     */
+    public static void main(String[] args) {
+        List<Long> values = new ArrayList<Long>();
+        long end = System.currentTimeMillis() + 10000; // 10 seconds
+        long last = System.currentTimeMillis();
+        long current = last;
+
+        do {
+            current = System.currentTimeMillis();
+            if (current != last && current != last + 1) {
+                values.add(current);
+            }
+            last = current;
+        } while (current < end);
+        for (int i = 1; i < values.size(); i++) {
+            System.out.println(values.get(i) + " " + (values.get(i) - values.get(i - 1)));
+        }
+    }
+
     @Test
     public void testClockDrift() throws InterruptedException {
         ScheduledExecutorService executor =
                 Executors.newSingleThreadScheduledExecutor();
+        final long limit = 20;
         try {
             Clock[] clocks = new Clock[] {
                     Clock.SIMPLE,
@@ -38,14 +62,14 @@ public class ClockTest {
 
             for (Clock clock : clocks) {
                 long drift = clock.getTime() - System.currentTimeMillis();
-                assertTrue(Math.abs(drift) < 20); // Windows can have 15ms gaps
+                assertTrue("unexpected drift: " + Math.abs(drift) + " (limit " + limit +")", Math.abs(drift) < limit); // Windows can have 15ms gaps
             }
 
             Thread.sleep(100);
 
             for (Clock clock : clocks) {
                 long drift = clock.getTime() - System.currentTimeMillis();
-                assertTrue(Math.abs(drift) < 20);
+                assertTrue("unexpected drift: " + Math.abs(drift) + " (limit " + limit +")", Math.abs(drift) < limit);
             }
         } finally {
             executor.shutdown();

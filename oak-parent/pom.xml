@@ -40,13 +40,13 @@
     <project.reporting.outputEncoding>
       ${project.build.sourceEncoding}
     </project.reporting.outputEncoding>
-    <jackrabbit.version>2.7.4</jackrabbit.version>
+    <jackrabbit.version>2.8-SNAPSHOT</jackrabbit.version>
     <mongo.host>127.0.0.1</mongo.host>
     <mongo.port>27017</mongo.port>
     <mongo.db>MongoMKDB</mongo.db>
     <mongo.db2>MongoMKDB2</mongo.db2>
     <segment.db>SegmentMK</segment.db>
-    <solr.version>4.7.0</solr.version>
+    <lucene.version>4.7.0</lucene.version>
     <!-- Note that we're using SLF4J API version 1.7 when compiling     -->
     <!-- core Oak components but more recent SLF4J and Logback versions -->
     <!-- when compiling and running test cases and the oak-run jar.     -->

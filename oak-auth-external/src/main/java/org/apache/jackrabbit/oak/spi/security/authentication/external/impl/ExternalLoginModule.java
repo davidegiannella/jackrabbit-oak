@@ -18,23 +18,25 @@ package org.apache.jackrabbit.oak.spi.security.authentication.external.impl;
 
 import java.security.Principal;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
 import javax.jcr.Credentials;
-import javax.jcr.RepositoryException;
 import javax.jcr.SimpleCredentials;
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.login.LoginException;
 
 import org.apache.jackrabbit.api.security.user.UserManager;
+import org.apache.jackrabbit.oak.api.AuthInfo;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.Root;
 import org.apache.jackrabbit.oak.spi.security.ConfigurationParameters;
 import org.apache.jackrabbit.oak.spi.security.authentication.AbstractLoginModule;
 import org.apache.jackrabbit.oak.spi.security.authentication.AuthInfoImpl;
+import org.apache.jackrabbit.oak.spi.security.authentication.ImpersonationCredentials;
 import org.apache.jackrabbit.oak.spi.security.authentication.external.ExternalIdentityException;
 import org.apache.jackrabbit.oak.spi.security.authentication.external.ExternalIdentityProvider;
 import org.apache.jackrabbit.oak.spi.security.authentication.external.ExternalIdentityProviderManager;
@@ -217,19 +219,16 @@ public class ExternalLoginModule extends AbstractLoginModule {
                 return false;
             }
         } catch (ExternalIdentityException e) {
-            log.error("Error while authenticating '{}' with {}", new Object[]{
-                    userId == null ? credentials : userId, idp.getName(), e
-            });
+            log.error("Error while authenticating '{}' with {}",
+                    userId == null ? credentials : userId, idp.getName(), e);
             return false;
         } catch (LoginException e) {
-            log.debug("IDP {} throws login exception for '{}': {}", new Object[] {
-                    idp.getName(), userId == null ? credentials : userId, e.getMessage()
-            });
+            log.debug("IDP {} throws login exception for '{}': {}",
+                    idp.getName(), userId == null ? credentials : userId, e.getMessage());
             throw e;
         } catch (Exception e) {
-            log.debug("SyncHandler {} throws sync exception for '{}'", new Object[] {
-                    syncHandler.getName(), userId == null ? credentials : userId, e
-            });
+            log.debug("SyncHandler {} throws sync exception for '{}'",
+                    syncHandler.getName(), userId == null ? credentials : userId, e);
             LoginException le = new LoginException("Error while syncing user.");
             le.initCause(e);
             throw le;
@@ -246,7 +245,7 @@ public class ExternalLoginModule extends AbstractLoginModule {
             if (!subject.isReadOnly()) {
                 subject.getPrincipals().addAll(principals);
                 subject.getPublicCredentials().add(credentials);
-                setAuthInfo(new AuthInfoImpl(externalUser.getId(), null, principals), subject);
+                setAuthInfo(createAuthInfo(externalUser.getId(), principals), subject);
             } else {
                 log.debug("Could not add information to read only subject {}", subject);
             }
@@ -329,6 +328,29 @@ public class ExternalLoginModule extends AbstractLoginModule {
         }
 
     }
+
+    private AuthInfo createAuthInfo(String userId, Set<? extends Principal> principals) {
+        Credentials creds;
+        if (credentials instanceof ImpersonationCredentials) {
+            creds = ((ImpersonationCredentials) credentials).getBaseCredentials();
+        } else {
+            creds = credentials;
+        }
+        Map<String, Object> attributes = new HashMap<String, Object>();
+        Object shared = sharedState.get(SHARED_KEY_ATTRIBUTES);
+        if (shared instanceof Map) {
+            for (Object key : ((Map) shared).keySet()) {
+                attributes.put(key.toString(), ((Map) shared).get(key));
+            }
+        } else if (creds instanceof SimpleCredentials) {
+            SimpleCredentials sc = (SimpleCredentials) creds;
+            for (String attrName : sc.getAttributeNames()) {
+                attributes.put(attrName, sc.getAttribute(attrName));
+            }
+        }
+        return new AuthInfoImpl(userId, attributes, principals);
+    }
+
     //------------------------------------------------< AbstractLoginModule >---
 
     @Override
