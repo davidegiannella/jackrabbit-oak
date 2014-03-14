@@ -171,10 +171,6 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
                         b.setDelayed(false);
                         // TODO for now but we should get this information from somewhere
                         b.setSortOrder(null);
-                        // something to be delegated to IndexStoreStrategy
-                        // TODO we will have to consider different use-cases of PropertyRestriction
-                        // and
-                        // values
                         long count = lookup.getEstimatedEntryCount(propertyName, value, filter, pr);
                         b.setEstimatedEntryCount(count);
                         LOG.debug("estimatedCount: {}", count);
