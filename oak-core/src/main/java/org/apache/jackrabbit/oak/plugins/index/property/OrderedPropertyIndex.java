@@ -155,8 +155,10 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
             OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
             Collection<PropertyRestriction> restrictions = filter.getPropertyRestrictions();
 
-            if (restrictions.isEmpty() && sortOrder != null && !sortOrder.isEmpty()) {
-                // we could still be in the case where a simple ORDER BY has been asked
+            // first we process the sole orders as we could be in a situation where we don't have
+            // a where condition indexed but we do for order. In that case we will return always the
+            // whole index
+            if(sortOrder!=null){
                 for (OrderEntry oe : sortOrder) {
                     String propertyName = PathUtils.getName(oe.getPropertyName());
                     if (lookup.isIndexed(propertyName, "/", filter)) {
@@ -173,51 +175,51 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
                         plans.add(plan);
                     }
                 }
-            } else {
-                for (Filter.PropertyRestriction pr : restrictions) {
-                    String propertyName = PathUtils.getName(pr.propertyName);
-                    if (lookup.isIndexed(propertyName, "/", filter)) {
-                        PropertyValue value = null;
-                        boolean createPlan = true;
-                        if (pr.first == null && pr.last == null) {
-                            // open query: [property] is not null
-                            value = null;
-                        } else if (pr.first != null && pr.first.equals(pr.last)
-                                   && pr.firstIncluding && pr.lastIncluding) {
-                            // [property]=[value]
-                            value = pr.first;
-                        } else if (pr.first != null && !pr.first.equals(pr.last)) {
-                            // '>' & '>=' use cases
-                            if (lookup.isAscending(root, propertyName, filter)) {
-                                value = pr.first;
-                            } else {
-                                createPlan = false;
-                            }
-                        } else if (pr.last != null && !pr.last.equals(pr.first)) {
-                            // '<' & '<='
-                            if (!lookup.isAscending(root, propertyName, filter)) {
-                                value = pr.last;
-                            } else {
-                                createPlan = false;
-                            }
-                        }
-                        if (createPlan) {
-                            // we always return a sorted set
-                            IndexPlan.Builder b = getIndexPlanBuilder(filter);
-                            b.setSortOrder(ImmutableList.of(new OrderEntry(
-                                propertyName,
-                                Type.UNDEFINED,
-                                (lookup.isAscending(root, propertyName, filter) ? OrderEntry.Order.ASCENDING
-                                                                               : OrderEntry.Order.DESCENDING))));
-                            long count = lookup.getEstimatedEntryCount(propertyName, value, filter,
-                                pr);
-                            b.setEstimatedEntryCount(count);
-                            LOG.debug("estimatedCount: {}", count);
+            }
 
-                            IndexPlan plan = b.build();
-                            LOG.debug("plan: {}", plan);
-                            plans.add(plan);
+            // then we add plans for each restriction that could apply to us
+            for (Filter.PropertyRestriction pr : restrictions) {
+                String propertyName = PathUtils.getName(pr.propertyName);
+                if (lookup.isIndexed(propertyName, "/", filter)) {
+                    PropertyValue value = null;
+                    boolean createPlan = true;
+                    if (pr.first == null && pr.last == null) {
+                        // open query: [property] is not null
+                        value = null;
+                    } else if (pr.first != null && pr.first.equals(pr.last) && pr.firstIncluding
+                               && pr.lastIncluding) {
+                        // [property]=[value]
+                        value = pr.first;
+                    } else if (pr.first != null && !pr.first.equals(pr.last)) {
+                        // '>' & '>=' use cases
+                        if (lookup.isAscending(root, propertyName, filter)) {
+                            value = pr.first;
+                        } else {
+                            createPlan = false;
                         }
+                    } else if (pr.last != null && !pr.last.equals(pr.first)) {
+                        // '<' & '<='
+                        if (!lookup.isAscending(root, propertyName, filter)) {
+                            value = pr.last;
+                        } else {
+                            createPlan = false;
+                        }
+                    }
+                    if (createPlan) {
+                        // we always return a sorted set
+                        IndexPlan.Builder b = getIndexPlanBuilder(filter);
+                        b.setSortOrder(ImmutableList.of(new OrderEntry(
+                            propertyName,
+                            Type.UNDEFINED,
+                            (lookup.isAscending(root, propertyName, filter) ? OrderEntry.Order.ASCENDING
+                                                                           : OrderEntry.Order.DESCENDING))));
+                        long count = lookup.getEstimatedEntryCount(propertyName, value, filter, pr);
+                        b.setEstimatedEntryCount(count);
+                        LOG.debug("estimatedCount: {}", count);
+
+                        IndexPlan plan = b.build();
+                        LOG.debug("plan: {}", plan);
+                        plans.add(plan);
                     }
                 }
             }
