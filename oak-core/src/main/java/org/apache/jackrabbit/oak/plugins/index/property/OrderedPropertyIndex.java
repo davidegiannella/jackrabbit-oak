@@ -20,6 +20,7 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.TYPE;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.jackrabbit.oak.api.PropertyValue;
@@ -94,8 +95,9 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
         PropertyIndexLookup pil = getLookup(root);
         if (pil instanceof OrderedPropertyIndexLookup) {
             OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
+            Collection<PropertyRestriction> prs = filter.getPropertyRestrictions();
             int depth = 1;
-            for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
+            for (PropertyRestriction pr : prs) {
                 String propertyName = PathUtils.getName(pr.propertyName);
                 depth = PathUtils.getDepth(pr.propertyName);
                 if (lookup.isIndexed(propertyName, "/", filter)) {
@@ -125,66 +127,97 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
         return cursor;
     }
 
+    /**
+     * @return an builder with some initial common settings
+     */
+    private static IndexPlan.Builder getIndexPlanBuilder(final Filter filter) {
+        IndexPlan.Builder b = new IndexPlan.Builder();
+        b.setCostPerExecution(1); // we're local. Low-cost
+        // we're local but slightly more expensive than a standard PropertyIndex
+        b.setCostPerEntry(1.3);
+        b.setFulltextIndex(false); // we're never full-text
+        b.setIncludesNodeData(false); // we should not include node data
+        b.setFilter(filter);
+        // TODO it's synch for now but we should investigate the indexMeta
+        b.setDelayed(false);
+        return b;
+    }
+
     @Override
     public List<IndexPlan> getPlans(Filter filter, List<OrderEntry> sortOrder, NodeState root) {
         LOG.debug("getPlans() - filter: {} - ", filter);
         LOG.debug("getPlans() - sortOrder: {} - ", sortOrder);
         LOG.debug("getPlans() - rootState: {} - ", root);
         List<IndexPlan> plans = new ArrayList<IndexPlan>();
-        
+
         PropertyIndexLookup pil = getLookup(root);
         if (pil instanceof OrderedPropertyIndexLookup) {
             OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
-            for (Filter.PropertyRestriction pr : filter.getPropertyRestrictions()) {
-                String propertyName = PathUtils.getName(pr.propertyName);
-                if (lookup.isIndexed(propertyName, "/", filter)) {
-                    PropertyValue value = null;
-                    boolean createPlan = true;
-                    if (pr.first == null && pr.last == null) {
-                        // open query: [property] is not null
-                        value = null;
-                    } else if (pr.first != null && pr.first.equals(pr.last) && pr.firstIncluding
-                               && pr.lastIncluding) {
-                        // [property]=[value]
-                        value = pr.first;
-                    } else if (pr.first != null && !pr.first.equals(pr.last)) {
-                        // '>' & '>=' use cases
-                        if (lookup.isAscending(root, propertyName, filter)) {
-                            value = pr.first;
-                        } else {
-                            createPlan = false;
-                        }
-                    } else if (pr.last != null && !pr.last.equals(pr.first)){
-                        // '<' & '<='
-                        if (!lookup.isAscending(root, propertyName, filter)) {
-                            value = pr.last;
-                        } else {
-                            createPlan = false;
-                        }
-                    }
-                    if (createPlan) {
-                        IndexPlan.Builder b = new IndexPlan.Builder();
-                        b.setCostPerExecution(1); // we're local. Low-cost
-                        // we're local but slightly more expensive than a standard PropertyIndex
-                        b.setCostPerEntry(1.3);
-                        b.setFulltextIndex(false); // we're never full-text
-                        b.setIncludesNodeData(false); // we should not include node data
-                        b.setFilter(filter);
-                        // TODO it's synch for now but we should investigate the indexMeta
-                        b.setDelayed(false);
-                        // we always return a sorted set
+            Collection<PropertyRestriction> restrictions = filter.getPropertyRestrictions();
+
+            if (restrictions.isEmpty() && sortOrder != null && !sortOrder.isEmpty()) {
+                // we could still be in the case where a simple ORDER BY has been asked
+                for (OrderEntry oe : sortOrder) {
+                    String propertyName = PathUtils.getName(oe.getPropertyName());
+                    if (lookup.isIndexed(propertyName, "/", filter)) {
+                        IndexPlan.Builder b = getIndexPlanBuilder(filter);
                         b.setSortOrder(ImmutableList.of(new OrderEntry(
                             propertyName,
                             Type.UNDEFINED,
                             (lookup.isAscending(root, propertyName, filter) ? OrderEntry.Order.ASCENDING
                                                                            : OrderEntry.Order.DESCENDING))));
-                        long count = lookup.getEstimatedEntryCount(propertyName, value, filter, pr);
-                        b.setEstimatedEntryCount(count);
-                        LOG.debug("estimatedCount: {}", count);
-
+                        b.setEstimatedEntryCount(lookup.getEstimatedEntryCount(propertyName, null,
+                            filter, null));
                         IndexPlan plan = b.build();
                         LOG.debug("plan: {}", plan);
                         plans.add(plan);
+                    }
+                }
+            } else {
+                for (Filter.PropertyRestriction pr : restrictions) {
+                    String propertyName = PathUtils.getName(pr.propertyName);
+                    if (lookup.isIndexed(propertyName, "/", filter)) {
+                        PropertyValue value = null;
+                        boolean createPlan = true;
+                        if (pr.first == null && pr.last == null) {
+                            // open query: [property] is not null
+                            value = null;
+                        } else if (pr.first != null && pr.first.equals(pr.last)
+                                   && pr.firstIncluding && pr.lastIncluding) {
+                            // [property]=[value]
+                            value = pr.first;
+                        } else if (pr.first != null && !pr.first.equals(pr.last)) {
+                            // '>' & '>=' use cases
+                            if (lookup.isAscending(root, propertyName, filter)) {
+                                value = pr.first;
+                            } else {
+                                createPlan = false;
+                            }
+                        } else if (pr.last != null && !pr.last.equals(pr.first)) {
+                            // '<' & '<='
+                            if (!lookup.isAscending(root, propertyName, filter)) {
+                                value = pr.last;
+                            } else {
+                                createPlan = false;
+                            }
+                        }
+                        if (createPlan) {
+                            // we always return a sorted set
+                            IndexPlan.Builder b = getIndexPlanBuilder(filter);
+                            b.setSortOrder(ImmutableList.of(new OrderEntry(
+                                propertyName,
+                                Type.UNDEFINED,
+                                (lookup.isAscending(root, propertyName, filter) ? OrderEntry.Order.ASCENDING
+                                                                               : OrderEntry.Order.DESCENDING))));
+                            long count = lookup.getEstimatedEntryCount(propertyName, value, filter,
+                                pr);
+                            b.setEstimatedEntryCount(count);
+                            LOG.debug("estimatedCount: {}", count);
+
+                            IndexPlan plan = b.build();
+                            LOG.debug("plan: {}", plan);
+                            plans.add(plan);
+                        }
                     }
                 }
             }

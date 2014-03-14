@@ -19,7 +19,10 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertTrue;
+import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
+import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
+import static org.junit.Assert.assertNotNull;
 
 import java.text.ParseException;
 import java.util.Calendar;
@@ -29,18 +32,32 @@ import java.util.Map;
 
 import javax.jcr.RepositoryException;
 
+import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.ResultRow;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
+import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
+import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
+import org.apache.jackrabbit.oak.query.ast.SelectorImpl;
+import org.apache.jackrabbit.oak.query.index.FilterImpl;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
+import org.apache.jackrabbit.oak.spi.commit.EditorHook;
+import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
+import org.apache.jackrabbit.oak.spi.query.QueryIndex;
+import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
+import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.util.NodeUtil;
+import org.junit.Ignore;
 import org.junit.Test;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -301,4 +318,74 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         setTravesalEnabled(true);
     }
 
+    @Test @Ignore("Waiting on OAK-622")
+    public void orderByQueryNoWhere() throws CommitFailedException, ParseException {
+        setTravesalEnabled(false);
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(NUMBER_OF_NODES), test,
+            OrderDirection.ASC, Type.STRING);
+        root.commit();
+
+        // querying
+        Iterator<? extends ResultRow> results;
+        String query = String.format(
+            "SELECT * from [nt:base] ORDER BY %s",
+            ORDERED_PROPERTY);
+        results = executeQuery(query, SQL2, null)
+            .getRows().iterator();
+        assertRightOrder(nodes, results);
+
+        setTravesalEnabled(true);
+    }
+    
+    private static final EditorHook HOOK = new EditorHook(new IndexUpdateProvider(
+        new OrderedPropertyIndexEditorProvider()));
+    
+    @Test
+    public void planOderByNoWhere() throws IllegalArgumentException, RepositoryException,
+                                   CommitFailedException {
+
+        NodeBuilder root = EmptyNodeState.EMPTY_NODE.builder();
+
+        IndexUtils.createIndexDefinition(root.child(IndexConstants.INDEX_DEFINITIONS_NAME),
+            TEST_INDEX_NAME, false, ImmutableList.of(ORDERED_PROPERTY), null, OrderedIndex.TYPE,
+            ImmutableMap.<String, String> of());
+
+        NodeState before = root.getNodeState();
+        final OrderDirection direction = OrderDirection.ASC;
+        List<String> values = generateOrderedValues(NUMBER_OF_NODES, direction);
+        addChildNodes(values, root, Type.STRING);
+        NodeState after = root.getNodeState();
+
+        NodeState indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
+
+        final OrderedPropertyIndex index = new OrderedPropertyIndex();
+        final String nodeTypeName = JcrConstants.NT_BASE;
+
+        NodeState system = indexed.getChildNode(JCR_SYSTEM);
+        NodeState types = system.getChildNode(JCR_NODE_TYPES);
+        NodeState type = types.getChildNode(nodeTypeName);
+        SelectorImpl selector = new SelectorImpl(type, nodeTypeName);
+        Filter filter = new FilterImpl(selector, "SELECT * FROM [" + nodeTypeName + "]");
+
+        List<QueryIndex.OrderEntry> sortOrder = ImmutableList.of(new QueryIndex.OrderEntry(
+            ORDERED_PROPERTY, Type.UNDEFINED, QueryIndex.OrderEntry.Order.ASCENDING));
+        List<IndexPlan> plans = index.getPlans(filter, sortOrder, indexed);
+        
+        assertNotNull(plans);
+        assertEquals(1, plans.size());
+        IndexPlan p = plans.get(0);
+        assertTrue(p.getEstimatedEntryCount() > 0);
+        assertNotNull(p.getSortOrder());
+        assertEquals(1,p.getSortOrder().size());
+        QueryIndex.OrderEntry oe = p.getSortOrder().get(0);
+        assertNotNull(oe);
+        assertEquals(ORDERED_PROPERTY,oe.getPropertyName());
+        assertEquals(QueryIndex.OrderEntry.Order.ASCENDING, oe.getOrder());
+    }
 }
