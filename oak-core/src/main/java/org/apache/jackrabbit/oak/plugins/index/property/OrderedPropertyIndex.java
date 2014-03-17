@@ -192,20 +192,22 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
                                && pr.lastIncluding) {
                         // [property]=[value]
                         value = pr.first;
-                    } else if (pr.first != null && !pr.first.equals(pr.last)) {
-                        // '>' & '>=' use cases
-                        if (lookup.isAscending(root, propertyName, filter)) {
-                            value = pr.first;
-                        } else {
-                            createPlan = false;
-                        }
-                    } else if (pr.last != null && !pr.last.equals(pr.first)) {
-                        // '<' & '<='
-                        if (!lookup.isAscending(root, propertyName, filter)) {
-                            value = pr.last;
-                        } else {
-                            createPlan = false;
-                        }
+// ----------- DISABLING RANGE QUERIES FOR NOW. EASYING THE INTEGRATION WITH OAK-622 [BEGIN]
+//                    } else if (pr.first != null && !pr.first.equals(pr.last)) {
+//                        // '>' & '>=' use cases
+//                        if (lookup.isAscending(root, propertyName, filter)) {
+//                            value = pr.first;
+//                        } else {
+//                            createPlan = false;
+//                        }
+//                    } else if (pr.last != null && !pr.last.equals(pr.first)) {
+//                        // '<' & '<='
+//                        if (!lookup.isAscending(root, propertyName, filter)) {
+//                            value = pr.last;
+//                        } else {
+//                            createPlan = false;
+//                        }
+// ----------- DISABLING RANGE QUERIES FOR NOW. EASYING THE INTEGRATION WITH OAK-622 [ END ]
                     }
                     if (createPlan) {
                         // we always return a sorted set

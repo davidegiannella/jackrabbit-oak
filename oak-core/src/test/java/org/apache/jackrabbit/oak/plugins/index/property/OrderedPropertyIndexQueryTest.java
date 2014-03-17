@@ -145,7 +145,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
      * @throws CommitFailedException
      * @throws ParseException
      */
-    @Test
+    @Test @Ignore("Disabling for now. Integration with OAK-622 and prioritising.")
     public void queryGreaterThan() throws CommitFailedException, ParseException {
         setTravesalEnabled(false);
 
@@ -184,7 +184,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
      * @throws CommitFailedException 
      * @throws ParseException 
      */
-    @Test
+    @Test @Ignore("Disabling for now. Integration with OAK-622 and prioritising.")
     public void queryGreaterEqualThan() throws CommitFailedException, ParseException {
         setTravesalEnabled(false);
 
@@ -225,7 +225,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
      * provider. not the lowcost one.
      * @throws Exception 
      */
-    @Test
+    @Test @Ignore("Disabling for now. Integration with OAK-622 and prioritising.")
     public void queryLessThan() throws Exception {
         initWithProperProvider();
         setTravesalEnabled(false);
@@ -263,7 +263,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
      * provider. not the lowcost one.
      * @throws Exception 
      */
-    @Test
+    @Test @Ignore("Disabling for now. Integration with OAK-622 and prioritising.")
     public void queryLessEqualThan() throws Exception {
         initWithProperProvider();
         initWithProperProvider();
@@ -321,7 +321,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         setTravesalEnabled(true);
     }
 
-    @Test @Ignore("Waiting on OAK-622")
+    @Test
     public void orderByQueryNoWhere() throws CommitFailedException, ParseException {
         setTravesalEnabled(false);
 
@@ -512,7 +512,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
      * @throws CommitFailedException 
      * @throws ParseException 
      */
-    @Test @Ignore("Waiting on OAK-622")
+    @Test
     public void queryOrderAndWhereMixed() throws IllegalArgumentException, RepositoryException, CommitFailedException, ParseException {
         setTravesalEnabled(false);
 

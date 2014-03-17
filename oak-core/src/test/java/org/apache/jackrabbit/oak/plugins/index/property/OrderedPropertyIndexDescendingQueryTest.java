@@ -39,6 +39,7 @@ import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.util.NodeUtil;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableMap;
@@ -135,7 +136,7 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
      * test the range query in case of '>' condition
      * @throws Exception 
      */
-    @Test
+    @Test @Ignore("Disabling for now. Integration with OAK-622 and prioritising.")
     public void queryGreaterThan() throws Exception {
         initWithProperProvider();
         setTravesalEnabled(false);
@@ -171,7 +172,7 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
      * test the range query in case of '>=' condition
      * @throws Exception 
      */
-    @Test
+    @Test @Ignore("Disabling for now. Integration with OAK-622 and prioritising.")
     public void queryGreaterEqualThan() throws Exception {
         initWithProperProvider();
         setTravesalEnabled(false);
