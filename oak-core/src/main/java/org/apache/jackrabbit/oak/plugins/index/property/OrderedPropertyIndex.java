@@ -60,31 +60,33 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
      */
     @Override
     public double getCost(Filter filter, NodeState root) {
-        double cost = Double.POSITIVE_INFINITY;
-
-        if (filter.getFullTextConstraint() == null && !filter.containsNativeConstraint()) {
-            PropertyIndexLookup pil = getLookup(root);
-            if (pil instanceof OrderedPropertyIndexLookup) {
-                OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
-                for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
-                    String propertyName = PathUtils.getName(pr.propertyName);
-                    if (lookup.isIndexed(propertyName, "/", filter)) {
-                        // '>' && '>=' case
-                        if (pr.first != null && !pr.first.equals(pr.last)
-                            && lookup.isAscending(root, propertyName, filter)) {
-                            cost = lookup.getCost(filter, propertyName, pr.first);
-                        }
-                        // '<'  && '<=' case
-                        else if (pr.last != null && !pr.last.equals(pr.first)
-                                   && !lookup.isAscending(root, propertyName, filter)) {
-                            cost = lookup.getCost(filter, propertyName, pr.last);
-                        }
-                    }
-                }
-            }
-        }
-
-        return cost;
+        throw new UnsupportedOperationException("Not supported as implementing AdvancedQueryIndex");
+        
+//        double cost = Double.POSITIVE_INFINITY;
+//
+//        if (filter.getFullTextConstraint() == null && !filter.containsNativeConstraint()) {
+//            PropertyIndexLookup pil = getLookup(root);
+//            if (pil instanceof OrderedPropertyIndexLookup) {
+//                OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
+//                for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
+//                    String propertyName = PathUtils.getName(pr.propertyName);
+//                    if (lookup.isIndexed(propertyName, "/", filter)) {
+//                        // '>' && '>=' case
+//                        if (pr.first != null && !pr.first.equals(pr.last)
+//                            && lookup.isAscending(root, propertyName, filter)) {
+//                            cost = lookup.getCost(filter, propertyName, pr.first);
+//                        }
+//                        // '<'  && '<=' case
+//                        else if (pr.last != null && !pr.last.equals(pr.first)
+//                                   && !lookup.isAscending(root, propertyName, filter)) {
+//                            cost = lookup.getCost(filter, propertyName, pr.last);
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//
+//        return cost;
     }
     
     @Override
@@ -234,7 +236,8 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
     public String getPlanDescription(IndexPlan plan) {
         LOG.debug("getPlanDescription() - plan: {}", plan);
         LOG.error("Not implemented yet");
-        return null;
+        throw new UnsupportedOperationException("Not implemented yet.");
+//        return null;
     }
 
     @Override
