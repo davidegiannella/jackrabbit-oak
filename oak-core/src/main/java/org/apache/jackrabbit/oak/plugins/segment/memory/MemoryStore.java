@@ -26,10 +26,11 @@ import javax.annotation.Nonnull;
 import org.apache.jackrabbit.oak.api.Blob;
 import org.apache.jackrabbit.oak.plugins.segment.Segment;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentId;
-import org.apache.jackrabbit.oak.plugins.segment.SegmentIdFactory;
+import org.apache.jackrabbit.oak.plugins.segment.SegmentTracker;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeState;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentStore;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentWriter;
+import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
@@ -37,9 +38,7 @@ import com.google.common.collect.Maps;
 
 public class MemoryStore implements SegmentStore {
 
-    private final SegmentIdFactory factory = new SegmentIdFactory(this);
-
-    private final SegmentWriter writer = new SegmentWriter(this);
+    private final SegmentTracker tracker = new SegmentTracker(this);
 
     private SegmentNodeState head;
 
@@ -50,7 +49,7 @@ public class MemoryStore implements SegmentStore {
         NodeBuilder builder = EMPTY_NODE.builder();
         builder.setChildNode("root", root);
 
-        SegmentWriter writer = getWriter();
+        SegmentWriter writer = tracker.getWriter();
         this.head = writer.writeNode(builder.getNodeState());
         writer.flush();
     }
@@ -60,13 +59,8 @@ public class MemoryStore implements SegmentStore {
     }
 
     @Override
-    public SegmentIdFactory getFactory() {
-        return factory;
-    }
-
-    @Override
-    public SegmentWriter getWriter() {
-        return writer;
+    public SegmentTracker getTracker() {
+        return tracker;
     }
 
     @Override
@@ -86,15 +80,12 @@ public class MemoryStore implements SegmentStore {
 
     @Override
     public boolean containsSegment(SegmentId id) {
-        return id.getStore() == this;
+        return id.getTracker() == tracker || segments.containsKey(id);
     }
 
     @Override @Nonnull
     public Segment readSegment(SegmentId id) {
-        Segment segment = writer.getCurrentSegment(id);
-        if (segment == null) {
-            segment = segments.get(id);
-        }
+        Segment segment = segments.get(id);
         if (segment != null) {
             return segment;
         } else {
@@ -108,7 +99,7 @@ public class MemoryStore implements SegmentStore {
         ByteBuffer buffer = ByteBuffer.allocate(length);
         buffer.put(data, offset, length);
         buffer.rewind();
-        Segment segment = new Segment(this, id, buffer);
+        Segment segment = new Segment(tracker, id, buffer);
         if (segments.putIfAbsent(id, segment) != null) {
             throw new IllegalStateException("Segment override: " + id);
         }
@@ -121,6 +112,17 @@ public class MemoryStore implements SegmentStore {
     @Override
     public Blob readBlob(String reference) {
         return null;
+    }
+
+    @Override
+    public BlobStore getBlobStore() {
+        return null;
+    }
+
+    @Override
+    public void gc() {
+        System.gc();
+        segments.keySet().retainAll(tracker.getReferencedSegmentIds());
     }
 
 }

@@ -28,18 +28,20 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.jackrabbit.oak.api.Blob;
+import org.apache.jackrabbit.oak.plugins.blob.BlobStoreBlob;
 import org.apache.jackrabbit.oak.plugins.segment.RecordId;
 import org.apache.jackrabbit.oak.plugins.segment.Segment;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentId;
-import org.apache.jackrabbit.oak.plugins.segment.SegmentIdFactory;
+import org.apache.jackrabbit.oak.plugins.segment.SegmentTracker;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeState;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentStore;
-import org.apache.jackrabbit.oak.plugins.segment.SegmentWriter;
+import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
@@ -51,17 +53,15 @@ public class FileStore implements SegmentStore {
 
     private static final int MB = 1024 * 1024;
 
-    private static final int DEFAULT_MEMORY_CACHE_SIZE = 256;
-
     private static final String FILE_NAME_FORMAT = "%s%05d.tar";
 
     private static final String JOURNAL_FILE_NAME = "journal.log";
 
-    private final SegmentIdFactory factory = new SegmentIdFactory(this);
-
-    private final SegmentWriter writer = new SegmentWriter(this);
+    private final SegmentTracker tracker;
 
     private final File directory;
+
+    private final BlobStore blobStore;
 
     private final int maxFileSize;
 
@@ -96,20 +96,32 @@ public class FileStore implements SegmentStore {
      */
     private final CountDownLatch timeToClose = new CountDownLatch(1);
 
+    public FileStore(BlobStore blobStore, File directory, int maxFileSizeMB, boolean memoryMapping)
+            throws IOException {
+        this(blobStore, directory, EMPTY_NODE, maxFileSizeMB, 0, memoryMapping);
+    }
+
     public FileStore(File directory, int maxFileSizeMB, boolean memoryMapping)
             throws IOException {
-        this(directory, EMPTY_NODE, maxFileSizeMB, DEFAULT_MEMORY_CACHE_SIZE, memoryMapping);
+        this(null, directory, maxFileSizeMB, memoryMapping);
     }
 
     public FileStore(File directory, int maxFileSizeMB, int cacheSizeMB,
             boolean memoryMapping) throws IOException {
-        this(directory, EMPTY_NODE, maxFileSizeMB, cacheSizeMB, memoryMapping);
+        this(null, directory, EMPTY_NODE, maxFileSizeMB, cacheSizeMB, memoryMapping);
     }
 
     public FileStore(
-            final File directory, NodeState initial, int maxFileSizeMB,
-            int cacheSizeMB, boolean memoryMapping) throws IOException {
+            BlobStore blobStore, final File directory, NodeState initial,
+            int maxFileSizeMB, int cacheSizeMB, boolean memoryMapping)
+            throws IOException {
         checkNotNull(directory).mkdirs();
+        if (cacheSizeMB > 0) {
+            this.tracker = new SegmentTracker(this, cacheSizeMB);
+        } else {
+            this.tracker = new SegmentTracker(this);
+        }
+        this.blobStore = blobStore;
         this.directory = directory;
         this.maxFileSize = maxFileSizeMB * MB;
         this.memoryMapping = memoryMapping;
@@ -142,7 +154,7 @@ public class FileStore implements SegmentStore {
         while (line != null) {
             int space = line.indexOf(' ');
             if (space != -1) {
-                id = RecordId.fromString(factory, line.substring(0, space));
+                id = RecordId.fromString(tracker, line.substring(0, space));
             }
             line = journalFile.readLine();
         }
@@ -153,8 +165,8 @@ public class FileStore implements SegmentStore {
         } else {
             NodeBuilder builder = EMPTY_NODE.builder();
             builder.setChildNode("root", initial);
-            head = new AtomicReference<RecordId>(
-                    getWriter().writeNode(builder.getNodeState()).getRecordId());
+            head = new AtomicReference<RecordId>(tracker.getWriter().writeNode(
+                    builder.getNodeState()).getRecordId());
             persistedHead = new AtomicReference<RecordId>(null);
         }
 
@@ -190,7 +202,7 @@ public class FileStore implements SegmentStore {
             if (!after.equals(before)) {
                 // needs to happen outside the synchronization block below to
                 // avoid a deadlock with another thread flushing the writer
-                getWriter().flush();
+                tracker.getWriter().flush();
 
                 synchronized (this) {
                     for (TarFile file : bulkFiles) {
@@ -211,14 +223,14 @@ public class FileStore implements SegmentStore {
         List<SegmentId> ids = newArrayList();
         for (TarFile file : dataFiles) {
             for (UUID uuid : file.getUUIDs()) {
-                ids.add(factory.getSegmentId(
+                ids.add(tracker.getSegmentId(
                         uuid.getMostSignificantBits(),
                         uuid.getLeastSignificantBits()));
             }
         }
         for (TarFile file : bulkFiles) {
             for (UUID uuid : file.getUUIDs()) {
-                ids.add(factory.getSegmentId(
+                ids.add(tracker.getSegmentId(
                         uuid.getMostSignificantBits(),
                         uuid.getLeastSignificantBits()));
             }
@@ -227,13 +239,8 @@ public class FileStore implements SegmentStore {
     }
 
     @Override
-    public SegmentIdFactory getFactory() {
-        return factory;
-    }
-
-    @Override
-    public SegmentWriter getWriter() {
-        return writer;
+    public SegmentTracker getTracker() {
+        return tracker;
     }
 
     @Override
@@ -284,7 +291,7 @@ public class FileStore implements SegmentStore {
 
     @Override
     public boolean containsSegment(SegmentId id) {
-        if (id.getStore() == this) {
+        if (id.getTracker() == tracker) {
             return true;
         } else if (id.isDataSegmentId()) {
             return containsSegment(id, dataFiles);
@@ -297,13 +304,9 @@ public class FileStore implements SegmentStore {
     public Segment readSegment(SegmentId id) {
         if (id.isBulkSegmentId()) {
             return loadSegment(id, bulkFiles);
+        } else {
+            return loadSegment(id, dataFiles);
         }
-
-        Segment segment = getWriter().getCurrentSegment(id);
-        if (segment == null) {
-            segment = loadSegment(id, dataFiles);
-        }
-        return segment;
     }
 
     private boolean containsSegment(SegmentId id, List<TarFile> files) {
@@ -332,7 +335,7 @@ public class FileStore implements SegmentStore {
             try {
                 ByteBuffer buffer = file.readEntry(uuid);
                 if (buffer != null) {
-                    return new Segment(this, id, buffer);
+                    return new Segment(tracker, id, buffer);
                 }
             } catch (IOException e) {
                 throw new RuntimeException(
@@ -373,7 +376,22 @@ public class FileStore implements SegmentStore {
 
     @Override
     public Blob readBlob(String reference) {
-        return new FileBlob(reference); // FIXME: proper reference lookup
+        if(blobStore != null){
+            return new BlobStoreBlob(blobStore, reference);
+        }
+        throw new IllegalStateException("Attempt to read external reference ["+reference+"] " +
+                "without specifying BlobStore");
     }
 
+    @Override
+    public BlobStore getBlobStore() {
+        return blobStore;
+    }
+
+    @Override
+    public void gc() {
+        System.gc();
+        Set<SegmentId> ids = tracker.getReferencedSegmentIds();
+        // TODO reclaim unreferenced segments
+    }
 }

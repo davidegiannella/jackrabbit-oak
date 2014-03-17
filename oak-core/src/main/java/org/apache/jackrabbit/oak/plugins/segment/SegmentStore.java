@@ -20,12 +20,11 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.Blob;
+import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 
 public interface SegmentStore {
 
-    SegmentIdFactory getFactory();
-
-    SegmentWriter getWriter();
+    SegmentTracker getTracker();
 
     /**
      * Returns the head state.
@@ -73,5 +72,16 @@ public interface SegmentStore {
      * @return external blob
      */
     Blob readBlob(String reference);
+
+    /**
+     * Returns the external BlobStore (if configured) with this store
+     */
+    @CheckForNull
+    BlobStore getBlobStore();
+
+    /**
+     * Triggers removal of segments that are no longer referenceable.
+     */
+    void gc();
 
 }
