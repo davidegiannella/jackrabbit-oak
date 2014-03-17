@@ -61,74 +61,8 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
     @Override
     public double getCost(Filter filter, NodeState root) {
         throw new UnsupportedOperationException("Not supported as implementing AdvancedQueryIndex");
-        
-//        double cost = Double.POSITIVE_INFINITY;
-//
-//        if (filter.getFullTextConstraint() == null && !filter.containsNativeConstraint()) {
-//            PropertyIndexLookup pil = getLookup(root);
-//            if (pil instanceof OrderedPropertyIndexLookup) {
-//                OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
-//                for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
-//                    String propertyName = PathUtils.getName(pr.propertyName);
-//                    if (lookup.isIndexed(propertyName, "/", filter)) {
-//                        // '>' && '>=' case
-//                        if (pr.first != null && !pr.first.equals(pr.last)
-//                            && lookup.isAscending(root, propertyName, filter)) {
-//                            cost = lookup.getCost(filter, propertyName, pr.first);
-//                        }
-//                        // '<'  && '<=' case
-//                        else if (pr.last != null && !pr.last.equals(pr.first)
-//                                   && !lookup.isAscending(root, propertyName, filter)) {
-//                            cost = lookup.getCost(filter, propertyName, pr.last);
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//
-//        return cost;
     }
     
-    @Override
-    public Cursor query(Filter filter, NodeState root) {
-        LOG.debug("query(Filter, NodeState)");
-        Iterable<String> paths = null;
-        Cursor cursor = null;
-        PropertyIndexLookup pil = getLookup(root);
-        if (pil instanceof OrderedPropertyIndexLookup) {
-            OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
-            Collection<PropertyRestriction> prs = filter.getPropertyRestrictions();
-            int depth = 1;
-            for (PropertyRestriction pr : prs) {
-                String propertyName = PathUtils.getName(pr.propertyName);
-                depth = PathUtils.getDepth(pr.propertyName);
-                if (lookup.isIndexed(propertyName, "/", filter)) {
-//                    if (pr.first != null && !pr.first.equals(pr.last)) {
-//                        // '>' & '>=' case
-//                        paths = lookup.query(filter, propertyName, pr);
-//                    } else {
-                        // processed as "[property] is not null"
-                        paths = lookup.query(filter, propertyName, pr);
-//                        break;
-//                    }
-                } 
-            }
-            if (paths == null) {
-                throw new IllegalStateException(
-                    "OrderedPropertyIndex index is used even when no index is available for filter "
-                        + filter);
-            }
-            cursor = Cursors.newPathCursor(paths);
-            if (depth > 1) {
-                cursor = Cursors.newAncestorCursor(cursor, depth - 1);
-            }
-        } else {
-            // if for some reasons it's not an Ordered Lookup we delegate up the chain
-            cursor = super.query(filter, root);
-        }
-        return cursor;
-    }
-
     /**
      * @return an builder with some initial common settings
      */
