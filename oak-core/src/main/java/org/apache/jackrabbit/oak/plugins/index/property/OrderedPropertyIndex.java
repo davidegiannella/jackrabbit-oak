@@ -147,6 +147,7 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
 
     @Override
     public List<IndexPlan> getPlans(Filter filter, List<OrderEntry> sortOrder, NodeState root) {
+        LOG.debug("getPlans(Filter, List<OrderEntry>, NodeState)");
         LOG.debug("getPlans() - filter: {} - ", filter);
         LOG.debug("getPlans() - sortOrder: {} - ", sortOrder);
         LOG.debug("getPlans() - rootState: {} - ", root);
@@ -243,10 +244,50 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
     }
 
     @Override
-    public Cursor query(IndexPlan plan, NodeState rootState) {
+    public Cursor query(IndexPlan plan, NodeState root) {
+        LOG.debug("query(IndexPlan, NodeState)");
         LOG.debug("query() - plan: {}", plan);
-        LOG.debug("query() - rootState: {}", rootState);
-        LOG.error("Not implemented yet");
-        return null;
+        LOG.debug("query() - rootState: {}", root);
+
+        Filter filter = plan.getFilter();
+        List<OrderEntry> sortOrder = plan.getSortOrder();
+        Iterable<String> paths = null;
+        Cursor cursor = null;
+        PropertyIndexLookup pil = getLookup(root);
+        if (pil instanceof OrderedPropertyIndexLookup) {
+            OrderedPropertyIndexLookup lookup = (OrderedPropertyIndexLookup) pil;
+            Collection<PropertyRestriction> prs = filter.getPropertyRestrictions();
+            int depth = 1;
+            for (PropertyRestriction pr : prs) {
+                String propertyName = PathUtils.getName(pr.propertyName);
+                depth = PathUtils.getDepth(pr.propertyName);
+                if (lookup.isIndexed(propertyName, "/", filter)) {
+                    paths = lookup.query(filter, propertyName, pr);
+                } 
+            }
+            if(paths==null && sortOrder!=null && !sortOrder.isEmpty()){
+                // we could be here if we have a query where the ORDER BY makes us play it.
+                for (OrderEntry oe : sortOrder) {
+                    String propertyName = PathUtils.getName(oe.getPropertyName());
+                    if (lookup.isIndexed(propertyName, "/", null)) {
+                        paths = lookup.query(null, propertyName, new PropertyRestriction());
+                    }
+                }
+            }
+            if (paths == null) {
+                // if still here then something went wrong.
+                throw new IllegalStateException(
+                    "OrderedPropertyIndex index is used even when no index is available for filter "
+                        + filter);
+            }
+            cursor = Cursors.newPathCursor(paths);
+            if (depth > 1) {
+                cursor = Cursors.newAncestorCursor(cursor, depth - 1);
+            }
+        } else {
+            // if for some reasons it's not an Ordered Lookup we delegate up the chain
+            cursor = super.query(filter, root);
+        }
+        return cursor;
     }
 }
