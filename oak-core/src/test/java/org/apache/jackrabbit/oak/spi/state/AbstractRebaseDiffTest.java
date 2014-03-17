@@ -154,10 +154,12 @@ public class AbstractRebaseDiffTest {
     @Test
     public void addExistingNode() {
         NodeBuilder headBuilder = base.builder();
+        headBuilder.setChildNode("n");
         headBuilder.setChildNode("m");
         NodeState head = headBuilder.getNodeState();
 
         NodeBuilder branchBuilder = base.builder();
+        branchBuilder.setChildNode("n");
         branchBuilder.setChildNode("m").setChildNode("mm");
         NodeState branch = branchBuilder.getNodeState();
 
