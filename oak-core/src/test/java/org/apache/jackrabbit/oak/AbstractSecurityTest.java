@@ -83,14 +83,14 @@ public abstract class AbstractSecurityTest {
     public void before() throws Exception {
         Oak oak = new Oak()
                 .with(new InitialContent())
-                .with(JcrConflictHandler.JCR_CONFLICT_HANDLER)
+//                .with(JcrConflictHandler.JCR_CONFLICT_HANDLER)
                 .with(new NamespaceEditorProvider())
                 .with(new ReferenceEditorProvider())
                 .with(new ReferenceIndexProvider())
                 .with(new PropertyIndexEditorProvider())
                 .with(new PropertyIndexProvider())
                 .with(new TypeEditorProvider())
-                .with(new ConflictValidatorProvider())
+//                .with(new ConflictValidatorProvider())
                 .with(getSecurityProvider());
         withEditors(oak);
         contentRepository = oak.createContentRepository();
