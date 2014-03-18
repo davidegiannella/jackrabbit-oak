@@ -176,7 +176,6 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
         LOG.debug("getPlanDescription() - plan: {}", plan);
         LOG.error("Not implemented yet");
         throw new UnsupportedOperationException("Not implemented yet.");
-//        return null;
     }
 
     @Override
