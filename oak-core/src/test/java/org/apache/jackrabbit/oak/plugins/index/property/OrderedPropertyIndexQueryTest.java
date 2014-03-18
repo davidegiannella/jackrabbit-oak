@@ -55,7 +55,6 @@ import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.util.NodeUtil;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
@@ -145,7 +144,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
      * @throws CommitFailedException
      * @throws ParseException
      */
-    @Test @Ignore("Disabling for now. Integration with OAK-622 and prioritising.")
+    @Test
     public void queryGreaterThan() throws CommitFailedException, ParseException {
         setTravesalEnabled(false);
 
@@ -184,7 +183,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
      * @throws CommitFailedException 
      * @throws ParseException 
      */
-    @Test @Ignore("Disabling for now. Integration with OAK-622 and prioritising.")
+    @Test
     public void queryGreaterEqualThan() throws CommitFailedException, ParseException {
         setTravesalEnabled(false);
 
@@ -226,7 +225,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
      * provider. not the lowcost one.
      * @throws Exception 
      */
-    @Test @Ignore("Disabling for now. Integration with OAK-622 and prioritising.")
+    @Test
     public void queryLessThan() throws Exception {
         initWithProperProvider();
         setTravesalEnabled(false);
@@ -264,7 +263,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
      * provider. not the lowcost one.
      * @throws Exception 
      */
-    @Test @Ignore("Disabling for now. Integration with OAK-622 and prioritising.")
+    @Test
     public void queryLessEqualThan() throws Exception {
         initWithProperProvider();
         initWithProperProvider();
@@ -556,4 +555,43 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         setTravesalEnabled(true);
     }
 
+    /**
+     * testing explicitly OAK-1561 use-case
+     * 
+     * @throws CommitFailedException
+     * @throws ParseException
+     */
+    @Test
+    public void queryGreaterThenWithCast() throws CommitFailedException, ParseException {
+
+        setTravesalEnabled(false);
+
+        final OrderDirection direction = OrderDirection.ASC;
+        final String query = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
+                             + "> cast('%s' as date)";
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+
+        // initialising the data
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        Calendar start = midnightFirstJan2013();
+        List<ValuePathTuple> nodes = addChildNodes(
+            generateOrderedDates(NUMBER_OF_NODES, direction, start), test, direction, Type.DATE);
+        root.commit();
+
+        Calendar searchForCalendar = (Calendar) start.clone();
+        searchForCalendar.add(Calendar.HOUR_OF_DAY, 36);
+        String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+        Iterator<? extends ResultRow> results = executeQuery(String.format(query, searchFor), SQL2,
+            null).getRows().iterator();
+        Iterator<ValuePathTuple> filtered = Iterables.filter(nodes,
+            new ValuePathTuple.GreaterThanPredicate(searchFor)).iterator();
+        assertRightOrder(Lists.newArrayList(filtered), results);
+        assertFalse("We should have looped throuhg all the results", results.hasNext());
+
+        setTravesalEnabled(true);
+
+    }
 }
