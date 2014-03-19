@@ -684,4 +684,116 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         setTravesalEnabled(true);
 
     }
+    
+    @Test
+    public void queryBetweenIncludeHigher() throws Exception {
+        setTravesalEnabled(false);
+
+        final OrderDirection direction = OrderDirection.ASC;
+        final String query = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY + "> $start AND "
+                             + ORDERED_PROPERTY + " <= $end";
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+
+        // initialising the data
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        Calendar start = midnightFirstJan2013();
+
+        List<ValuePathTuple> nodes = addChildNodes(
+            generateOrderedDates(10, direction, start), test, direction, Type.DATE);
+        root.commit();
+
+        for(ValuePathTuple n : nodes){
+            System.out.println("+++" + n);
+        }
+        
+        Calendar searchForCalendarStart = (Calendar) start.clone();
+        searchForCalendarStart.add(Calendar.HOUR_OF_DAY, 36);
+        String searchForStart = ISO_8601_2000.format(searchForCalendarStart.getTime());
+
+        Calendar endCalendar = Calendar.getInstance();
+        endCalendar.setTime(ISO_8601_2000.parse(nodes.get(nodes.size() - 1).getValue()));
+        endCalendar.add(Calendar.HOUR_OF_DAY, -36);
+        String searchForEnd = ISO_8601_2000.format(endCalendar.getTime());
+
+        Map<String, PropertyValue> filter = ImmutableMap.of("start",
+            PropertyValues.newDate(searchForStart), "end", PropertyValues.newDate(searchForEnd));
+        Iterator<? extends ResultRow> results = executeQuery(query, SQL2, filter).getRows()
+            .iterator();
+
+        Iterator<ValuePathTuple> filtered = Iterables.filter(nodes,
+            new ValuePathTuple.BetweenPredicate(searchForStart, searchForEnd, false, true))
+            .iterator();
+
+        while (filtered.hasNext()) {
+            System.out.println("---" + filtered.next());
+        }
+        filtered = Iterables.filter(nodes,
+            new ValuePathTuple.BetweenPredicate(searchForStart, searchForEnd, false, true))
+            .iterator();
+        
+        assertRightOrder(Lists.newArrayList(filtered), results);
+        assertFalse("We should have looped throuhg all the results", results.hasNext());
+
+        setTravesalEnabled(true);
+
+    }
+
+    @Test
+    public void queryBetweenIncludeBoth() throws Exception {
+        setTravesalEnabled(false);
+
+        final OrderDirection direction = OrderDirection.ASC;
+        final String query = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY + ">= $start AND "
+                             + ORDERED_PROPERTY + " <= $end";
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+
+        // initialising the data
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        Calendar start = midnightFirstJan2013();
+
+        List<ValuePathTuple> nodes = addChildNodes(
+            generateOrderedDates(10, direction, start), test, direction, Type.DATE);
+        root.commit();
+
+        for(ValuePathTuple n : nodes){
+            System.out.println("+++" + n);
+        }
+        
+        Calendar searchForCalendarStart = (Calendar) start.clone();
+        searchForCalendarStart.add(Calendar.HOUR_OF_DAY, 36);
+        String searchForStart = ISO_8601_2000.format(searchForCalendarStart.getTime());
+
+        Calendar endCalendar = Calendar.getInstance();
+        endCalendar.setTime(ISO_8601_2000.parse(nodes.get(nodes.size() - 1).getValue()));
+        endCalendar.add(Calendar.HOUR_OF_DAY, -36);
+        String searchForEnd = ISO_8601_2000.format(endCalendar.getTime());
+
+        Map<String, PropertyValue> filter = ImmutableMap.of("start",
+            PropertyValues.newDate(searchForStart), "end", PropertyValues.newDate(searchForEnd));
+        Iterator<? extends ResultRow> results = executeQuery(query, SQL2, filter).getRows()
+            .iterator();
+
+        Iterator<ValuePathTuple> filtered = Iterables.filter(nodes,
+            new ValuePathTuple.BetweenPredicate(searchForStart, searchForEnd, false, true))
+            .iterator();
+
+        while (filtered.hasNext()) {
+            System.out.println("---" + filtered.next());
+        }
+        filtered = Iterables.filter(nodes,
+            new ValuePathTuple.BetweenPredicate(searchForStart, searchForEnd, true, true))
+            .iterator();
+        
+        assertRightOrder(Lists.newArrayList(filtered), results);
+        assertFalse("We should have looped throuhg all the results", results.hasNext());
+
+        setTravesalEnabled(true);
+
+    }
 }

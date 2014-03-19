@@ -331,12 +331,23 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     pi.enqueue(Iterators.filter(children, new Predicate<ChildNodeEntry>() {
                         @Override
                         public boolean apply(ChildNodeEntry entry) {
+                            boolean b = false;
                             String value = lpr.first.getValue(Type.STRING);
                             String last = (lpr.last != null) ? lpr.last.getValue(Type.STRING)
                                                             : null;
                             String name = convert(entry.getName());
-                            return (value.compareTo(name) < 0 || (lpr.firstIncluding && value
-                                .equals(name))) || (last != null && last.compareTo(name) > 0);
+                            if (last == null) {
+                                // normal > and >= case
+                                b = (value.compareTo(name) < 0 || (lpr.firstIncluding && value
+                                    .equals(name)));
+                            } else {
+                                // we are in the "between" case.
+                                b = (value.compareTo(name) < 0 || (lpr.firstIncluding && value
+                                    .equals(name)))
+                                    && (last.compareTo(name) > 0 || lpr.lastIncluding
+                                                                    && last.equals(name));
+                            }
+                            return b;
                         }
                     }));
                     return pi;
