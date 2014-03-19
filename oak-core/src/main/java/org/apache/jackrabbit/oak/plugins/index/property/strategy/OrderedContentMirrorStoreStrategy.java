@@ -240,48 +240,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             // if the property is not there or is empty it means we're empty
             cne = Collections.emptyList();
         } else {
-            cne = new Iterable<ChildNodeEntry>() {
-                private NodeState localIndex = index;
-                private NodeState localStart = includeStart && !start.exists() ? EMPTY_START_NODE
-                                                                             : start;
-                private NodeState current = localStart;
-                private boolean localIncludeStart = includeStart;
-
-                @Override
-                public Iterator<ChildNodeEntry> iterator() {
-                    return new Iterator<ChildNodeEntry>() {
-
-                        @Override
-                        public boolean hasNext() {
-                            return (localIncludeStart && localStart.equals(current)) || (!localIncludeStart && !Strings.isNullOrEmpty(current.getString(NEXT)));
-                        }
-
-                        @Override
-                        public ChildNodeEntry next() {
-                            ChildNodeEntry localCNE = null;
-                            if (localIncludeStart && localStart.equals(current)) {
-                                localCNE = new OrderedChildNodeEntry(START, current);
-                                // let's set it to false. We just included it.
-                                localIncludeStart = false; 
-                            } else {
-                                if (hasNext()) {
-                                    final String name = current.getString(NEXT);
-                                    current = localIndex.getChildNode(name);
-                                    localCNE = new OrderedChildNodeEntry(name, current);
-                                } else {
-                                    throw new NoSuchElementException();
-                                }
-                            }
-                            return localCNE;
-                        }
-
-                        @Override
-                        public void remove() {
-                            throw new UnsupportedOperationException();
-                        }
-                    };
-                }
-            };
+            cne = new FullIterable(index, includeStart);
         }
         return cne;
     }
@@ -509,5 +468,67 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 
         }
         return count;
+    }
+    
+    /**
+     * Convenience class for iterating throughout the index in the correct order
+     */
+    static class FullIterable implements Iterable<ChildNodeEntry> {
+        private NodeState index;
+        private NodeState start;
+        private NodeState current;
+        private boolean includeStart;
+
+        /**
+         * @param index the current index content state. The {@code :index} node
+         * @param includeStart whether include {@code :start} or not.
+         */
+        public FullIterable(NodeState index, boolean includeStart) {
+            this.index = index;
+            this.includeStart = includeStart;
+            NodeState s = index.getChildNode(START);
+            if (includeStart && !s.exists()) {
+                start = EMPTY_START_NODE;
+            } else {
+                start = s;
+            }
+            current = start;
+        }
+
+        @Override
+        public Iterator<ChildNodeEntry> iterator() {
+            return new Iterator<ChildNodeEntry>() {
+
+                @Override
+                public boolean hasNext() {
+                    return (includeStart && start.equals(current))
+                           || (!includeStart && !Strings.isNullOrEmpty(current.getString(NEXT)));
+                }
+
+                @Override
+                public ChildNodeEntry next() {
+                    ChildNodeEntry entry = null;
+                    if (includeStart && start.equals(current)) {
+                        entry = new OrderedChildNodeEntry(START, current);
+                        // let's set it to false. We just included it.
+                        includeStart = false;
+                    } else {
+                        if (hasNext()) {
+                            final String name = current.getString(NEXT);
+                            current = index.getChildNode(name);
+                            entry = new OrderedChildNodeEntry(name, current);
+                        } else {
+                            throw new NoSuchElementException();
+                        }
+                    }
+                    return entry;
+                }
+
+                @Override
+                public void remove() {
+                    throw new UnsupportedOperationException();
+                }
+            };
+        }
     }
 }
