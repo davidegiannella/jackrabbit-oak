@@ -328,17 +328,17 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     Iterator<? extends ChildNodeEntry> children = getChildNodeEntries(
                             index).iterator();
                     pi.setPathContainsValue(true);
-                    pi.enqueue(Iterators.filter(children,
-                            new Predicate<ChildNodeEntry>() {
-                                @Override
-                                public boolean apply(ChildNodeEntry entry) {
-                                    String value = lpr.first
-                                            .getValue(Type.STRING);
-                                    String name = convert(entry.getName());
-                                    return value.compareTo(name) < 0 || (lpr.firstIncluding && value
-                                            .equals(name));
-                                }
-                            }));
+                    pi.enqueue(Iterators.filter(children, new Predicate<ChildNodeEntry>() {
+                        @Override
+                        public boolean apply(ChildNodeEntry entry) {
+                            String value = lpr.first.getValue(Type.STRING);
+                            String last = (lpr.last != null) ? lpr.last.getValue(Type.STRING)
+                                                            : null;
+                            String name = convert(entry.getName());
+                            return (value.compareTo(name) < 0 || (lpr.firstIncluding && value
+                                .equals(name))) || (last != null && last.compareTo(name) > 0);
+                        }
+                    }));
                     return pi;
                 }
             };
