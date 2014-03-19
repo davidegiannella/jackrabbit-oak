@@ -239,24 +239,16 @@ public class SegmentWriter {
     }
 
     private synchronized int getSegmentRef(SegmentId segmentId) {
-        if (segmentId == segment.getSegmentId()) {
-            return 0;
-        }
-
-        long msb = segmentId.getMostSignificantBits();
-        long lsb = segmentId.getLeastSignificantBits();
-
         int refcount = segment.getRefCount();
-        for (int refid = 1; refid < refcount; refid++) {
-            if (msb == segment.readLong(refid * 16)
-                    && lsb == segment.readLong(refid * 16 + 8)) {
-                return refid;
+        for (int index = 0; index < refcount; index++) {
+            if (segmentId == segment.getRefId(index)) {
+                return index;
             }
         }
 
-        ByteBuffer data = ByteBuffer.wrap(buffer);
-        data.putLong(refcount * 16, msb);
-        data.putLong(refcount * 16 + 8, lsb);
+        ByteBuffer.wrap(buffer, refcount * 16, 16)
+            .putLong(segmentId.getMostSignificantBits())
+            .putLong(segmentId.getLeastSignificantBits());
         buffer[Segment.REF_COUNT_OFFSET] = (byte) refcount;
         return refcount;
     }
@@ -489,21 +481,18 @@ public class SegmentWriter {
      * Write a reference to an external blob.
      *
      * @param reference reference
-     * @param blobLength blob length
      * @return record id
      */
-    private synchronized RecordId writeValueRecord(String reference, long blobLength) {
+    private synchronized RecordId writeValueRecord(String reference) {
         byte[] data = reference.getBytes(Charsets.UTF_8);
         int length = data.length;
 
         checkArgument(length < 8192);
 
-        RecordId id = prepare(RecordType.VALUE, 2 + 8 + length);
+        RecordId id = prepare(RecordType.VALUE, 2 + length);
         int len = length | 0xE000;
         buffer[position++] = (byte) (len >> 8);
         buffer[position++] = (byte) len;
-
-        writeLong(blobLength);
 
         System.arraycopy(data, 0, buffer, position, length);
         position += length;
@@ -672,7 +661,7 @@ public class SegmentWriter {
 
         String reference = blob.getReference();
         if (reference != null) {
-            RecordId id = writeValueRecord(reference, blob.length());
+            RecordId id = writeValueRecord(reference);
             return new SegmentBlob(id);
         }
 
@@ -711,9 +700,10 @@ public class SegmentWriter {
         // store them directly as small- or medium-sized value records
         if (n < Segment.MEDIUM_LIMIT) {
             return writeValueRecord(n, data);
-        }else if (blobStore != null){
-            String blobId = blobStore.writeBlob(new SequenceInputStream(new ByteArrayInputStream(data, 0, n), stream));
-            return writeValueRecord(blobId, blobStore.getBlobLength(blobId));
+        } else if (blobStore != null) {
+            String blobId = blobStore.writeBlob(new SequenceInputStream(
+                    new ByteArrayInputStream(data, 0, n), stream));
+            return writeValueRecord(blobId);
         }
 
         long length = n;

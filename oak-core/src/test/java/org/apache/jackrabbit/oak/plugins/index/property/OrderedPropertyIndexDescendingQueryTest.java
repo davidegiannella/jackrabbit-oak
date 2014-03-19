@@ -52,10 +52,10 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
         Tree index = root.getTree("/");
         IndexUtils.createIndexDefinition(
             new NodeUtil(index.getChild(IndexConstants.INDEX_DEFINITIONS_NAME)),
-            TEST_INDEX_NAME, 
-            false, 
-            new String[] { ORDERED_PROPERTY }, 
-            null, 
+            TEST_INDEX_NAME,
+            false,
+            new String[] { ORDERED_PROPERTY },
+            null,
             OrderedIndex.TYPE,
             ImmutableMap.of(
                 OrderedIndex.DIRECTION, OrderedIndex.OrderDirection.DESC.getDirection()
@@ -63,10 +63,10 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
         );
         root.commit();
     }
-    
+
     /**
      * Query the index for retrieving all the entries
-     * 
+     *
      * @throws CommitFailedException
      * @throws ParseException
      * @throws RepositoryException
@@ -84,7 +84,7 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
             generateOrderedValues(NUMBER_OF_NODES, OrderDirection.DESC), test, OrderDirection.DESC,
             Type.STRING);
         root.commit();
-        
+
         // querying
         Iterator<? extends ResultRow> results;
         results = executeQuery(
@@ -94,10 +94,10 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
 
         setTravesalEnabled(true);
     }
-    
+
     /**
      * test the index for returning the items related to a single key
-     * 
+     *
      * @throws CommitFailedException
      * @throws ParseException
      */
@@ -121,8 +121,8 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
             PropertyValues.newString(searchfor.getValue()));
         String query = "SELECT * FROM [%s] WHERE %s=$%s";
         Iterator<? extends ResultRow> results = executeQuery(
-            String.format(query, NT_UNSTRUCTURED, ORDERED_PROPERTY, ORDERED_PROPERTY), 
-            SQL2, 
+            String.format(query, NT_UNSTRUCTURED, ORDERED_PROPERTY, ORDERED_PROPERTY),
+            SQL2,
             filter).getRows().iterator();
         assertTrue("one element is expected", results.hasNext());
         assertEquals("wrong path returned", searchfor.getPath(), results.next().getPath());
@@ -130,10 +130,10 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
 
         setTravesalEnabled(true);
     }
-    
+
     /**
      * test the range query in case of '>' condition
-     * @throws Exception 
+     * @throws Exception
      */
     @Test
     public void queryGreaterThan() throws Exception {
@@ -166,10 +166,10 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
 
         setTravesalEnabled(true);
     }
-    
+
     /**
      * test the range query in case of '>=' condition
-     * @throws Exception 
+     * @throws Exception
      */
     @Test
     public void queryGreaterEqualThan() throws Exception {
@@ -202,13 +202,13 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
 
         setTravesalEnabled(true);
     }
-        
+
     /**
      * test the range query in case of '<' condition
-     * 
+     *
      * in this case as we're ascending we're expecting an empty resultset with the proper
      * provider. not the lowcost one.
-     * @throws Exception 
+     * @throws Exception
      */
     @Test
     public void queryLessThan() throws Exception {
@@ -245,10 +245,10 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
 
     /**
      * test the range query in case of '<=' condition
-     * 
+     *
      * in this case as we're ascending we're expecting an empty resultset with the proper
      * provider. not the lowcost one.
-     * @throws Exception 
+     * @throws Exception
      */
     @Test
     public void queryLessEqualThan() throws Exception {

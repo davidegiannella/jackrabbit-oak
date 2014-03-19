@@ -219,9 +219,12 @@ public class RepositoryUpgrade {
             copyNamespaces(builder, uriToPrefix, idxToPrefix);
             copyNodeTypes(builder);
             copyPrivileges(builder);
-            copyVersionStore(builder, uriToPrefix, idxToPrefix);
-            copyWorkspaces(builder, uriToPrefix, idxToPrefix);
 
+            NodeState root = builder.getNodeState();
+            copyVersionStore(builder, root, uriToPrefix, idxToPrefix);
+            copyWorkspaces(builder, root, uriToPrefix, idxToPrefix);
+
+            logger.info("Applying default commit hooks");
             String groupsPath;
             UserManagerConfig userConfig = config.getSecurityConfig().getSecurityManagerConfig().getUserManagerConfig();
             if (userConfig != null) {
@@ -537,7 +540,7 @@ public class RepositoryUpgrade {
     }
 
     private void copyVersionStore(
-            NodeBuilder root,
+            NodeBuilder builder, NodeState root,
             Map<String, String> uriToPrefix, Map<Integer, String> idxToPrefix)
             throws RepositoryException, IOException {
         logger.info("Copying version histories");
@@ -545,15 +548,17 @@ public class RepositoryUpgrade {
         PersistenceManager pm =
                 source.getInternalVersionManager().getPersistenceManager();
 
-        NodeBuilder system = root.child(JCR_SYSTEM);
+        NodeBuilder system = builder.child(JCR_SYSTEM);
         system.setChildNode(JCR_VERSIONSTORAGE, new JackrabbitNodeState(
-                pm, uriToPrefix, VERSION_STORAGE_NODE_ID, copyBinariesByReference));
+                pm, root, uriToPrefix, VERSION_STORAGE_NODE_ID,
+                "/jcr:system/jcr:versionStorage", copyBinariesByReference));
         system.setChildNode("jcr:activities", new JackrabbitNodeState(
-                pm, uriToPrefix, ACTIVITIES_NODE_ID, copyBinariesByReference));
+                pm, root, uriToPrefix, ACTIVITIES_NODE_ID,
+                "/jcr:system/jcr:activities", copyBinariesByReference));
     }   
 
     private void copyWorkspaces(
-            NodeBuilder root,
+            NodeBuilder builder, NodeState root,
             Map<String, String> uriToPrefix, Map<Integer, String> idxToPrefix)
             throws RepositoryException, IOException {
         logger.info("Copying default workspace");
@@ -566,14 +571,14 @@ public class RepositoryUpgrade {
                 source.getWorkspaceInfo(name).getPersistenceManager();
 
         NodeState state = new JackrabbitNodeState(
-                pm, uriToPrefix, ROOT_NODE_ID, copyBinariesByReference);
+                pm, root, uriToPrefix, ROOT_NODE_ID, "/", copyBinariesByReference);
         for (PropertyState property : state.getProperties()) {
-            root.setProperty(property);
+            builder.setProperty(property);
         }
         for (ChildNodeEntry child : state.getChildNodeEntries()) {
             String childName = child.getName();
             if (!JCR_SYSTEM.equals(childName)) {
-                root.setChildNode(childName, child.getNodeState());
+                builder.setChildNode(childName, child.getNodeState());
             }
         }
 

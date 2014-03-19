@@ -93,7 +93,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
      */
     public RDBDocumentStore(String jdbcurl, String username, String password, DocumentMK.Builder builder) {
         try {
-            DataSource ds = RDBDataSourceFactory.forJdbcUrl(jdbcurl, "sa", "");
+            DataSource ds = RDBDataSourceFactory.forJdbcUrl(jdbcurl, username, password);
             initialize(ds, builder);
         } catch (Exception ex) {
             throw new MicroKernelException("initializing RDB document store", ex);
@@ -678,7 +678,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
      * the cache with the document key. This method does not acquire a lock from
      * {@link #locks}! The caller must ensure a lock is held for the given
      * document.
-     * 
+     *
      * @param doc
      *            the document to add to the cache.
      * @return either the given <code>doc</code> or the document already present
