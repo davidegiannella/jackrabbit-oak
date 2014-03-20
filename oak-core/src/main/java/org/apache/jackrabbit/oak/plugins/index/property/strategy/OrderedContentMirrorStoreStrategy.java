@@ -555,6 +555,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         return entry;
     }
     
+    /**
+     * predicate for evaluating 'key' equality across index 
+     */
     public static class PredicateEquals implements Predicate<ChildNodeEntry> {
         private String searchfor;
 
@@ -565,6 +568,54 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         @Override
         public boolean apply(ChildNodeEntry arg0) {
             return (arg0 != null && searchfor.equals(arg0.getName()));
+        }
+    }
+    
+    /**
+     * evaluates when the current element is greater than (>) and greater than equal
+     * {@code searchfor}
+     */
+    public static class PredicateGreaterThan implements Predicate<ChildNodeEntry> {
+        private String searchfor;
+        private boolean include;
+        
+        public PredicateGreaterThan(@Nonnull String searchfor) {
+            this(searchfor, false);
+        }
+        
+        public PredicateGreaterThan(@Nonnull String searchfor, boolean include) {
+            this.searchfor = searchfor;
+            this.include = include;
+        }
+
+        @Override
+        public boolean apply(ChildNodeEntry arg0) {
+            return (arg0 != null && (searchfor.compareTo(arg0.getName()) < 0 || (include && searchfor
+                .equals(arg0.getName()))));
+        }
+    }
+
+    /**
+     * evaluates when the current element is less than (<) and less than equal
+     * {@code searchfor}
+     */
+    public static class PredicateLessThan implements Predicate<ChildNodeEntry> {
+        private String searchfor;
+        private boolean include;
+        
+        public PredicateLessThan(@Nonnull String searchfor) {
+            this(searchfor, false);
+        }
+        
+        public PredicateLessThan(@Nonnull String searchfor, boolean include) {
+            this.searchfor = searchfor;
+            this.include = include;
+        }
+
+        @Override
+        public boolean apply(ChildNodeEntry arg0) {
+            return (arg0 != null && (searchfor.compareTo(arg0.getName()) > 0 || (include && searchfor
+                .equals(arg0.getName()))));
         }
     }
 }
