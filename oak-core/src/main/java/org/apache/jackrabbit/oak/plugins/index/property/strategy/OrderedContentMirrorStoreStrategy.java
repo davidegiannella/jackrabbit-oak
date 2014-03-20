@@ -430,17 +430,22 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         return count;
     }
     
+    /**
+     * wrap an {@code Iterable<ChildNodeEntry>} in something that can be understood by the Query
+     * Engine
+     */
     private static class QueryResultsWrapper implements Iterable<String> {
         private Iterable<ChildNodeEntry> children;
         private String indexName;
         private Filter filter;
-        
-        public QueryResultsWrapper(Filter filter, String indexName, Iterable<ChildNodeEntry> children) {
+
+        public QueryResultsWrapper(Filter filter, String indexName,
+                                   Iterable<ChildNodeEntry> children) {
             this.children = children;
             this.indexName = indexName;
             this.filter = filter;
         }
-        
+
         @Override
         public Iterator<String> iterator() {
             PathIterator pi = new PathIterator(filter, indexName);
@@ -450,19 +455,24 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
     }
     
+    /**
+     * iterating throughout the index in the correct order. Externalised as class for easy
+     * overloading.
+     */
     private static class FullIterator implements Iterator<ChildNodeEntry> {
         private boolean includeStart;
         private NodeState start;
         private NodeState current;
         private NodeState index;
-        
-        public FullIterator(NodeState index, NodeState start, boolean includeStart, NodeState current) {
+
+        public FullIterator(NodeState index, NodeState start, boolean includeStart,
+                            NodeState current) {
             this.includeStart = includeStart;
             this.start = start;
             this.current = current;
             this.index = index;
         }
-        
+
         @Override
         public boolean hasNext() {
             return (includeStart && start.equals(current))
@@ -492,7 +502,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         public void remove() {
             throw new UnsupportedOperationException();
         }
-        
+
     }
     
     /**
@@ -524,51 +534,23 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         @Override
         public Iterator<ChildNodeEntry> iterator() {
             return new FullIterator(index, start, includeStart, current);
-//            return new Iterator<ChildNodeEntry>() {
-//                @Override
-//                public boolean hasNext() {
-//                    return (includeStart && start.equals(current))
-//                           || (!includeStart && !Strings.isNullOrEmpty(current.getString(NEXT)));
-//                }
-//
-//                @Override
-//                public ChildNodeEntry next() {
-//                    ChildNodeEntry entry = null;
-//                    if (includeStart && start.equals(current)) {
-//                        entry = new OrderedChildNodeEntry(START, current);
-//                        // let's set it to false. We just included it.
-//                        includeStart = false;
-//                    } else {
-//                        if (hasNext()) {
-//                            final String name = current.getString(NEXT);
-//                            current = index.getChildNode(name);
-//                            entry = new OrderedChildNodeEntry(name, current);
-//                        } else {
-//                            throw new NoSuchElementException();
-//                        }
-//                    }
-//                    return entry;
-//                }
-//
-//                @Override
-//                public void remove() {
-//                    throw new UnsupportedOperationException();
-//                }
-//            };
         }
     }
-    
+
+    /**
+     * Iterator that allows to start iterating from a given position
+     */
     private static class SeekedIterator extends FullIterator {
         /**
          * whether the seekeed item has been returned already or not.
          */
         private boolean firstReturned = false;
-        
+
         /**
          * the seeked item
          */
         private ChildNodeEntry first;
-        
+
         public SeekedIterator(NodeState index, NodeState start, ChildNodeEntry first) {
             super(index, start, false, first.getNodeState());
             this.first = first;
@@ -581,9 +563,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 
         @Override
         public ChildNodeEntry next() {
-            if(firstReturned){
+            if (firstReturned) {
                 return super.next();
-            }else{
+            } else {
                 firstReturned = true;
                 return first;
             }
@@ -595,7 +577,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      */
     private static class SeekedIterable extends FullIterable {
         private ChildNodeEntry first;
-        
+
         public SeekedIterable(NodeState index, ChildNodeEntry first) {
             super(index, false);
             this.first = first;
@@ -677,17 +659,16 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     }
 
     /**
-     * evaluates when the current element is less than (<) and less than equal
-     * {@code searchfor}
+     * evaluates when the current element is less than (<) and less than equal {@code searchfor}
      */
     static class PredicateLessThan implements Predicate<ChildNodeEntry> {
         private String searchfor;
         private boolean include;
-        
+
         public PredicateLessThan(@Nonnull String searchfor) {
             this(searchfor, false);
         }
-        
+
         public PredicateLessThan(@Nonnull String searchfor, boolean include) {
             this.searchfor = searchfor;
             this.include = include;
@@ -695,8 +676,13 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 
         @Override
         public boolean apply(ChildNodeEntry arg0) {
-            return (arg0 != null && (searchfor.compareTo(arg0.getName()) > 0 || (include && searchfor
-                .equals(arg0.getName()))));
+            boolean b = false;
+            if (arg0 != null) {
+                String name = convert(arg0.getName());
+                b = (searchfor.compareTo(name) > 0 || (include && searchfor.equals(name)));
+            }
+
+            return b;
         }
     }
 }
