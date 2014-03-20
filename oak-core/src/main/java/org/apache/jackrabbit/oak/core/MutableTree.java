@@ -22,6 +22,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Lists.newArrayList;
+import static com.google.common.collect.Lists.newArrayListWithCapacity;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
 import static org.apache.jackrabbit.oak.commons.PathUtils.elements;
 import static org.apache.jackrabbit.oak.commons.PathUtils.isAbsolute;
@@ -173,7 +174,16 @@ class MutableTree extends AbstractTree {
         beforeWrite();
         if (parent != null && parent.hasChild(name)) {
             nodeBuilder.remove();
-            updateChildOrder(false);
+            PropertyState order = parent.nodeBuilder.getProperty(OAK_CHILD_ORDER);
+            if (order != null) {
+                List<String> names = newArrayListWithCapacity(order.count());
+                for (String n : order.getValue(NAMES)) {
+                    if (!n.equals(name)) {
+                        names.add(n);
+                    }
+                }
+                parent.nodeBuilder.setProperty(OAK_CHILD_ORDER, names, NAMES);
+            }
             root.updated();
             return true;
         } else {
@@ -187,7 +197,17 @@ class MutableTree extends AbstractTree {
         beforeWrite();
         if (!super.hasChild(name)) {
             nodeBuilder.setChildNode(name);
-            updateChildOrder(false);
+            PropertyState order = nodeBuilder.getProperty(OAK_CHILD_ORDER);
+            if (order != null) {
+                List<String> names = newArrayListWithCapacity(order.count() + 1);
+                for (String n : order.getValue(NAMES)) {
+                    if (!n.equals(name)) {
+                        names.add(n);
+                    }
+                }
+                names.add(name);
+                nodeBuilder.setProperty(OAK_CHILD_ORDER, names, NAMES);
+            }
             root.updated();
         }
         return createChild(name);

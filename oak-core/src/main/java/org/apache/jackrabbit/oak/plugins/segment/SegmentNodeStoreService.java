@@ -16,6 +16,9 @@
  */
 package org.apache.jackrabbit.oak.plugins.segment;
 
+import static com.google.common.base.Preconditions.checkState;
+import static org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils.registerMBean;
+
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -32,19 +35,26 @@ import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.jackrabbit.oak.osgi.ObserverTracker;
+import org.apache.jackrabbit.oak.osgi.OsgiWhiteboard;
+import org.apache.jackrabbit.oak.plugins.blob.BlobGC;
+import org.apache.jackrabbit.oak.plugins.blob.BlobGCMBean;
+import org.apache.jackrabbit.oak.plugins.blob.MarkSweepGarbageCollector;
 import org.apache.jackrabbit.oak.plugins.segment.file.FileStore;
 import org.apache.jackrabbit.oak.spi.blob.BlobStore;
+import org.apache.jackrabbit.oak.spi.blob.GarbageCollectableBlobStore;
 import org.apache.jackrabbit.oak.spi.commit.Observable;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.spi.state.ProxyNodeStore;
+import org.apache.jackrabbit.oak.spi.state.RevisionGC;
+import org.apache.jackrabbit.oak.spi.state.RevisionGCMBean;
+import org.apache.jackrabbit.oak.spi.whiteboard.Registration;
+import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardExecutor;
 import org.osgi.framework.Constants;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static com.google.common.base.Preconditions.checkState;
 
 @Component(policy = ConfigurationPolicy.REQUIRE)
 public class SegmentNodeStoreService extends ProxyNodeStore
@@ -87,6 +97,9 @@ public class SegmentNodeStoreService extends ProxyNodeStore
     private volatile BlobStore blobStore;
 
     private ServiceRegistration registration;
+    private Registration revisionGCRegistration;
+    private Registration blobGCRegistration;
+    private WhiteboardExecutor executor;
 
     @Override
     protected synchronized SegmentNodeStore getNodeStore() {
@@ -146,6 +159,27 @@ public class SegmentNodeStoreService extends ProxyNodeStore
         Dictionary<String, String> props = new Hashtable<String, String>();
         props.put(Constants.SERVICE_PID, SegmentNodeStore.class.getName());
         registration = context.getBundleContext().registerService(NodeStore.class.getName(), this, props);
+
+        OsgiWhiteboard whiteboard = new OsgiWhiteboard(context.getBundleContext());
+        executor = new WhiteboardExecutor();
+        executor.start(whiteboard);
+
+        RevisionGC revisionGC = new RevisionGC(new Runnable() {
+            @Override
+            public void run() {
+                store.gc();
+            }
+        }, executor);
+        revisionGCRegistration = registerMBean(whiteboard, RevisionGCMBean.class, revisionGC,
+                RevisionGCMBean.TYPE, "Segment node store revision garbage collection");
+
+        if (blobStore instanceof GarbageCollectableBlobStore) {
+            MarkSweepGarbageCollector gc = new MarkSweepGarbageCollector();
+//            gc.init(delegate);  FIXME OAK-1582 ClassCastException in MarkSweepGarbageCollector#init()
+            blobGCRegistration = registerMBean(whiteboard, BlobGCMBean.class, new BlobGC(gc, executor),
+                    BlobGCMBean.TYPE, "Segment node store blob garbage collection");
+        }
+
         log.info("SegmentNodeStore initialized");
     }
 
@@ -185,6 +219,18 @@ public class SegmentNodeStoreService extends ProxyNodeStore
         if(registration != null){
             registration.unregister();
             registration = null;
+        }
+        if (revisionGCRegistration != null) {
+            revisionGCRegistration.unregister();
+            revisionGCRegistration = null;
+        }
+        if (blobGCRegistration != null) {
+            blobGCRegistration.unregister();
+            blobGCRegistration = null;
+        }
+        if (executor != null) {
+            executor.stop();
+            executor = null;
         }
     }
 
