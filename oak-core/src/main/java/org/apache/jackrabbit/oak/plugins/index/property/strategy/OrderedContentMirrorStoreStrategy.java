@@ -531,4 +531,40 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             };
         }
     }
+    
+    /**
+     * seek for an element in the index given the provided Predicate
+     * 
+     * @param index the index content node {@code :index}
+     * @param condition the predicate to evaluate
+     * @return the entry or null if not found
+     */
+    public static ChildNodeEntry seek(@Nonnull NodeState index,
+                                      @Nonnull Predicate<ChildNodeEntry> condition) {
+        
+        // TODO the FullIterable will have to be replaced with something else once we'll have the
+        // Skip part of the list implemented.
+        Iterable<ChildNodeEntry> children = new FullIterable(index, false);
+        ChildNodeEntry entry = null;
+        for (ChildNodeEntry child : children) {
+            if (condition.apply(child)) {
+                entry = child;
+                break;
+            }
+        }
+        return entry;
+    }
+    
+    public static class PredicateEquals implements Predicate<ChildNodeEntry> {
+        private String searchfor;
+
+        public PredicateEquals(@Nonnull String searchfor) {
+            this.searchfor = searchfor;
+        }
+
+        @Override
+        public boolean apply(ChildNodeEntry arg0) {
+            return (arg0 != null && searchfor.equals(arg0.getName()));
+        }
+    }
 }
