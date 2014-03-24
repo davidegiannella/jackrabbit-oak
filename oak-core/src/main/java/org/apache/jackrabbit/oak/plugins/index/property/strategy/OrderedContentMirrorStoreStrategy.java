@@ -281,8 +281,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 new PredicateGreaterThan(pr.first.getValue(Type.STRING), pr.firstIncluding));
             Iterable<String> it = Collections.emptyList();
             if (firstValueableItem != null) {
-                it = new QueryResultsWrapper(filter, indexName, new SeekedIterable(index,
-                    firstValueableItem));
+                Iterable<ChildNodeEntry> childrenIterable = (pr.last == null) ? new SeekedIterable(
+                    index, firstValueableItem) : new BetweenIterable(index, firstValueableItem,
+                    pr.last.getValue(Type.STRING), pr.lastIncluding);
+                it = new QueryResultsWrapper(filter, indexName, childrenIterable);
             }
             return it;
         } else if (pr.last != null && !pr.last.equals(pr.first)) {
@@ -464,6 +466,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         private NodeState start;
         private NodeState current;
         private NodeState index;
+        private String currentName;
 
         public FullIterator(NodeState index, NodeState start, boolean includeStart,
                             NodeState current) {
@@ -488,9 +491,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 includeStart = false;
             } else {
                 if (hasNext()) {
-                    final String name = current.getString(NEXT);
-                    current = index.getChildNode(name);
-                    entry = new OrderedChildNodeEntry(name, current);
+                    currentName = current.getString(NEXT);
+                    current = index.getChildNode(currentName);
+                    entry = new OrderedChildNodeEntry(currentName, current);
                 } else {
                     throw new NoSuchElementException();
                 }
@@ -503,6 +506,13 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             throw new UnsupportedOperationException();
         }
 
+        /**
+         * @return the name of the current node. May be null in some cases.
+         */
+        @Nullable
+        String getCurrentName() {
+            return currentName;
+        }
     }
     
     /**
@@ -576,7 +586,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * iterable that starts at a provided position ({@code ChildNodeEntry})
      */
     private static class SeekedIterable extends FullIterable {
-        private ChildNodeEntry first;
+        ChildNodeEntry first;
 
         public SeekedIterable(NodeState index, ChildNodeEntry first) {
             super(index, false);
@@ -683,6 +693,62 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             }
 
             return b;
+        }
+    }
+    
+    /**
+     * iterable for going through a set of data in the case of BETWEEN queries. We don't have to
+     * return more data for having the Query Engine to skip them later.
+     */
+    private static class BetweenIterable extends SeekedIterable {
+        private String lastKey;
+        private boolean lastInclude;
+        
+        public BetweenIterable(NodeState index, ChildNodeEntry first, String lastKey,
+                               boolean lastInclude) {
+            super(index, first);
+            this.lastKey = lastKey;
+            this.lastInclude = lastInclude;
+        }
+
+        @Override
+        public Iterator<ChildNodeEntry> iterator() {
+            return new BetweenIterator(index, start, first, lastKey, lastInclude);
+        }
+    }
+
+    /**
+     * iterator for iterating in the cases of BETWEEN queries.
+     */
+    private static class BetweenIterator extends SeekedIterator {
+        private String lastKey;
+        private boolean lastInclude;
+
+        /**
+         * @param index the current index content {@code :index}
+         * @param start the {@code :start} node
+         * @param first the first valuable options for starting iterating from.
+         * @param lastKey the last key to be returned
+         * @param lastInclude whether including the last key or not. 
+         */
+        public BetweenIterator(NodeState index, NodeState start, ChildNodeEntry first,
+                               String lastKey, boolean lastInclude) {
+            super(index, start, first);
+            this.lastInclude = lastInclude;
+            this.lastKey = lastKey;
+        }
+
+        @Override
+        public boolean hasNext() {
+            boolean next = super.hasNext();
+            String name = getCurrentName();
+
+            if (name != null && next) {
+                name = convert(name);
+                next = (next && (lastKey.compareTo(name) > 0 || (lastInclude && lastKey
+                    .equals(name))));
+            }
+            return next;
         }
     }
 }
