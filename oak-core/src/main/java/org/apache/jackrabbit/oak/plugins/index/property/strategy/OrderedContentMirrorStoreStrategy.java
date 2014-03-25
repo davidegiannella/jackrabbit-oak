@@ -44,6 +44,8 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 
 /**
  * Same as for {@link ContentMirrorStoreStrategy} but the order of the keys is kept by using the
@@ -60,6 +62,10 @@ import com.google.common.base.Strings;
  * </code>
  */
 public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrategy {
+    /**
+     * convenience property for initialising an empty multi-value :next
+     */
+    private static final Iterable<String> EMPTY_NEXT = ImmutableList.of("", "", "", "");
 
     /**
      * the property linking to the next node
@@ -75,11 +81,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * a NodeState used for easy creating of an empty :start
      */
     public static final NodeState EMPTY_START_NODE = EmptyNodeState.EMPTY_NODE.builder()
-                                                                              .setProperty(NEXT, "")
-                                                                              .getNodeState();
+        .setProperty(NEXT, EMPTY_NEXT, Type.STRINGS).getNodeState();
 
     private static final Logger LOG = LoggerFactory.getLogger(OrderedContentMirrorStoreStrategy.class);
-
+    
     /**
      * the direction of the index.
      */
@@ -94,35 +99,64 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         this.direction = direction;
     }
     
+    /**
+     * method that should ease the moving towards a multi-value :next. Will be probably deleted
+     * afterwards.
+     * 
+     * @param n the new key to add
+     * @return the PV to be set as :next
+     */
+    private static Iterable<String> multivalueNextFromString(String n) {
+        return ImmutableList.of(n, "", "", "");
+    }
+    
+    /**
+     * method that return the 0 item of the multi-value :next
+     * 
+     * @param p the :next property
+     * @return the first lane (0 item)
+     */
+    private static String getNextFromMulti(PropertyState p) {
+        String next = "";
+        if (p != null) {
+            Iterable<String> pv = p.getValue(Type.STRINGS);
+            if (pv != null) {
+                String[] s = Lists.newArrayList(pv).toArray(new String[0]);
+                next = s[0];
+            }
+        }
+        return next;
+    }
+    
     @Override
     NodeBuilder fetchKeyNode(@Nonnull NodeBuilder index, @Nonnull String key) {
         NodeBuilder localkey = null;
         NodeBuilder start = index.child(START);
 
         // identifying the right place for insert
-        String n = start.getString(NEXT);
+        String n = getNextFromMulti(start.getProperty(NEXT));
         if (Strings.isNullOrEmpty(n)) {
             // new/empty index
             localkey = index.child(key);
-            localkey.setProperty(NEXT, "");
-            start.setProperty(NEXT, key);
+            localkey.setProperty(NEXT, EMPTY_NEXT, Type.STRINGS);
+            start.setProperty(NEXT, multivalueNextFromString(key), Type.STRINGS);
         } else {
             // specific use-case where the item has to be added as first of the list
             String nextKey = n;
             Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(index.getNodeState(),
                                                                               true);
             for (ChildNodeEntry child : children) {
-                nextKey = child.getNodeState().getString(NEXT);
+                nextKey =  getNextFromMulti(child.getNodeState().getProperty(NEXT));
                 if (Strings.isNullOrEmpty(nextKey)) {
                     // we're at the last element, therefore our 'key' has to be appended
-                    index.getChildNode(child.getName()).setProperty(NEXT, key);
+                    index.getChildNode(child.getName()).setProperty(NEXT, multivalueNextFromString(key), Type.STRINGS);
                     localkey = index.child(key);
-                    localkey.setProperty(NEXT, "");
+                    localkey.setProperty(NEXT, EMPTY_NEXT, Type.STRINGS);
                 } else {
                     if (isInsertHere(key, nextKey)) {
-                        index.getChildNode(child.getName()).setProperty(NEXT, key);
+                        index.getChildNode(child.getName()).setProperty(NEXT, multivalueNextFromString(key), Type.STRINGS);
                         localkey = index.child(key);
-                        localkey.setProperty(NEXT, nextKey);
+                        localkey.setProperty(NEXT, multivalueNextFromString(nextKey), Type.STRINGS);
                         break;
                     }
                 }
@@ -235,7 +269,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         Iterable<? extends ChildNodeEntry> cne = null;
         final NodeState start = index.getChildNode(START);
 
-        if ((!start.exists() || Strings.isNullOrEmpty(start.getString(NEXT))) && !includeStart) {
+        String startNext = getNextFromMulti(start.getProperty(NEXT));
+        if ((!start.exists() || Strings.isNullOrEmpty(startNext)) && !includeStart) {
             // if the property is not there or is empty it means we're empty
             cne = Collections.emptyList();
         } else {
@@ -479,7 +514,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         @Override
         public boolean hasNext() {
             return (includeStart && start.equals(current))
-                   || (!includeStart && !Strings.isNullOrEmpty(current.getString(NEXT)));
+                   || (!includeStart && !Strings.isNullOrEmpty(getNextFromMulti(current
+                       .getProperty(NEXT))));
         }
 
         @Override
@@ -491,7 +527,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 includeStart = false;
             } else {
                 if (hasNext()) {
-                    currentName = current.getString(NEXT);
+                    currentName = getNextFromMulti(current.getProperty(NEXT));
                     current = index.getChildNode(currentName);
                     entry = new OrderedChildNodeEntry(currentName, current);
                 } else {

@@ -33,6 +33,7 @@ import java.util.Set;
 
 import javax.jcr.RepositoryException;
 
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
@@ -95,11 +96,13 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertFalse(":index should be left alone with not changes", index.hasProperty(NEXT));
         node = index.getChildNode(START);
         assertTrue(":index should have the :start node", node.exists());
-        assertEquals(":start should point to n0", no, node.getString(NEXT));
+        assertEquals(":start should point to n0", no,
+            Iterables.toArray(node.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
 
         node = index.getChildNode(no);
         assertTrue("n0 should exists in the index", node.exists());
-        assertEquals("n0 should point nowhere as it's the last (and only) element", "", node.getString(NEXT));
+        assertEquals("n0 should point nowhere as it's the last (and only) element", "",
+            Iterables.toArray(node.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
 
         // checking content structure below n0
         node = node.getChildNode(pathNodes[0]);
@@ -137,26 +140,31 @@ public class OrderedContentMirrorStorageStrategyTest {
 
         node = index.getChildNode(START);
         assertTrue(":index should have :start", node.exists());
-        assertEquals(":start should point to n0", n0, node.getString(NEXT));
+        assertEquals(":start should point to n0", n0, 
+            Iterables.toArray(node.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
 
         node = index.getChildNode(n0);
         assertTrue(":index should have n0", node.exists());
-        assertEquals("n0 should point nowhere at this stage", "", node.getString(NEXT));
+        assertEquals("n0 should point nowhere at this stage", "",
+            Iterables.toArray(node.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
 
         // second node arrives
         store.update(index, path, EMPTY_KEY_SET, newHashSet(n1));
 
         node = index.getChildNode(START);
         assertTrue(":index should still have :start", node.exists());
-        assertEquals(":start should still point to n0", n0, node.getString(NEXT));
+        assertEquals(":start should still point to n0", n0,
+            Iterables.toArray(node.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
 
         node = index.getChildNode(n0);
         assertTrue("n0 should still exists", node.exists());
-        assertEquals("n0 should point to n1", n1, node.getString(NEXT));
+        assertEquals("n0 should point to n1", n1,
+            Iterables.toArray(node.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
 
         node = index.getChildNode(n1);
         assertTrue("n1 should exists", node.exists());
-        assertEquals("n1 should point nowhere", "", node.getString(NEXT));
+        assertEquals("n1 should point nowhere", "",
+            Iterables.toArray(node.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
     }
 
     /**
