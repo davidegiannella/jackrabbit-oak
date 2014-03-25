@@ -31,6 +31,7 @@ import java.text.NumberFormat;
 import java.util.Iterator;
 import java.util.Set;
 
+import javax.annotation.Nonnull;
 import javax.jcr.RepositoryException;
 
 import org.apache.jackrabbit.oak.api.Type;
@@ -529,30 +530,48 @@ public class OrderedContentMirrorStorageStrategyTest {
 
         // Stage 1
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
-        assertEquals(":start should point to the first node", n0, index.getChildNode(START).getString(NEXT));
+        NodeState n = index.getChildNode(START).getNodeState();
+        assertEquals(":start should point to the first node", n0, 
+            Iterables.toArray(n.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
         assertTrue("the first node should point nowhere", Strings.isNullOrEmpty(index.getChildNode(n0).getString(NEXT)));
 
         // Stage 2
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n1));
-        assertEquals(":start should point to n1", n1, index.getChildNode(START).getString(NEXT));
-        assertEquals("'n1' should point to 'n0'", n0, index.getChildNode(n1).getString(NEXT));
+        n = index.getChildNode(START).getNodeState();
+        assertEquals(":start should point to n1", n1, 
+            Iterables.toArray(n.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
+        n = index.getChildNode(n1).getNodeState();
+        assertEquals("'n1' should point to 'n0'", n0,
+            Iterables.toArray(n.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
         assertTrue("n0 should still be point nowhere", Strings.isNullOrEmpty(index.getChildNode(n0).getString(NEXT)));
 
         // Stage 3
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n2));
-        assertEquals(":start should point to n1", n1, index.getChildNode(START).getString(NEXT));
-        assertEquals("n1 should be pointing to n2", n2, index.getChildNode(n1).getString(NEXT));
-        assertEquals("n2 should be pointing to n0", n0, index.getChildNode(n2).getString(NEXT));
-        assertTrue("n0 should still be the last item of the list",
-                        Strings.isNullOrEmpty(index.getChildNode(n0).getString(NEXT)));
+        n = index.getChildNode(START).getNodeState();
+        assertEquals(":start should point to n1", n1, 
+            Iterables.toArray(n.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
+        n = index.getChildNode(n1).getNodeState();
+        assertEquals("n1 should be pointing to n2", n2, 
+            Iterables.toArray(n.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
+        n = index.getChildNode(n2).getNodeState();
+        assertEquals("n2 should be pointing to n0", n0,
+            Iterables.toArray(n.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
+        n = index.getChildNode(n0).getNodeState();
+        assertTrue("n0 should still be the last item of the list", Strings.isNullOrEmpty(Iterables
+            .toArray(n.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]));
 
         // Stage 4
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n3));
-        assertEquals(":start should point to n1", n1, index.getChildNode(START).getString(NEXT));
-        assertEquals("n1 should be pointing to n2", n2, index.getChildNode(n1).getString(NEXT));
-        assertEquals("n2 should be pointing to n0", n0, index.getChildNode(n2).getString(NEXT));
-        assertEquals("n0 should be pointing to n3", n3, index.getChildNode(n0).getString(NEXT));
-        assertTrue("n3 should be the last element", Strings.isNullOrEmpty(index.getChildNode(n3).getString(NEXT)));
+        n = index.getChildNode(START).getNodeState();
+        assertEquals(":start should point to n1", n1, 
+            Iterables.toArray(n.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
+        n = index.getChildNode(n1).getNodeState();
+        assertEquals("n1 should be pointing to n2", n2, 
+            Iterables.toArray(n.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
+        assertEquals("n2 should be pointing to n0", n0, getNext(index.getChildNode(n2)));
+        assertEquals("n0 should be pointing to n3", n3, getNext(index.getChildNode(n0)));
+        assertTrue("n3 should be the last element",
+            Strings.isNullOrEmpty(getNext(index.getChildNode(n3))));
     }
 
     /**
@@ -1598,5 +1617,13 @@ public class OrderedContentMirrorStorageStrategyTest {
 
         assertNotNull("we should have found an item", item);
         assertEquals(n2, item.getName());
+    }
+    
+    private static String getNext(@Nonnull NodeBuilder node) {
+        return getNext(node.getNodeState());
+    }
+    
+    private static String getNext(@Nonnull NodeState node) {
+        return Iterables.toArray(node.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0];
     }
 }
