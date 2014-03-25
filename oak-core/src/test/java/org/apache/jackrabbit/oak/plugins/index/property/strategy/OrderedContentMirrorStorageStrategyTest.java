@@ -435,7 +435,8 @@ public class OrderedContentMirrorStorageStrategyTest {
         // Stage 1
         store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(key1st));
         ns = index.getChildNode(START).getNodeState();
-        assertEquals(":start is expected to point to the 1st node", key1st, ns.getString(NEXT));
+        assertEquals(":start is expected to point to the 1st node", key1st,
+            Iterables.toArray(ns.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
         ns = index.getChildNode(key1st).getNodeState();
         assertTrue("At Stage 1 the first node is expected to point nowhere as it's the last",
                         Strings.isNullOrEmpty(ns.getString(NEXT)));
@@ -443,12 +444,14 @@ public class OrderedContentMirrorStorageStrategyTest {
         // Stage 2
         store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(key2nd));
         ns = index.getChildNode(START).getNodeState();
-        assertEquals(":start is expected to point to the 2nd node", key2nd, ns.getString(NEXT));
+        assertEquals(":start is expected to point to the 2nd node", key2nd,
+            Iterables.toArray(ns.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
         ns = index.getChildNode(key1st).getNodeState();
         assertTrue("At stage 2 the first element should point nowhere as it's the last",
                         Strings.isNullOrEmpty(ns.getString(NEXT)));
         ns = index.getChildNode(key2nd).getNodeState();
-        assertEquals("At Stage 2 the second element should point to the first one", key1st, ns.getString(NEXT));
+        assertEquals("At Stage 2 the second element should point to the first one", key1st,
+            Iterables.toArray(ns.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0]);
     }
 
     /**
