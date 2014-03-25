@@ -366,7 +366,9 @@ public class OrderedContentMirrorStorageStrategyTest {
      */
     @Test
     public void childNodeEntriesNewIndexWithStart() {
-        NodeState nodeStart = EmptyNodeState.EMPTY_NODE.builder().setProperty(NEXT, "").getNodeState();
+        NodeState nodeStart = EmptyNodeState.EMPTY_NODE.builder()
+            .setProperty(NEXT, OrderedContentMirrorStoreStrategy.EMPTY_NEXT, Type.STRINGS)
+            .getNodeState();
         NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
         OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
 
