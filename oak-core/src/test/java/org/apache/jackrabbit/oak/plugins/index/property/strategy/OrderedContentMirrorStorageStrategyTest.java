@@ -1629,22 +1629,21 @@ public class OrderedContentMirrorStorageStrategyTest {
     
     @Test
     public void setNext() {
-        OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
         NodeBuilder n = EmptyNodeState.EMPTY_NODE.builder();
         
-        store.setNext(n, "foobar");
+        OrderedContentMirrorStoreStrategy.setNext(n, "foobar");
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals(ImmutableList.of("foobar", "", "", ""), 
             n.getProperty(NEXT).getValue(Type.STRINGS));
         
-        store.setNext(n, null);
+        OrderedContentMirrorStoreStrategy.setNext(n, null);
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals("If I set a value to null, nothing should change", ImmutableList.of("foobar", "", "", ""), 
             n.getProperty(NEXT).getValue(Type.STRINGS));
 
-        store.setNext(n, "");
+        OrderedContentMirrorStoreStrategy.setNext(n, "");
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals(ImmutableList.of("", "", "", ""), 
@@ -1653,26 +1652,24 @@ public class OrderedContentMirrorStorageStrategyTest {
     
     @Test
     public void getNext() {
-        OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
-
         NodeBuilder node = EmptyNodeState.EMPTY_NODE.builder();
         assertEquals("If the property is not there an empty string is expected", "",
-            store.getNext(node.getNodeState()));
+            OrderedContentMirrorStoreStrategy.getNext(node.getNodeState()));
         
         node.setProperty(NEXT, ImmutableList.of("bar", "", "", ""), Type.STRINGS);
-        assertEquals("bar", store.getNext(node.getNodeState()));
+        assertEquals("bar", OrderedContentMirrorStoreStrategy.getNext(node.getNodeState()));
 
         node.setProperty(NEXT, ImmutableList.of("", "", "", ""), Type.STRINGS);
-        assertEquals("", store.getNext(node.getNodeState()));
+        assertEquals("", OrderedContentMirrorStoreStrategy.getNext(node.getNodeState()));
         
         node = EmptyNodeState.EMPTY_NODE.builder();
         assertEquals("If the property is not there an empty string is expected", "",
-            store.getNext(node));
+            OrderedContentMirrorStoreStrategy.getNext(node));
         
         node.setProperty(NEXT, ImmutableList.of("bar", "", "", ""), Type.STRINGS);
-        assertEquals("bar", store.getNext(node));
+        assertEquals("bar", OrderedContentMirrorStoreStrategy.getNext(node));
 
         node.setProperty(NEXT, ImmutableList.of("", "", "", ""), Type.STRINGS);
-        assertEquals("", store.getNext(node));
-}
+        assertEquals("", OrderedContentMirrorStoreStrategy.getNext(node));
+    }
 }

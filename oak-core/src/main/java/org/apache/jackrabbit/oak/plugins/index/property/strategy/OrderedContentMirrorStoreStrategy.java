@@ -45,7 +45,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 
 /**
  * Same as for {@link ContentMirrorStoreStrategy} but the order of the keys is kept by using the
@@ -98,65 +97,36 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         this();
         this.direction = direction;
     }
-    
-    /**
-     * method that should ease the moving towards a multi-value :next. Will be probably deleted
-     * afterwards.
-     * 
-     * @param n the new key to add
-     * @return the PV to be set as :next
-     */
-    private static Iterable<String> multivalueNextFromString(String n) {
-        return ImmutableList.of(n, "", "", "");
-    }
-    
-    /**
-     * method that return the 0 item of the multi-value :next
-     * 
-     * @param p the :next property
-     * @return the first lane (0 item)
-     */
-    private static String getNextFromMulti(PropertyState p) {
-        String next = "";
-        if (p != null) {
-            Iterable<String> pv = p.getValue(Type.STRINGS);
-            if (pv != null) {
-                String[] s = Lists.newArrayList(pv).toArray(new String[0]);
-                next = s[0];
-            }
-        }
-        return next;
-    }
-    
+        
     @Override
     NodeBuilder fetchKeyNode(@Nonnull NodeBuilder index, @Nonnull String key) {
         NodeBuilder localkey = null;
         NodeBuilder start = index.child(START);
 
         // identifying the right place for insert
-        String n = getNextFromMulti(start.getProperty(NEXT));
+        String n = getNext(start);
         if (Strings.isNullOrEmpty(n)) {
             // new/empty index
             localkey = index.child(key);
             localkey.setProperty(NEXT, EMPTY_NEXT, Type.STRINGS);
-            start.setProperty(NEXT, multivalueNextFromString(key), Type.STRINGS);
+            setNext(start, key);
         } else {
             // specific use-case where the item has to be added as first of the list
             String nextKey = n;
             Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(index.getNodeState(),
                                                                               true);
             for (ChildNodeEntry child : children) {
-                nextKey =  getNextFromMulti(child.getNodeState().getProperty(NEXT));
+                nextKey = getNext(child);
                 if (Strings.isNullOrEmpty(nextKey)) {
                     // we're at the last element, therefore our 'key' has to be appended
-                    index.getChildNode(child.getName()).setProperty(NEXT, multivalueNextFromString(key), Type.STRINGS);
+                    setNext(index.getChildNode(child.getName()), key);
                     localkey = index.child(key);
                     localkey.setProperty(NEXT, EMPTY_NEXT, Type.STRINGS);
                 } else {
                     if (isInsertHere(key, nextKey)) {
-                        index.getChildNode(child.getName()).setProperty(NEXT, multivalueNextFromString(key), Type.STRINGS);
-                        localkey = index.child(key);
-                        localkey.setProperty(NEXT, multivalueNextFromString(nextKey), Type.STRINGS);
+                        setNext(index.getChildNode(child.getName()), key);
+                        localkey = index.child(key); 
+                        setNext(localkey, nextKey);
                         break;
                     }
                 }
@@ -269,7 +239,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         Iterable<? extends ChildNodeEntry> cne = null;
         final NodeState start = index.getChildNode(START);
 
-        String startNext = getNextFromMulti(start.getProperty(NEXT));
+        String startNext = getNext(start); 
         if ((!start.exists() || Strings.isNullOrEmpty(startNext)) && !includeStart) {
             // if the property is not there or is empty it means we're empty
             cne = Collections.emptyList();
@@ -514,8 +484,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         @Override
         public boolean hasNext() {
             return (includeStart && start.equals(current))
-                   || (!includeStart && !Strings.isNullOrEmpty(getNextFromMulti(current
-                       .getProperty(NEXT))));
+                   || (!includeStart && !Strings.isNullOrEmpty(getNext(current)));
         }
 
         @Override
@@ -527,7 +496,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 includeStart = false;
             } else {
                 if (hasNext()) {
-                    currentName = getNextFromMulti(current.getProperty(NEXT));
+                    currentName = getNext(current);
                     current = index.getChildNode(currentName);
                     entry = new OrderedChildNodeEntry(currentName, current);
                 } else {
@@ -794,7 +763,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @param node the node to modify
      * @param next the 'next' value
      */
-    void setNext(@Nonnull final NodeBuilder node, final String next) {
+    static void setNext(@Nonnull final NodeBuilder node, final String next) {
         if (node != null && next != null) {
             node.setProperty(NEXT, ImmutableList.of(next, "", "", ""), Type.STRINGS);
         }
@@ -806,7 +775,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @param nodeState the node state to inspect
      * @return the next value
      */
-    String getNext(@Nonnull final NodeState nodeState) {
+    static String getNext(@Nonnull final NodeState nodeState) {
         String next = "";
         PropertyState ps = nodeState.getProperty(NEXT);
         if (ps != null) {
@@ -818,7 +787,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     /**
      * short-cut for using NodeBuilder. See {@code getNext(NodeState)}
      */
-    String getNext(@Nonnull final NodeBuilder node) {
+    static String getNext(@Nonnull final NodeBuilder node) {
         return getNext(node.getNodeState());
+    }
+    
+    /**
+     * short-cut for using ChildNodeEntry. See {@code getNext(NodeState)}
+     */
+    static String getNext(@Nonnull final ChildNodeEntry child) {
+        return getNext(child.getNodeState());
     }
 }
