@@ -755,10 +755,10 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertFalse(index.hasChildNode(n1));
 
         NodeBuilder node = index.getChildNode(START);
-        assertEquals(":start pointing to wrong node", n0, node.getString(NEXT));
+        assertEquals(":start pointing to wrong node", n0, getNext(node));
 
         node = index.getChildNode(n0);
-        assertTrue("n0 should go nowhere", Strings.isNullOrEmpty(node.getString(NEXT)));
+        assertTrue("n0 should go nowhere", Strings.isNullOrEmpty(getNext(node)));
 
         // checking the first document
         String[] path = Iterables.toArray(PathUtils.elements(path0), String.class);
@@ -782,10 +782,10 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertTrue(index.hasChildNode(n1));
 
         node = index.getChildNode(START);
-        assertEquals(":start pointing to wrong node", n0, node.getString(NEXT));
+        assertEquals(":start pointing to wrong node", n0, getNext(node));
 
         node = index.getChildNode(n0);
-        assertEquals(n1, node.getString(NEXT));
+        assertEquals(n1, getNext(node));
         path = Iterables.toArray(PathUtils.elements(path0), String.class);
         node = node.getChildNode(path[0]);
         assertTrue(node.exists());
