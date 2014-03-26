@@ -20,6 +20,9 @@ package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 import static com.google.common.collect.Sets.newHashSet;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.NEXT;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.START;
+import static org.easymock.EasyMock.createNiceMock;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -29,6 +32,7 @@ import static org.junit.Assert.assertTrue;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.Iterator;
+import java.util.Random;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
@@ -1640,8 +1644,8 @@ public class OrderedContentMirrorStorageStrategyTest {
         OrderedContentMirrorStoreStrategy.setNext(n, null);
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
-        assertEquals("If I set a value to null, nothing should change", ImmutableList.of("foobar", "", "", ""), 
-            n.getProperty(NEXT).getValue(Type.STRINGS));
+        assertEquals("If I set a value to null, nothing should change",
+            ImmutableList.of("foobar", "", "", ""), n.getProperty(NEXT).getValue(Type.STRINGS));
 
         OrderedContentMirrorStoreStrategy.setNext(n, "");
         assertNotNull(n);
@@ -1671,5 +1675,48 @@ public class OrderedContentMirrorStorageStrategyTest {
 
         node.setProperty(NEXT, ImmutableList.of("", "", "", ""), Type.STRINGS);
         assertEquals("", OrderedContentMirrorStoreStrategy.getNext(node));
+    }
+    
+    @Test
+    public void getLane() {
+        OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
+        Random generator = null;
+        
+        // Default probability is 0.1
+        
+        generator = createNiceMock(Random.class);
+        expect(generator.nextDouble()).andReturn(0.73).anyTimes();
+        replay(generator);        
+        assertEquals(0, store.getLane(generator));
+        
+        generator = createNiceMock(Random.class);
+        expect(generator.nextDouble()).andReturn(0.02).once();
+        expect(generator.nextDouble()).andReturn(0.73).once();
+        replay(generator);
+        assertEquals(1, store.getLane(generator));
+
+        generator = createNiceMock(Random.class);
+        expect(generator.nextDouble()).andReturn(0.02).once();
+        expect(generator.nextDouble()).andReturn(0.02).once();
+        expect(generator.nextDouble()).andReturn(0.73).once();
+        replay(generator);
+        assertEquals(2, store.getLane(generator));
+
+        generator = createNiceMock(Random.class);
+        expect(generator.nextDouble()).andReturn(0.02).once();
+        expect(generator.nextDouble()).andReturn(0.02).once();
+        expect(generator.nextDouble()).andReturn(0.02).once();
+        expect(generator.nextDouble()).andReturn(0.73).once();
+        replay(generator);
+        assertEquals(3, store.getLane(generator));
+
+        generator = createNiceMock(Random.class);
+        for (int i = 0; i <= OrderedIndex.LANES + 1; i++) {
+            expect(generator.nextDouble()).andReturn(0.02).once();
+        }
+        expect(generator.nextDouble()).andReturn(0.73).once();
+        replay(generator);
+        assertEquals("we should never go beyond 4 lanes", OrderedIndex.LANES - 1,
+            store.getLane(generator));
     }
 }

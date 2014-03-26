@@ -116,4 +116,22 @@ public interface OrderedIndex {
      * the default direction for sorting the index
      */
     OrderDirection DEFAULT_DIRECTION = OrderDirection.ASC;
+    
+    /**
+     * defines the default distribution of items across the skip list. It's with a factor of 10%
+     * having therefore
+     * 
+     * <dl>
+     *  <dt>lane 0:</dt> <dd>100.0% (the base linked list)</dd>
+     *  <dt>lane 1:</dt> <dd>10.0%</dd>
+     *  <dt>lane 2:</dt> <dd>1.0%</dd>
+     *  <dt>lane 3:</dt> <dd>0.1%</dd>
+     * </dl>
+     */
+    double DEFAULT_PROBABILITY = 0.1;
+    
+    /**
+     * the number of lanes used in the SkipList 
+     */
+    int LANES = 4;
 }

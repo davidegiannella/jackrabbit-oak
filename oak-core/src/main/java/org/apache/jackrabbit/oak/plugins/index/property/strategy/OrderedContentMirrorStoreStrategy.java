@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.Random;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -796,5 +797,40 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      */
     static String getNext(@Nonnull final ChildNodeEntry child) {
         return getNext(child.getNodeState());
+    }
+    
+    /**
+     * retrieve the lane to be updated based on probabilistic approach.
+     * 
+     * Having 4 lanes if we have the 3 to be updated it means we'll have to update lanes
+     * 0,1,2 and 3. If we'll have 2 only 0,1,2 and so on.
+     * 
+     * Lane 0 will always be updated as it's the base linked list.
+     * 
+     * It uses {@code getLane(Random)} by passing a {@code new Random(System.currentTimeMillis())}
+     * 
+     * @see OrderedIndex.DEFAULT_PROBABILITY
+     * 
+     * @return the lane to start updating from.
+     */
+    public int getLane() {
+        return getLane(new Random(System.currentTimeMillis()));
+    }
+    
+    /**
+     * used for mocking purposes or advanced uses. Use the {@code getLane()} where possible
+     * 
+     * @param rnd the Random generator to be used for probability
+     * @return the lane to be updated. 
+     */
+    int getLane(@Nonnull final Random rnd) {
+        final int maxLanes = OrderedIndex.LANES - 1;
+        int lane = 0;
+        
+        while (rnd.nextDouble() < OrderedIndex.DEFAULT_PROBABILITY && lane < maxLanes) {
+            lane++;
+        }
+        
+        return lane;
     }
 }
