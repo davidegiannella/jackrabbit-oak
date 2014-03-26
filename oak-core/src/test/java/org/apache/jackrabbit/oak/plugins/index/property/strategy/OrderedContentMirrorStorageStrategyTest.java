@@ -1040,11 +1040,11 @@ public class OrderedContentMirrorStorageStrategyTest {
 
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n1));
-        assertEquals(":start should point to the first node", n0, index.getChildNode(START)
-                                                                       .getString(NEXT));
-        assertEquals("n0 should point to n1", n1, index.getChildNode(n0).getString(NEXT));
+        assertEquals(":start should point to the first node", n0,
+            getNext(index.getChildNode(START)));
+        assertEquals("n0 should point to n1", n1, getNext(index.getChildNode(n0)));
         assertTrue("n1 should point nowhere",
-                   Strings.isNullOrEmpty(index.getChildNode(n1).getString(NEXT)));
+                   Strings.isNullOrEmpty(getNext(index.getChildNode(n1))));
     }
 
     /**
