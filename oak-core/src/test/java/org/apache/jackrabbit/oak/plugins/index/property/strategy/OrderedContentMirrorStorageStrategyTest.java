@@ -628,11 +628,11 @@ public class OrderedContentMirrorStorageStrategyTest {
         store.update(index, path, EMPTY_KEY_SET, newHashSet(n0));
         node = index.getChildNode(START);
         assertTrue(":start should exists", node.exists());
-        assertEquals(":start should point to n0", n0, node.getString(NEXT));
+        assertEquals(":start should point to n0", n0, getNext(node));
 
         node = index.getChildNode(n0);
         assertTrue(":index should have n0", node.exists());
-        assertTrue("n0 should point nowhere", Strings.isNullOrEmpty(node.getString(NEXT)));
+        assertTrue("n0 should point nowhere", Strings.isNullOrEmpty(getNext(node)));
 
         node = node.getChildNode(nodes[0]);
         assertTrue("n0 should have /content", node.exists());
@@ -644,11 +644,11 @@ public class OrderedContentMirrorStorageStrategyTest {
         // Stage 2
         store.update(index, path, newHashSet(n0), newHashSet(n1));
         node = index.getChildNode(START);
-        assertEquals(":start should now point to n1", n1, node.getString(NEXT));
+        assertEquals(":start should now point to n1", n1, getNext(node));
 
         node = index.getChildNode(n1);
         assertTrue("n1 should exists", node.exists());
-        assertTrue("n1 should point nowhere", Strings.isNullOrEmpty(node.getString(NEXT)));
+        assertTrue("n1 should point nowhere", Strings.isNullOrEmpty(getNext(node)));
 
         node = node.getChildNode(nodes[0]);
         assertTrue("n1 should have /content", node.exists());
