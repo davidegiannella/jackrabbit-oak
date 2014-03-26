@@ -1002,9 +1002,9 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertFalse(index.hasChildNode(n2));
 
         // checking pointers
-        assertEquals(n1, index.getChildNode(START).getString(NEXT));
-        assertEquals(n0, index.getChildNode(n1).getString(NEXT));
-        assertTrue(Strings.isNullOrEmpty(index.getChildNode(n0).getString(NEXT)));
+        assertEquals(n1, getNext(index.getChildNode(START)));
+        assertEquals(n0, getNext(index.getChildNode(n1)));
+        assertTrue(Strings.isNullOrEmpty(getNext(index.getChildNode(n0))));
 
         // checking sub-nodes
         String[] subNodes = Iterables.toArray(PathUtils.elements(path0), String.class);

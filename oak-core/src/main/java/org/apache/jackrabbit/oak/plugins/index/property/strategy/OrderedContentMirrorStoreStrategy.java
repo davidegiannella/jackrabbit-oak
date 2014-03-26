@@ -164,12 +164,12 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                             index.getNodeState(), node.getNodeState());
                     LOG.debug("previous: {}", previous);
                     // (2) find the next element
-                    String next = node.getString(NEXT); 
+                    String next = getNext(node); 
                     if (next == null) {
                         next = "";
                     }
                     // (3) re-link the previous to the next
-                    index.getChildNode(previous.getName()).setProperty(NEXT, next); 
+                    setNext(index.getChildNode(previous.getName()), next);
                 } 
                 node.remove();
             }
