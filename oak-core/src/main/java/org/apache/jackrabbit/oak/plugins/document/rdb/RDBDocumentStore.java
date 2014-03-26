@@ -16,6 +16,9 @@
  */
 package org.apache.jackrabbit.oak.plugins.document.rdb;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -36,6 +39,8 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import javax.sql.DataSource;
 
+import org.apache.commons.io.IOUtils;
+import org.apache.jackrabbit.commons.query.sql2.SQL2QOMBuilder;
 import org.apache.jackrabbit.mk.api.MicroKernelException;
 import org.apache.jackrabbit.oak.cache.CacheStats;
 import org.apache.jackrabbit.oak.cache.CacheValue;
@@ -67,7 +72,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
      */
     public RDBDocumentStore(DocumentMK.Builder builder) {
         try {
-            String jdbcurl = "jdbc:h2:mem:oaknodes";
+            String jdbcurl = "jdbc:h2:file:./target/oaknodes";
             DataSource ds = RDBDataSourceFactory.forJdbcUrl(jdbcurl, "sa", "");
             initialize(ds, builder);
         } catch (Exception ex) {
@@ -246,6 +251,9 @@ public class RDBDocumentStore implements CachingDocumentStore {
 
     private DataSource ds;
 
+    // string length at which we switch to BLOB storage
+    private static int DATALIMIT = 16384 / 4;
+
     private void initialize(DataSource ds, DocumentMK.Builder builder) throws Exception {
 
         this.ds = ds;
@@ -259,12 +267,39 @@ public class RDBDocumentStore implements CachingDocumentStore {
         try {
             con.setAutoCommit(false);
 
-            Statement stmt = con.createStatement();
-            stmt.execute("create table if not exists CLUSTERNODES(ID varchar primary key, MODIFIED bigint, MODCOUNT bigint, DATA varchar)");
-            stmt.execute("create table if not exists NODES(ID varchar primary key, MODIFIED bigint, MODCOUNT bigint, DATA varchar)");
-            stmt.close();
+            for (String tableName : new String[] { "CLUSTERNODES", "NODES", "SETTINGS"}) {
+                try {
+                    PreparedStatement stmt = con.prepareStatement("select ID from " + tableName + " where ID = ?");
+                    stmt.setString(1, "0:/");
+                    stmt.executeQuery();
+                }
+                catch(SQLException ex) {
+                    // table does not appear to exist
+                    con.rollback();
 
-            con.commit();
+                    String dbtype = con.getMetaData().getDatabaseProductName();
+                    LOG.info("Attempting to create table " + tableName + " in " + dbtype);
+
+                    Statement stmt = con.createStatement();
+
+                    // the code below likely will need to be extended for new database types
+                    if ("PostgreSQL".equals(dbtype)) {
+                        stmt.execute("create table " + tableName
+                                + " (ID varchar(1000) not null primary key, MODIFIED bigint, MODCOUNT bigint, DATA varchar(16384), BDATA bytea)");
+                    }
+                    else if ("DB2".equals(dbtype) || (dbtype != null && dbtype.startsWith("DB2/"))) {
+                        stmt.execute("create table " + tableName
+                                + " (ID varchar(1000) not null primary key, MODIFIED bigint, MODCOUNT bigint, DATA varchar(16384), BDATA blob)");
+                    }
+                    else {
+                        stmt.execute("create table " + tableName
+                                + " (ID varchar(1000) not null primary key, MODIFIED bigint, MODCOUNT bigint, DATA varchar(16384), BDATA blob)");
+                    }
+                    stmt.close();
+
+                    con.commit();
+                }
+            }
         } finally {
             con.close();
         }
@@ -416,6 +451,8 @@ public class RDBDocumentStore implements CachingDocumentStore {
             return "CLUSTERNODES";
         } else if (collection == Collection.NODES) {
             return "NODES";
+        } else if (collection == Collection.SETTINGS) {
+            return "SETTINGS";
         } else {
             throw new IllegalArgumentException("Unknown collection: " + collection.toString());
         }
@@ -537,14 +574,37 @@ public class RDBDocumentStore implements CachingDocumentStore {
 
     // low level operations
 
+    private String getData(ResultSet rs, int stringIndex, int blobIndex) throws SQLException {
+        try {
+            String data = rs.getString(stringIndex);
+            byte[] bdata = rs.getBytes(blobIndex);
+            if (bdata == null) {
+                return data;
+            } else {
+                return IOUtils.toString(bdata, "UTF-8");
+            }
+        } catch (IOException e) {
+            throw new SQLException(e);
+        }
+    }
+
+    private static ByteArrayInputStream asInputStream(String data) {
+        try {
+            return new ByteArrayInputStream(data.getBytes("UTF-8"));
+        } catch (UnsupportedEncodingException ex) {
+            LOG.error("This REALLY is not supposed to happen", ex);
+            return null;
+        }
+    }
+
     @CheckForNull
     private String dbRead(Connection connection, String tableName, String id) throws SQLException {
-        PreparedStatement stmt = connection.prepareStatement("select DATA from " + tableName + " where ID = ?");
+        PreparedStatement stmt = connection.prepareStatement("select DATA, BDATA from " + tableName + " where ID = ?");
         try {
             stmt.setString(1, id);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
-                return rs.getString(1);
+                return getData(rs, 1, 2);
             } else {
                 return null;
             }
@@ -555,7 +615,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
 
     private List<String> dbQuery(Connection connection, String tableName, String minId, String maxId, String indexedProperty,
             long startValue, int limit) throws SQLException {
-        String t = "select DATA from " + tableName + " where ID > ? and ID < ?";
+        String t = "select DATA, BDATA from " + tableName + " where ID > ? and ID < ?";
         if (indexedProperty != null) {
             t += " and MODIFIED >= ?";
         }
@@ -577,7 +637,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
             }
             ResultSet rs = stmt.executeQuery();
             while (rs.next()) {
-                String data = rs.getString(1);
+                String data = getData(rs, 1, 2);
                 result.add(data);
             }
         } finally {
@@ -588,7 +648,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
 
     private boolean dbUpdate(Connection connection, String tableName, String id, Long modified, Long modcount, Long oldmodcount,
             String data) throws SQLException {
-        String t = "update " + tableName + " set MODIFIED = ?, MODCOUNT = ?, DATA = ? where ID = ?";
+        String t = "update " + tableName + " set MODIFIED = ?, MODCOUNT = ?, DATA = ?, BDATA = ? where ID = ?";
         if (oldmodcount != null) {
             t += " and MODCOUNT = ?";
         }
@@ -597,7 +657,16 @@ public class RDBDocumentStore implements CachingDocumentStore {
             int si = 1;
             stmt.setObject(si++, modified, Types.BIGINT);
             stmt.setObject(si++, modcount, Types.BIGINT);
-            stmt.setString(si++, data);
+
+            if (data.length() < DATALIMIT) {
+                stmt.setString(si++, data);
+                stmt.setBinaryStream(si++, null, 0);
+            } else {
+                stmt.setString(si++, "truncated...:" + data.substring(0, 1023));
+                ByteArrayInputStream bis = asInputStream(data);
+                stmt.setBinaryStream(si++, bis, bis.available());
+            }
+
             stmt.setString(si++, id);
             if (oldmodcount != null) {
                 stmt.setObject(si++, oldmodcount, Types.BIGINT);
@@ -614,12 +683,21 @@ public class RDBDocumentStore implements CachingDocumentStore {
 
     private boolean dbInsert(Connection connection, String tableName, String id, Long modified, Long modcount, String data)
             throws SQLException {
-        PreparedStatement stmt = connection.prepareStatement("insert into " + tableName + " values(?, ?, ?, ?)");
+        PreparedStatement stmt = connection.prepareStatement("insert into " + tableName + " values(?, ?, ?, ?, ?)");
         try {
-            stmt.setString(1, id);
-            stmt.setObject(2, modified, Types.BIGINT);
-            stmt.setObject(3, modcount, Types.BIGINT);
-            stmt.setString(4, data);
+            int si = 1;
+            stmt.setString(si++, id);
+            stmt.setObject(si++, modified, Types.BIGINT);
+            stmt.setObject(si++, modcount, Types.BIGINT);
+            if (data.length() < DATALIMIT) {
+                stmt.setString(si++, data);
+                stmt.setBinaryStream(si++, null, 0);
+            } else {
+                stmt.setString(si++, "truncated...:" + data.substring(0, 1023));
+                ByteArrayInputStream bis = asInputStream(data);
+                stmt.setBinaryStream(si++, bis, bis.available());
+            }
+
             int result = stmt.executeUpdate();
             if (result != 1) {
                 LOG.debug("DB insert failed for " + tableName + "/" + id);
@@ -680,7 +758,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
      * the cache with the document key. This method does not acquire a lock from
      * {@link #locks}! The caller must ensure a lock is held for the given
      * document.
-     *
+     * 
      * @param doc
      *            the document to add to the cache.
      * @return either the given <code>doc</code> or the document already present

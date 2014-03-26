@@ -24,7 +24,6 @@ import java.util.Map;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.ConfigurationPolicy;
 import org.apache.jackrabbit.core.data.DataStore;
-import org.apache.jackrabbit.core.data.FileDataStore;
 import org.osgi.service.component.ComponentContext;
 
 @Component(policy = ConfigurationPolicy.REQUIRE, name=FileDataStoreService.NAME)
@@ -33,6 +32,6 @@ public class FileDataStoreService extends AbstractDataStoreService{
 
     @Override
     protected DataStore createDataStore(ComponentContext context, Map<String, Object> config) {
-        return new FileDataStore();
+        return new OakFileDataStore();
     }
 }

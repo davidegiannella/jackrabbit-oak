@@ -27,23 +27,18 @@ import javax.annotation.CheckForNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.jackrabbit.oak.plugins.document.Collection.NODES;
 
 /**
- * Checkpoints provide details around which revision are to be kept. Currently these
- * are stored in NODES collection itself.
+ * Checkpoints provide details around which revision are to be kept. These
+ * are stored in Settings collection.
  */
 class Checkpoints {
-    /**
-     * Id of checkpoint document. It differs from normal convention of ID used for NodeDocument
-     * which back JCR Nodes as it is internal to DocumentNodeStore
-     */
-    private static final String ID = "/checkpoint";
+    private static final String ID = "checkpoint";
 
     /**
      * Property name to store all checkpoint data. The data is stored as Revision => expiryTime
      */
-    private static final String PROP_CHECKPOINT = "checkpoint";
+    private static final String PROP_CHECKPOINT = "data";
 
     private final DocumentNodeStore nodeStore;
 
@@ -62,7 +57,7 @@ class Checkpoints {
         UpdateOp op = new UpdateOp(ID, false);
         long endTime = nodeStore.getClock().getTime() + lifetimeInMillis;
         op.setMapEntry(PROP_CHECKPOINT, r, Long.toString(endTime));
-        store.createOrUpdate(NODES, op);
+        store.createOrUpdate(Collection.SETTINGS, op);
         return r;
     }
 
@@ -73,11 +68,12 @@ class Checkpoints {
      * @return oldest valid checkpoint registered. Might return null if no valid
      * checkpoint found
      */
+    @SuppressWarnings("unchecked")
     @CheckForNull
     public Revision getOldestRevisionToKeep() {
         //Get uncached doc
-        NodeDocument cdoc = store.find(NODES, ID, 0);
-        SortedMap<Revision, String> checkpoints = cdoc.getLocalMap(PROP_CHECKPOINT);
+        Document cdoc = store.find(Collection.SETTINGS, ID, 0);
+        SortedMap<Revision, String> checkpoints = (SortedMap<Revision, String>) cdoc.get(PROP_CHECKPOINT);
 
         final long currentTime = nodeStore.getClock().getTime();
         UpdateOp op = new UpdateOp(ID, false);
@@ -95,7 +91,7 @@ class Checkpoints {
         }
 
         if (op.hasChanges()) {
-            store.findAndUpdate(NODES, op);
+            store.findAndUpdate(Collection.SETTINGS, op);
             log.info("Purged {} expired checkpoints", op.getChanges().size());
         }
 
@@ -103,10 +99,10 @@ class Checkpoints {
     }
 
     private void createIfNotExist() {
-        if (store.find(NODES, ID) == null) {
+        if (store.find(Collection.SETTINGS, ID) == null) {
             UpdateOp updateOp = new UpdateOp(ID, true);
             updateOp.set(Document.ID, ID);
-            store.createOrUpdate(NODES, updateOp);
+            store.createOrUpdate(Collection.SETTINGS, updateOp);
         }
     }
 }

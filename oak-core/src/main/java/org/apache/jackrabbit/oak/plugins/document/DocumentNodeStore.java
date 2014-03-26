@@ -266,11 +266,11 @@ public final class DocumentNodeStore
         @Override
         public String serialize(Blob blob) {
             if (blob instanceof BlobStoreBlob) {
-                return blob.toString();
+                return ((BlobStoreBlob) blob).getBlobId();
             }
             String id;
             try {
-                id = createBlob(blob.getNewStream()).toString();
+                id = createBlob(blob.getNewStream()).getBlobId();
             } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
@@ -1208,16 +1208,25 @@ public final class DocumentNodeStore
     }
 
     @Override
-    public Blob createBlob(InputStream inputStream) throws IOException {
-        String id;
-        try {
-            id = blobStore.writeBlob(inputStream);
-        } catch (IOException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IOException("Could not write blob", e);
+    public BlobStoreBlob createBlob(InputStream inputStream) throws IOException {
+        return new BlobStoreBlob(blobStore, blobStore.writeBlob(inputStream));
+    }
+
+    /**
+     * Returns the {@link Blob} with the given reference. Note that this method is meant to
+     * be used with secure reference obtained from Blob#reference which is different from blobId
+     *
+     * @param reference the reference of the blob.
+     * @return the blob.
+     */
+    @Override
+    public Blob getBlob(String reference) {
+        String blobId = blobStore.getBlobId(reference);
+        if(blobId != null){
+            return new BlobStoreBlob(blobStore, blobId);
         }
-        return new BlobStoreBlob(blobStore, id);
+        LOG.debug("No blobId found matching reference [{}]", reference);
+        return null;
     }
 
     /**
@@ -1226,9 +1235,7 @@ public final class DocumentNodeStore
      * @param blobId the blobId of the blob.
      * @return the blob.
      */
-    @Override
-    @Nonnull
-    public Blob getBlob(String blobId) {
+    public Blob getBlobFromBlobId(String blobId){
         return new BlobStoreBlob(blobStore, blobId);
     }
 

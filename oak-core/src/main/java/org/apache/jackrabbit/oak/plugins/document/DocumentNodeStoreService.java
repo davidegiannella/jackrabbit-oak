@@ -52,6 +52,7 @@ import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
 import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.spi.blob.GarbageCollectableBlobStore;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.apache.jackrabbit.oak.spi.state.RevisionGC;
 import org.apache.jackrabbit.oak.spi.whiteboard.Registration;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardExecutor;
@@ -130,17 +131,17 @@ public class DocumentNodeStoreService {
     protected void activate(ComponentContext context, Map<String, ?> config) throws Exception {
         this.context = context;
 
-        if(blobStore == null &&
-                PropertiesUtil.toBoolean(prop(CUSTOM_BLOB_STORE), false)){
-            log.info("BlobStore use enabled. DocumentNodeStoreService would be initialized when " +
-                    "BlobStore would be available");
-        }else{
+        if (blobStore == null &&
+                PropertiesUtil.toBoolean(prop(CUSTOM_BLOB_STORE), false)) {
+            log.info("BlobStore use enabled. DocumentNodeStoreService would be initialized when "
+                    + "BlobStore would be available");
+        } else {
             registerNodeStore();
         }
     }
 
     protected void registerNodeStore() throws IOException {
-        if(context == null){
+        if (context == null) {
             log.info("Component still not activated. Ignoring the initialization call");
             return;
         }
@@ -234,7 +235,7 @@ public class DocumentNodeStoreService {
         registerNodeStore();
     }
 
-    protected void unbindBlobStore(BlobStore blobStore){
+    protected void unbindBlobStore(BlobStore blobStore) {
         this.blobStore = null;
         unregisterNodeStore();
     }
@@ -258,7 +259,7 @@ public class DocumentNodeStoreService {
         }
     }
 
-    private void registerJMXBeans(DocumentNodeStore store, BundleContext context) throws IOException {
+    private void registerJMXBeans(final DocumentNodeStore store, BundleContext context) throws IOException {
         Whiteboard wb = new OsgiWhiteboard(context);
         registrations.add(
                 registerMBean(wb,
@@ -303,14 +304,22 @@ public class DocumentNodeStoreService {
                             cds.getCacheStats().getName())
             );
         }
+
+        executor = new WhiteboardExecutor();
+        executor.start(wb);
         if (blobStore instanceof GarbageCollectableBlobStore) {
-            executor = new WhiteboardExecutor();
-            executor.start(wb);
             MarkSweepGarbageCollector gc = new MarkSweepGarbageCollector();
             gc.init(store);  // FIXME OAK-1582 ClassCastException in MarkSweepGarbageCollector#init() if using KernelNodeStore
             registrations.add(registerMBean(wb, BlobGCMBean.class, new BlobGC(gc, executor),
                     BlobGCMBean.TYPE, "Segment node store blob garbage collection"));
         }
+
+        RevisionGC revisionGC = new RevisionGC(new Runnable() {
+            @Override
+            public void run() {
+                store.getVersionGarbageCollector().gc();
+            }
+        }, executor);
 
         //TODO Register JMX bean for Off Heap Cache stats
     }

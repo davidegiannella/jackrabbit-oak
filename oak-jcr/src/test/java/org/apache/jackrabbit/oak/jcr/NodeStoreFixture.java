@@ -19,10 +19,12 @@
 package org.apache.jackrabbit.oak.jcr;
 
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
 import java.util.UUID;
 
 import com.mongodb.DB;
+
 import org.apache.jackrabbit.mk.core.MicroKernelImpl;
 import org.apache.jackrabbit.oak.kernel.KernelNodeStore;
 import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
@@ -31,6 +33,7 @@ import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStore;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentStore;
 import org.apache.jackrabbit.oak.plugins.segment.memory.MemoryStore;
+import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 
 /**
@@ -78,13 +81,15 @@ public abstract class NodeStoreFixture {
         @Override
         public NodeStore createNodeStore() {
             String id = UUID.randomUUID().toString();
-            return new DocumentMK.Builder().setRDBConnection("jdbc:h2:mem:" + id + ";MVCC=true", "sa", "").getNodeStore();
+            String folder = (new File("target")).isDirectory() ? "target/" : "";
+            return new DocumentMK.Builder().setRDBConnection("jdbc:h2:file:" + folder + id + ";MVCC=true", "sa", "").getNodeStore();
         }
 
         @Override
         public NodeStore createNodeStore(int clusterNodeId) {
             try {
-                return new DocumentMK.Builder().setRDBConnection("jdbc:h2:mem:oaknodes-" + clusterNodeId, "sa", "").getNodeStore();
+                String folder = (new File("target")).isDirectory() ? "target/" : "";
+                return new DocumentMK.Builder().setRDBConnection("jdbc:h2:file:" + folder + "oaknodes-" + clusterNodeId, "sa", "").getNodeStore();
             } catch (Exception e) {
                 return null;
             }
@@ -180,27 +185,33 @@ public abstract class NodeStoreFixture {
 
         private final String uri;
         private final boolean inMemory;
+        private final BlobStore blobStore;
 
-        public DocumentFixture(String uri, boolean inMemory) {
+        public DocumentFixture(String uri, boolean inMemory, BlobStore blobStore) {
             this.uri = uri;
             this.inMemory = inMemory;
+            this.blobStore = blobStore;
         }
 
         public DocumentFixture(String uri) {
-            this(uri, true);
+            this(uri, true, null);
         }
 
         public DocumentFixture() {
-            this(DEFAULT_URI, false);
+            this(DEFAULT_URI, false, null);
         }
 
-        private static NodeStore createNodeStore(String uri) {
+        private static NodeStore createNodeStore(String uri, BlobStore blobStore) {
             MongoConnection connection;
             try {
                 connection = new MongoConnection(uri);
                 DB mongoDB = connection.getDB();
-                return new DocumentMK.Builder()
-                        .setMongoDB(mongoDB).getNodeStore();
+                DocumentMK.Builder builder = new DocumentMK.Builder();
+                if(blobStore != null){
+                    builder.setBlobStore(blobStore);
+                }
+                builder.setMongoDB(mongoDB);
+                return builder.getNodeStore();
             } catch (Exception e) {
                 return null;
             }
@@ -211,19 +222,19 @@ public abstract class NodeStoreFixture {
             if (inMemory) {
                 return new DocumentMK.Builder().getNodeStore();
             } else {
-                return createNodeStore(uri + '-' + System.nanoTime());
+                return createNodeStore(uri + '-' + System.nanoTime(), blobStore);
             }
         }
 
         @Override
         public NodeStore createNodeStore(int clusterNodeId) {
-            return createNodeStore(uri);
+            return createNodeStore(uri, blobStore);
         }
 
         @Override
         public boolean isAvailable() {
             // FIXME is there a better way to check whether MongoDB is available?
-            NodeStore nodeStore = createNodeStore(uri);
+            NodeStore nodeStore = createNodeStore(uri, blobStore);
             if (nodeStore == null) {
                 return false;
             } else {

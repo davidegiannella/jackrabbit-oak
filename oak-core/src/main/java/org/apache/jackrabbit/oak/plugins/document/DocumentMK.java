@@ -306,7 +306,7 @@ public class DocumentMK implements MicroKernel {
     @Override
     public long getLength(String blobId) throws MicroKernelException {
         try {
-            return nodeStore.getBlob(blobId).length();
+            return nodeStore.getBlobStore().getBlobLength(blobId);
         } catch (Exception e) {
             throw new MicroKernelException(e);
         }
@@ -731,12 +731,12 @@ public class DocumentMK implements MicroKernel {
             return this;
         }
 
-        public Builder clock(Clock clock){
+        public Builder clock(Clock clock) {
             this.clock = clock;
             return this;
         }
 
-        public Clock getClock(){
+        public Clock getClock() {
             return clock;
         }
 

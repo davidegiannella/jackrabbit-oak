@@ -17,13 +17,14 @@
 package org.apache.jackrabbit.oak.jcr.repository;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonMap;
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -35,29 +36,29 @@ import javax.jcr.SimpleCredentials;
 import javax.jcr.Value;
 import javax.security.auth.login.LoginException;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableScheduledFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-
 import org.apache.jackrabbit.api.JackrabbitRepository;
 import org.apache.jackrabbit.api.security.authentication.token.TokenCredentials;
 import org.apache.jackrabbit.commons.SimpleValueFactory;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.ContentSession;
 import org.apache.jackrabbit.oak.api.jmx.SessionMBean;
-import org.apache.jackrabbit.oak.plugins.observation.CommitRateLimiter;
-import org.apache.jackrabbit.oak.stats.Clock;
-import org.apache.jackrabbit.oak.stats.StatisticManager;
 import org.apache.jackrabbit.oak.jcr.delegate.SessionDelegate;
 import org.apache.jackrabbit.oak.jcr.session.RefreshStrategy;
 import org.apache.jackrabbit.oak.jcr.session.SessionContext;
 import org.apache.jackrabbit.oak.jcr.session.SessionStats;
+import org.apache.jackrabbit.oak.plugins.observation.CommitRateLimiter;
 import org.apache.jackrabbit.oak.spi.security.SecurityProvider;
 import org.apache.jackrabbit.oak.spi.whiteboard.Registration;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils;
+import org.apache.jackrabbit.oak.stats.Clock;
+import org.apache.jackrabbit.oak.stats.StatisticManager;
 import org.apache.jackrabbit.oak.util.GenericDescriptors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,6 +80,13 @@ public class RepositoryImpl implements JackrabbitRepository {
      * @see org.apache.jackrabbit.oak.jcr.session.RefreshStrategy
      */
     public static final String REFRESH_INTERVAL = "oak.refresh-interval";
+
+    /**
+     * Name of the session attribute for enabling relaxed locking rules
+     *
+     * @see <a href="https://issues.apache.org/jira/browse/OAK-1329">OAK-1329</a>
+     */
+    public static final String RELAXED_LOCKING = "oak.relaxed-locking";
 
     private final GenericDescriptors descriptors;
     private final ContentRepository contentRepository;
@@ -240,12 +248,14 @@ public class RepositoryImpl implements JackrabbitRepository {
             } else if (attributes.containsKey(REFRESH_INTERVAL)) {
                 throw new RepositoryException("Duplicate attribute '" + REFRESH_INTERVAL + "'.");
             }
+            boolean relaxedLocking = getRelaxedLocking(attributes);
 
             RefreshStrategy refreshStrategy = createRefreshStrategy(refreshInterval);
             ContentSession contentSession = contentRepository.login(credentials, workspaceName);
             SessionDelegate sessionDelegate = createSessionDelegate(refreshStrategy, contentSession);
             SessionContext context = createSessionContext(
-                    statisticManager, securityProvider, createAttributes(refreshInterval),
+                    statisticManager, securityProvider,
+                    createAttributes(refreshInterval, relaxedLocking),
                     sessionDelegate, observationQueueLength, commitRateLimiter);
             return context.getSession();
         } catch (LoginException e) {
@@ -257,7 +267,7 @@ public class RepositoryImpl implements JackrabbitRepository {
             final RefreshStrategy refreshStrategy,
             final ContentSession contentSession) {
         return new SessionDelegate(
-                contentSession, refreshStrategy,
+                contentSession, securityProvider, refreshStrategy,
                 threadSaveCount, statisticManager, clock) {
             // Defer session MBean registration to avoid cluttering the
             // JMX name space with short lived sessions
@@ -344,6 +354,17 @@ public class RepositoryImpl implements JackrabbitRepository {
         return toLong(attributes.get(REFRESH_INTERVAL));
     }
 
+    private static boolean getRelaxedLocking(Map<String, Object> attributes) {
+        Object value = attributes.get(RELAXED_LOCKING);
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        } else if (value instanceof String) {
+            return Boolean.parseBoolean((String) value);
+        } else {
+            return false;
+        }
+    }
+
     private static Long toLong(Object value) {
         if (value instanceof Long) {
             return (Long) value;
@@ -366,10 +387,19 @@ public class RepositoryImpl implements JackrabbitRepository {
         }
     }
 
-    private static Map<String, Object> createAttributes(Long refreshInterval) {
-        return refreshInterval == null
-                ? Collections.<String, Object>emptyMap()
-                : Collections.<String, Object>singletonMap(REFRESH_INTERVAL, refreshInterval);
+    private static Map<String, Object> createAttributes(
+            Long refreshInterval, boolean relaxedLocking) {
+        if (refreshInterval == null && !relaxedLocking) {
+            return emptyMap();
+        } else if (refreshInterval == null) {
+            return singletonMap(RELAXED_LOCKING, (Object) Boolean.valueOf(relaxedLocking));
+        } else if (!relaxedLocking) {
+            return singletonMap(REFRESH_INTERVAL, (Object) refreshInterval);
+        } else {
+            return ImmutableMap.of(
+                    REFRESH_INTERVAL, (Object) refreshInterval,
+                    RELAXED_LOCKING,  (Object) Boolean.valueOf(relaxedLocking));
+        }
     }
 
     /**
