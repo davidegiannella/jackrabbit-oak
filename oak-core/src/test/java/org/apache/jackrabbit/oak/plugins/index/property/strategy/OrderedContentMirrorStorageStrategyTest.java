@@ -1626,4 +1626,28 @@ public class OrderedContentMirrorStorageStrategyTest {
     private static String getNext(@Nonnull NodeState node) {
         return Iterables.toArray(node.getProperty(NEXT).getValue(Type.STRINGS), String.class)[0];
     }
+    
+    @Test
+    public void setNext() {
+        OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
+        NodeBuilder n = EmptyNodeState.EMPTY_NODE.builder();
+        
+        store.setNext(n, "foobar");
+        assertNotNull(n);
+        assertNotNull(":next cannot be null", n.getProperty(NEXT));
+        assertEquals(ImmutableList.of("foobar", "", "", ""), 
+            n.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        store.setNext(n, null);
+        assertNotNull(n);
+        assertNotNull(":next cannot be null", n.getProperty(NEXT));
+        assertEquals("If I set a value to null, nothing should change", ImmutableList.of("foobar", "", "", ""), 
+            n.getProperty(NEXT).getValue(Type.STRINGS));
+
+        store.setNext(n, "");
+        assertNotNull(n);
+        assertNotNull(":next cannot be null", n.getProperty(NEXT));
+        assertEquals(ImmutableList.of("", "", "", ""), 
+            n.getProperty(NEXT).getValue(Type.STRINGS));
+}
 }

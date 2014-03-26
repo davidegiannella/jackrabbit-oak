@@ -787,4 +787,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             return next;
         }
     }
+    
+    void setNext(@Nonnull final NodeBuilder node, final String next) {
+        if (node != null && next != null) {
+            node.setProperty(NEXT, ImmutableList.of(next, "", "", ""), Type.STRINGS);
+        }
+    }
 }
