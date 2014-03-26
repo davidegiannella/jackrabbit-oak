@@ -909,8 +909,8 @@ public class OrderedContentMirrorStorageStrategyTest {
 
         assertTrue(index.hasChildNode(START));
         assertTrue(index.hasChildNode(n0));
-        assertEquals(":start should still point to n0", n0, index.getChildNode(START).getString(NEXT));
-        assertTrue("n0 should point nowhere", Strings.isNullOrEmpty(index.getChildNode(n0).getString(NEXT)));
+        assertEquals(":start should still point to n0", n0, getNext(index.getChildNode(START)));
+        assertTrue("n0 should point nowhere", Strings.isNullOrEmpty(getNext(index.getChildNode(n0))));
 
         assertFalse(index.getChildNode(n0).hasChildNode(doc1));
         assertTrue(index.getChildNode(n0).hasChildNode(doc2));
