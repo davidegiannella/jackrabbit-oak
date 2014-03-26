@@ -1102,33 +1102,33 @@ public class OrderedContentMirrorStorageStrategyTest {
 
         // Stage 1
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
-        assertEquals(":start should point to n0", n0, index.getChildNode(START).getString(NEXT));
+        assertEquals(":start should point to n0", n0, getNext(index.getChildNode(START)));
         assertTrue("n0 should point nowhere",
-                   Strings.isNullOrEmpty(index.getChildNode(n0).getString(NEXT)));
+                   Strings.isNullOrEmpty(getNext(index.getChildNode(n0))));
 
         // Stage 2
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n1));
-        assertEquals(":start should point to n1", n1, index.getChildNode(START).getString(NEXT));
-        assertEquals("n1 should point to n0", n0, index.getChildNode(n1).getString(NEXT));
+        assertEquals(":start should point to n1", n1, getNext(index.getChildNode(START)));
+        assertEquals("n1 should point to n0", n0, getNext(index.getChildNode(n1)));
         assertTrue("n0 should point nowhere",
-                   Strings.isNullOrEmpty(index.getChildNode(n0).getString(NEXT)));
+                   Strings.isNullOrEmpty(getNext(index.getChildNode(n0))));
 
         // Stage 3
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n2));
-        assertEquals(":start should point to n2", n2, index.getChildNode(START).getString(NEXT));
-        assertEquals("n2 should point to n1", n1, index.getChildNode(n2).getString(NEXT));
-        assertEquals("n1 should point to n0", n0, index.getChildNode(n1).getString(NEXT));
+        assertEquals(":start should point to n2", n2, getNext(index.getChildNode(START)));
+        assertEquals("n2 should point to n1", n1, getNext(index.getChildNode(n2)));
+        assertEquals("n1 should point to n0", n0, getNext(index.getChildNode(n1)));
         assertTrue("n0 should point nowhere",
-                   Strings.isNullOrEmpty(index.getChildNode(n0).getString(NEXT)));
+                   Strings.isNullOrEmpty(getNext(index.getChildNode(n0))));
 
         // Stage 4
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n3));
-        assertEquals(":start should point to n3", n3, index.getChildNode(START).getString(NEXT));
-        assertEquals("n3 should point to n2", n2, index.getChildNode(n3).getString(NEXT));
-        assertEquals("n2 should point to n1", n1, index.getChildNode(n2).getString(NEXT));
-        assertEquals("n1 should point to n0", n0, index.getChildNode(n1).getString(NEXT));
+        assertEquals(":start should point to n3", n3, getNext(index.getChildNode(START)));
+        assertEquals("n3 should point to n2", n2, getNext(index.getChildNode(n3)));
+        assertEquals("n2 should point to n1", n1, getNext(index.getChildNode(n2)));
+        assertEquals("n1 should point to n0", n0, getNext(index.getChildNode(n1)));
         assertTrue("n0 should point nowhere",
-                   Strings.isNullOrEmpty(index.getChildNode(n0).getString(NEXT)));
+                   Strings.isNullOrEmpty(getNext(index.getChildNode(n0))));
     }
 
     /**
