@@ -787,10 +787,38 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             return next;
         }
     }
-    
+
+    /**
+     * set the value of the the :next at position 0
+     * 
+     * @param node the node to modify
+     * @param next the 'next' value
+     */
     void setNext(@Nonnull final NodeBuilder node, final String next) {
         if (node != null && next != null) {
             node.setProperty(NEXT, ImmutableList.of(next, "", "", ""), Type.STRINGS);
         }
+    }
+
+    /**
+     * return the 'next; value at the 0 position (lowest lane)
+     * 
+     * @param nodeState the node state to inspect
+     * @return the next value
+     */
+    String getNext(@Nonnull final NodeState nodeState) {
+        String next = "";
+        PropertyState ps = nodeState.getProperty(NEXT);
+        if (ps != null) {
+            next = ps.getValue(Type.STRING, 0);
+        }
+        return next;
+    }
+    
+    /**
+     * short-cut for using NodeBuilder. See {@code getNext(NodeState)}
+     */
+    String getNext(@Nonnull final NodeBuilder node) {
+        return getNext(node.getNodeState());
     }
 }
