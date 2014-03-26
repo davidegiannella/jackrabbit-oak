@@ -1236,12 +1236,12 @@ public class OrderedContentMirrorStorageStrategyTest {
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n1));
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n2));
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n3));
-        assertEquals(":start should point to n1", n1, index.getChildNode(START).getString(NEXT));
-        assertEquals("n0 should point to n3", n3, index.getChildNode(n0).getString(NEXT));
-        assertEquals("n1 should point to n2", n2, index.getChildNode(n1).getString(NEXT));
-        assertEquals("n2 should point to n1", n0, index.getChildNode(n2).getString(NEXT));
+        assertEquals(":start should point to n1", n1, getNext(index.getChildNode(START)));
+        assertEquals("n0 should point to n3", n3, getNext(index.getChildNode(n0)));
+        assertEquals("n1 should point to n2", n2, getNext(index.getChildNode(n1)));
+        assertEquals("n2 should point to n1", n0, getNext(index.getChildNode(n2)));
         assertTrue("n3 should point nowhere",
-                   Strings.isNullOrEmpty(index.getChildNode(n3).getString(NEXT)));
+                   Strings.isNullOrEmpty(getNext(index.getChildNode(n3))));
     }
 
     /**
