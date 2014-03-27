@@ -642,10 +642,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     static ChildNodeEntry seek(@Nonnull NodeState index,
                                @Nonnull Predicate<ChildNodeEntry> condition,
                                @Nullable ChildNodeEntry[] walkedLanes) {
-//        boolean keepWalked = false;
-//        NodeState start = index.getChildNode(START);
-//        ChildNodeEntry current = null;
-//        
+        boolean keepWalked = false;
+        NodeState start = index.getChildNode(START);
+        ChildNodeEntry current = null;
+        
 //        if (walkedLanes != null) {
 //            // re-initialising to be sure about the state
 //            walkedLanes = new ChildNodeEntry[4];
@@ -818,16 +818,24 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     }
 
     /**
-     * return the 'next; value at the 0 position (lowest lane)
+     * see {@link #getPropertyNext(NodeState, int)} by providing '0' as lane
+     */
+    static String getPropertyNext(@Nonnull final NodeState nodeState) {
+        return getPropertyNext(nodeState, 0);
+    }
+    
+    /**
+     * return the 'next' value at the provided position
      * 
      * @param nodeState the node state to inspect
      * @return the next value
      */
-    static String getPropertyNext(@Nonnull final NodeState nodeState) {
+    static String getPropertyNext(@Nonnull final NodeState state, final int lane) {
         String next = "";
-        PropertyState ps = nodeState.getProperty(NEXT);
+        PropertyState ps = state.getProperty(NEXT);
         if (ps != null) {
-            next = ps.getValue(Type.STRING, 0);
+            next = (lane < OrderedIndex.LANES) ? ps.getValue(Type.STRING, lane)
+                                               : "";
         }
         return next;
     }
@@ -838,7 +846,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     static String getPropertyNext(@Nonnull final NodeBuilder node) {
         return getPropertyNext(node.getNodeState());
     }
-    
+
+    /**
+     * short-cut for using NodeBuilder. See {@code getNext(NodeState)}
+     */
+    static String getPropertyNext(@Nonnull final NodeBuilder node, final int lane) {
+        return getPropertyNext(node.getNodeState(), lane);
+    }
+
     /**
      * short-cut for using ChildNodeEntry. See {@code getNext(NodeState)}
      */

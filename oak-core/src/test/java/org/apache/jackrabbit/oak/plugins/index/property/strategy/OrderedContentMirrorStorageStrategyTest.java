@@ -1729,6 +1729,15 @@ public class OrderedContentMirrorStorageStrategyTest {
 
         node.setProperty(NEXT, ImmutableList.of("", "", "", ""), Type.STRINGS);
         assertEquals("", OrderedContentMirrorStoreStrategy.getPropertyNext(node));
+        
+        node.setProperty(NEXT, ImmutableList.of("a", "b", "c", "d"), Type.STRINGS);
+        assertEquals("a", OrderedContentMirrorStoreStrategy.getPropertyNext(node));
+        assertEquals("a", OrderedContentMirrorStoreStrategy.getPropertyNext(node, 0));
+        assertEquals("b", OrderedContentMirrorStoreStrategy.getPropertyNext(node, 1));
+        assertEquals("c", OrderedContentMirrorStoreStrategy.getPropertyNext(node, 2));
+        assertEquals("d", OrderedContentMirrorStoreStrategy.getPropertyNext(node, 3));
+        assertEquals("if we provide a number outside the range an empty next is expeted", "",
+            OrderedContentMirrorStoreStrategy.getPropertyNext(node, OrderedIndex.LANES + 100));
     }
     
     @Test
