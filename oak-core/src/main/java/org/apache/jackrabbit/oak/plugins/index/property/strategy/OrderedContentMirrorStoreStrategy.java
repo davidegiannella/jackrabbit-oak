@@ -20,6 +20,8 @@ package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.Predicate;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
@@ -45,7 +47,6 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -327,7 +328,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         return value.replaceAll("%3A", ":");
     }
     
-    private static final class OrderedChildNodeEntry extends AbstractChildNodeEntry {
+    static final class OrderedChildNodeEntry extends AbstractChildNodeEntry {
         private final String name;
         private final NodeState state;
 
@@ -635,26 +636,29 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @param index the index content node {@code :index}
      * @param condition the predicate to evaluate
      * @param walkedLanes if not null will contain the last element of the walked lanes with each
-     *            lane represented by the corresponding position in the array. <b>Beware</b> that
-     *            whatever is passed into won't be considered and overwritten.
+     *            lane represented by the corresponding position in the array. <b>You have</b> to
+     *            pass in an array already sized as {@link OrderedIndex#LANES} or an
+     *            {@link IllegalArgumentException} will be raised
      * @return the entry or null if not found
      */
-    static ChildNodeEntry seek(@Nonnull NodeState index,
-                               @Nonnull Predicate<ChildNodeEntry> condition,
-                               @Nullable ChildNodeEntry[] walkedLanes) {
-        boolean keepWalked = false;
-        NodeState start = index.getChildNode(START);
-        ChildNodeEntry current = null;
-        
+    static ChildNodeEntry seek(@Nonnull final NodeState index,
+                               @Nonnull final Predicate<ChildNodeEntry> condition,
+                               @Nullable final ChildNodeEntry[] walkedLanes) {
+//        boolean keepWalked = false;
+//        NodeState current = index.getChildNode(START);
+//        Predicate walkingPredicate = null;
 //        if (walkedLanes != null) {
-//            // re-initialising to be sure about the state
-//            walkedLanes = new ChildNodeEntry[4];
+//            if (walkedLanes.length != OrderedIndex.LANES) {
+//                throw new IllegalArgumentException(String.format(
+//                    "Wrong size for keeping track of the Walked Lanes. Expected %d but was %d",
+//                    OrderedIndex.LANES, walkedLanes.length));
+//            }
 //            keepWalked = true;
-//            current = new OrderedChildNodeEntry(START, start);
-//            //when we start iteration we always start with :start
-//            walkedLanes[0] = walkedLanes[1] = walkedLanes[2] = walkedLanes[3] = current; 
 //        }
 //
+//        String next = getPropertyNext(current, 3);
+//        //TODO we'll have to consider the descending use-case as well
+//        if ( condition.)
 //        return null;
         // TODO the FullIterable will have to be replaced with something else once we'll have the
         // Skip part of the list implemented.
@@ -683,6 +687,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         @Override
         public boolean apply(ChildNodeEntry arg0) {
             return arg0 != null && searchfor.equals(arg0.getName());
+        }
+
+        @Override
+        public String getSearchFor() {
+            return searchfor;
         }
     }
     
@@ -714,6 +723,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             
             return b;
         }
+        
+        @Override
+        public String getSearchFor() {
+            return searchfor;
+        }
     }
 
     /**
@@ -741,6 +755,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             }
 
             return b;
+        }
+        
+        @Override
+        public String getSearchFor() {
+            return searchfor;
         }
     }
     

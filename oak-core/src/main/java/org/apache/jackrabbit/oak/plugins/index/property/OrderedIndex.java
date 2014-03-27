@@ -134,4 +134,16 @@ public interface OrderedIndex {
      * the number of lanes used in the SkipList 
      */
     int LANES = 4;
+    
+    /**
+     * Convenience Predicate that will force the implementor to expose what we're searching for
+     *
+     * @param <T>
+     */
+    interface Predicate<T> extends com.google.common.base.Predicate<T> {
+        /**
+         * @return the string we're searching for during this predicate
+         */
+        String getSearchFor();
+    }
 }

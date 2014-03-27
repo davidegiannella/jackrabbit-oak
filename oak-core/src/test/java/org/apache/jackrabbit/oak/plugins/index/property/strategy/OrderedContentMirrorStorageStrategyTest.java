@@ -28,6 +28,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
@@ -44,12 +45,14 @@ import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.OrderedChildNodeEntry;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.common.base.Strings;
@@ -65,7 +68,21 @@ public class OrderedContentMirrorStorageStrategyTest {
     /**
      * ascending ordered set of keys. Useful for testing
      */
-    private static final String[] KEYS = new String[] { "donald", "goofy", "mickey", "minnie" };
+    private static final String[] KEYS = new String[] { 
+                                                        "dianno",
+                                                        "dickinson",
+                                                        "donald", 
+                                                        "floyd",
+                                                        "gers",
+                                                        "goofy", 
+                                                        "harris",
+                                                        "mcbrian",
+                                                        "mickey", 
+                                                        "minnie",
+                                                        "murray",
+                                                        "pink",
+                                                        "smith",
+                                                      };
     private static final Set<String> EMPTY_KEY_SET = newHashSet();
     private static final NumberFormat NF = new DecimalFormat("00000");
     
@@ -1890,7 +1907,7 @@ public class OrderedContentMirrorStorageStrategyTest {
     /**
      * tests the insert of an item that has to be appended 
      */
-    @Test
+    @Test @Ignore
     public void laneInsert2ItemsAlreadyOrdere() {
         MockOrderedContentMirrorStoreStrategy store = new MockOrderedContentMirrorStoreStrategy();
         NodeBuilder index = null;
@@ -1959,5 +1976,96 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertEquals(OrderedContentMirrorStoreStrategy.EMPTY_NEXT,
             n.getProperty(NEXT).getValue(Type.STRINGS));
 
+    }
+    
+    /**
+     * testing the seek method and the returned lanes with the following index structure
+     * 
+     *  <code>
+     *      :index : {
+     *          :start  : { :next : [ n0 , n1 , n3 , n10 ] },
+     *          n0      : { :next : [ n1 ,    ,    ,     ] },
+     *          n1      : { :next : [ n2 , n3 ,    ,     ] },
+     *          n2      : { :next : [ n3 ,    ,    ,     ] },
+     *          n3      : { :next : [ n4 , n5 , n7 ,     ] },
+     *          n4      : { :next : [ n5 ,    ,    ,     ] },
+     *          n5      : { :next : [ n6 , n7 ,    ,     ] },
+     *          n6      : { :next : [ n7 ,    ,    ,     ] },
+     *          n7      : { :next : [ n8 , n11, n12,     ] },
+     *          n8      : { :next : [ n9 ,    ,    ,     ] },
+     *          n9      : { :next : [ n10,    ,    ,     ] },
+     *          n10     : { :next : [ n11,    ,    ,     ] },
+     *          n11     : { :next : [ n12, n12,    ,     ] },
+     *          n12     : { :next : [    ,    ,    ,     ] },
+     *      }
+     *  </code>
+     */
+    @Test @Ignore
+    public void seekWithLanes() {
+        NodeBuilder builder = EmptyNodeState.EMPTY_NODE.builder();
+        String n00 = KEYS[0];
+        String n01 = KEYS[1];
+        String n02 = KEYS[2];
+        String n03 = KEYS[3];
+        String n04 = KEYS[4];
+        String n05 = KEYS[5];
+        String n06 = KEYS[6];
+        String n07 = KEYS[7];
+        String n08 = KEYS[8];
+        String n09 = KEYS[9];
+        String n10 = KEYS[10];
+        String n11 = KEYS[11];
+        String n12 = KEYS[12];
+
+        // initialising the store
+        builder.child(START).setProperty(NEXT, ImmutableList.of(n00, n01, n03, n10), Type.STRINGS);
+        builder.child(n00).setProperty(NEXT,   ImmutableList.of(n01,  "",  "",  ""), Type.STRINGS);
+        builder.child(n01).setProperty(NEXT,   ImmutableList.of(n02, n03,  "",  ""), Type.STRINGS);
+        builder.child(n02).setProperty(NEXT,   ImmutableList.of(n03,  "",  "",  ""), Type.STRINGS);
+        builder.child(n03).setProperty(NEXT,   ImmutableList.of(n04, n05, n07,  ""), Type.STRINGS);
+        builder.child(n04).setProperty(NEXT,   ImmutableList.of(n05,  "",  "",  ""), Type.STRINGS);
+        builder.child(n05).setProperty(NEXT,   ImmutableList.of(n06, n07,  "",  ""), Type.STRINGS);
+        builder.child(n06).setProperty(NEXT,   ImmutableList.of(n07,  "",  "",  ""), Type.STRINGS);
+        builder.child(n07).setProperty(NEXT,   ImmutableList.of(n08, n10, n10,  ""), Type.STRINGS);
+        builder.child(n08).setProperty(NEXT,   ImmutableList.of(n09,  "",  "",  ""), Type.STRINGS);
+        builder.child(n09).setProperty(NEXT,   ImmutableList.of(n10, n12,  "",  ""), Type.STRINGS);
+        builder.child(n10).setProperty(NEXT,   ImmutableList.of(n11,  "",  "",  ""), Type.STRINGS);
+        builder.child(n11).setProperty(NEXT,   ImmutableList.of(n12,  "",  "",  ""), Type.STRINGS);
+        builder.child(n12).setProperty(NEXT,   ImmutableList.of("" ,  "",  "",  ""), Type.STRINGS);
+
+        NodeState index = builder.getNodeState();
+
+        // testing the exception in case of wrong parameters
+        String searchFor = n12;
+        NodeState node = index.getChildNode(searchFor);
+        ChildNodeEntry entry = new OrderedChildNodeEntry(
+            searchFor, node);
+        ChildNodeEntry[] wl = new ChildNodeEntry[0];
+        ChildNodeEntry item = null;
+        ChildNodeEntry lane0, lane1, lane2, lane3;
+        
+        try {
+            item = OrderedContentMirrorStoreStrategy.seek(index,
+                new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl);
+            fail("With a wrong size for the lane it should have raised an exception");
+        } catch (IllegalArgumentException e) {
+            // so far so good. It was expected
+        }
+        
+        searchFor = n12;
+        lane0 = new OrderedChildNodeEntry(n11, index.getChildNode(n11));
+        lane1 = null;
+        lane2 = null;
+        lane3 = new OrderedChildNodeEntry(START, index.getChildNode(START));
+        
+        entry = new OrderedContentMirrorStoreStrategy.OrderedChildNodeEntry(searchFor,
+            index.getChildNode(searchFor));
+        wl = new ChildNodeEntry[OrderedIndex.LANES];
+        item = OrderedContentMirrorStoreStrategy.seek(index,
+            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl);
+        assertNotNull(wl);
+        assertEquals(OrderedIndex.LANES, wl.length);
+        assertEquals("Wrong lane", lane0, wl[0]);
+        assertEquals("Wrong item returned", entry, item);
     }
 }
