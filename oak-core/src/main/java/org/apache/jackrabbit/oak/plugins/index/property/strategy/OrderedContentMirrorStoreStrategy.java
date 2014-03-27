@@ -46,6 +46,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 
 /**
  * Same as for {@link ContentMirrorStoreStrategy} but the order of the keys is kept by using the
@@ -66,6 +67,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * convenience property for initialising an empty multi-value :next
      */
     public static final Iterable<String> EMPTY_NEXT = ImmutableList.of("", "", "", "");
+    
+    /**
+     * convenience property that represent an empty :next as array
+     */
+    public static final String[] EMPTY_NEXT_ARRAY = Iterables.toArray(EMPTY_NEXT, String.class);
 
     /**
      * the property linking to the next node
@@ -101,6 +107,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         
     @Override
     NodeBuilder fetchKeyNode(@Nonnull NodeBuilder index, @Nonnull String key) {
+        // this is where the actual adding and maintenance of index's keys happen
         NodeBuilder localkey = null;
         NodeBuilder start = index.child(START);
 
@@ -109,8 +116,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         if (Strings.isNullOrEmpty(n)) {
             // new/empty index
             localkey = index.child(key);
-            localkey.setProperty(NEXT, EMPTY_NEXT, Type.STRINGS);
-            setNext(start, key);
+            setNext(localkey, EMPTY_NEXT_ARRAY);
+            setNext(start, key, key, key, key);
         } else {
             // specific use-case where the item has to be added as first of the list
             String nextKey = n;
@@ -764,9 +771,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @param node the node to modify
      * @param next the 'next' value
      */
-    static void setNext(@Nonnull final NodeBuilder node, final String next) {
+    static void setNext(@Nonnull final NodeBuilder node, final String... next) {
         if (node != null && next != null) {
-            node.setProperty(NEXT, ImmutableList.of(next, "", "", ""), Type.STRINGS);
+            String n1 = (next.length > 0) ? next[0] : "";
+            String n2 = (next.length > 1) ? next[1] : "";
+            String n3 = (next.length > 2) ? next[2] : "";
+            String n4 = (next.length > 3) ? next[3] : "";
+            
+            node.setProperty(NEXT, ImmutableList.of(n1, n2, n3, n4), Type.STRINGS);
         }
     }
 

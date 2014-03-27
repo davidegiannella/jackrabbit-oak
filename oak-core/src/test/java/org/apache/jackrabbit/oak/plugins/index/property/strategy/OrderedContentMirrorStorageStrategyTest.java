@@ -1641,7 +1641,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertEquals(ImmutableList.of("foobar", "", "", ""), 
             n.getProperty(NEXT).getValue(Type.STRINGS));
         
-        OrderedContentMirrorStoreStrategy.setNext(n, null);
+        OrderedContentMirrorStoreStrategy.setNext(n, (String[]) null);
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals("If I set a value to null, nothing should change",
@@ -1651,6 +1651,35 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals(ImmutableList.of("", "", "", ""), 
+            n.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        n = EmptyNodeState.EMPTY_NODE.builder();
+        OrderedContentMirrorStoreStrategy.setNext(n, "a", "b");
+        assertNotNull(n);
+        assertNotNull(":next cannot be null", n.getProperty(NEXT));
+        assertEquals(ImmutableList.of("a", "b", "", ""), 
+            n.getProperty(NEXT).getValue(Type.STRINGS));
+
+        n = EmptyNodeState.EMPTY_NODE.builder();
+        OrderedContentMirrorStoreStrategy.setNext(n, "a", "b", "c");
+        assertNotNull(n);
+        assertNotNull(":next cannot be null", n.getProperty(NEXT));
+        assertEquals(ImmutableList.of("a", "b", "c", ""), 
+            n.getProperty(NEXT).getValue(Type.STRINGS));
+
+        n = EmptyNodeState.EMPTY_NODE.builder();
+        OrderedContentMirrorStoreStrategy.setNext(n, "a", "b", "c", "d");
+        assertNotNull(n);
+        assertNotNull(":next cannot be null", n.getProperty(NEXT));
+        assertEquals(ImmutableList.of("a", "b", "c", "d"), 
+            n.getProperty(NEXT).getValue(Type.STRINGS));
+
+        n = EmptyNodeState.EMPTY_NODE.builder();
+        OrderedContentMirrorStoreStrategy.setNext(n, "a", "b", "c", "d", "e", "f");
+        assertNotNull(n);
+        assertNotNull(":next cannot be null", n.getProperty(NEXT));
+        assertEquals("even if we provide more than 4 nexts we expect it to take only the first 4s", 
+            ImmutableList.of("a", "b", "c", "d"), 
             n.getProperty(NEXT).getValue(Type.STRINGS));
     }
     
@@ -1696,27 +1725,60 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertEquals(1, store.getLane(generator));
 
         generator = createNiceMock(Random.class);
-        expect(generator.nextDouble()).andReturn(0.02).once();
-        expect(generator.nextDouble()).andReturn(0.02).once();
+        expect(generator.nextDouble()).andReturn(0.02).times(2);
         expect(generator.nextDouble()).andReturn(0.73).once();
         replay(generator);
         assertEquals(2, store.getLane(generator));
 
         generator = createNiceMock(Random.class);
-        expect(generator.nextDouble()).andReturn(0.02).once();
-        expect(generator.nextDouble()).andReturn(0.02).once();
-        expect(generator.nextDouble()).andReturn(0.02).once();
+        expect(generator.nextDouble()).andReturn(0.02).times(3);
         expect(generator.nextDouble()).andReturn(0.73).once();
         replay(generator);
         assertEquals(3, store.getLane(generator));
 
         generator = createNiceMock(Random.class);
-        for (int i = 0; i <= OrderedIndex.LANES + 1; i++) {
-            expect(generator.nextDouble()).andReturn(0.02).once();
-        }
+        expect(generator.nextDouble()).andReturn(0.02).times(OrderedIndex.LANES);
         expect(generator.nextDouble()).andReturn(0.73).once();
         replay(generator);
         assertEquals("we should never go beyond 4 lanes", OrderedIndex.LANES - 1,
             store.getLane(generator));
     }
+    
+    /**
+     * Test the insert of 1 item into an empty index. Start should always point with all the lanes
+     * to the first element
+     * 
+     * <code>
+     *      Stage 1
+     *      =======
+     *      
+     *      :index : {
+     *          :start : { :next : ["","","",""] }
+     *      }
+     *  
+     *      Stage 2
+     *      =======
+     *      
+     *      :index : {
+     *          :start : { :next = [ n0, n0, n0, n0 ] },
+     *          n0     : { :next : ["","","",""] }
+     *      }
+     *  </code>
+     */
+    @Test
+    public void insertWithLanes1Item() {
+        OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
+        NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
+        String n0 = KEYS[0];
+        
+        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
+        
+        NodeState iState = index.getNodeState();
+        NodeState n = iState.getChildNode(START);
+        assertNotNull("There should always be a :start", n);
+        assertEquals(":start's :next should always point to the first element", 
+            ImmutableList.of(n0, n0, n0, n0),
+            n.getProperty(NEXT).getValue(Type.STRINGS)
+        );
+    }    
 }
