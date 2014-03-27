@@ -68,6 +68,31 @@ public class OrderedContentMirrorStorageStrategyTest {
     private static final String[] KEYS = new String[] { "donald", "goofy", "mickey", "minnie" };
     private static final Set<String> EMPTY_KEY_SET = newHashSet();
     private static final NumberFormat NF = new DecimalFormat("00000");
+    
+    /**
+     * convenience class for mockick some behaviours while testing
+     */
+    private static class MockOrderedContentMirrorStoreStrategy extends
+        OrderedContentMirrorStoreStrategy {
+        /**
+         * tells the code to use the Original class method implementation
+         */
+        public static final int SUPER_LANE = -1;
+        private int lane = SUPER_LANE;
+
+        @Override
+        public int getLane() {
+            if (lane == SUPER_LANE) {
+                return super.getLane();
+            } else {
+                return lane;
+            }
+        }
+        
+        public void setLane(int lane) {
+            this.lane = lane; 
+        }
+    }
 
     /**
      * checks that the fist item/key is inserted with an empty property 'next'
@@ -1687,23 +1712,23 @@ public class OrderedContentMirrorStorageStrategyTest {
     public void getNext() {
         NodeBuilder node = EmptyNodeState.EMPTY_NODE.builder();
         assertEquals("If the property is not there an empty string is expected", "",
-            OrderedContentMirrorStoreStrategy.getNext(node.getNodeState()));
+            OrderedContentMirrorStoreStrategy.getPropertyNext(node.getNodeState()));
         
         node.setProperty(NEXT, ImmutableList.of("bar", "", "", ""), Type.STRINGS);
-        assertEquals("bar", OrderedContentMirrorStoreStrategy.getNext(node.getNodeState()));
+        assertEquals("bar", OrderedContentMirrorStoreStrategy.getPropertyNext(node.getNodeState()));
 
         node.setProperty(NEXT, ImmutableList.of("", "", "", ""), Type.STRINGS);
-        assertEquals("", OrderedContentMirrorStoreStrategy.getNext(node.getNodeState()));
+        assertEquals("", OrderedContentMirrorStoreStrategy.getPropertyNext(node.getNodeState()));
         
         node = EmptyNodeState.EMPTY_NODE.builder();
         assertEquals("If the property is not there an empty string is expected", "",
-            OrderedContentMirrorStoreStrategy.getNext(node));
+            OrderedContentMirrorStoreStrategy.getPropertyNext(node));
         
         node.setProperty(NEXT, ImmutableList.of("bar", "", "", ""), Type.STRINGS);
-        assertEquals("bar", OrderedContentMirrorStoreStrategy.getNext(node));
+        assertEquals("bar", OrderedContentMirrorStoreStrategy.getPropertyNext(node));
 
         node.setProperty(NEXT, ImmutableList.of("", "", "", ""), Type.STRINGS);
-        assertEquals("", OrderedContentMirrorStoreStrategy.getNext(node));
+        assertEquals("", OrderedContentMirrorStoreStrategy.getPropertyNext(node));
     }
     
     @Test
@@ -1748,37 +1773,182 @@ public class OrderedContentMirrorStorageStrategyTest {
      * Test the insert of 1 item into an empty index. Start should always point with all the lanes
      * to the first element
      * 
-     * <code>
-     *      Stage 1
-     *      =======
-     *      
-     *      :index : {
-     *          :start : { :next : ["","","",""] }
-     *      }
-     *  
-     *      Stage 2
-     *      =======
-     *      
-     *      :index : {
-     *          :start : { :next = [ n0, n0, n0, n0 ] },
-     *          n0     : { :next : ["","","",""] }
-     *      }
-     *  </code>
      */
     @Test
     public void insertWithLanes1Item() {
-        OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
+        MockOrderedContentMirrorStoreStrategy store = new MockOrderedContentMirrorStoreStrategy();
         NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
         String n0 = KEYS[0];
         
+       
+        /*
+         * with lane==0
+         * 
+         *  :index : {
+         *      :start : { :next = [n0, , , ] },
+         *      n0 : { :next = [ , , , ] }
+         *  }
+         */
+        store.setLane(0);
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
         
-        NodeState iState = index.getNodeState();
-        NodeState n = iState.getChildNode(START);
+        NodeBuilder n = index.getChildNode(START);
+        assertNotNull("There should always be a :start", n);
+        assertEquals(":start's :next should always point to the first element", 
+            ImmutableList.of(n0, "", "", ""),
+            n.getProperty(NEXT).getValue(Type.STRINGS)
+        );
+        n = index.getChildNode(n0);
+        assertNotNull(n);
+        assertEquals(OrderedContentMirrorStoreStrategy.EMPTY_NEXT,
+            n.getProperty(NEXT).getValue(Type.STRINGS)
+        );
+        
+        /*
+         * with lane==1
+         * 
+         *  :index : {
+         *      :start : { :next = [n0, n0, , ] },
+         *      n0 : { :next = [ , , , ] }
+         *  }
+         */
+        index = EmptyNodeState.EMPTY_NODE.builder();
+        store.setLane(1);
+        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
+        
+        n = index.getChildNode(START);
+        assertNotNull("There should always be a :start", n);
+        assertEquals(":start's :next should always point to the first element", 
+            ImmutableList.of(n0, n0, "", ""),
+            n.getProperty(NEXT).getValue(Type.STRINGS)
+        );
+        n = index.getChildNode(n0);
+        assertNotNull(n);
+        assertEquals(OrderedContentMirrorStoreStrategy.EMPTY_NEXT,
+            n.getProperty(NEXT).getValue(Type.STRINGS)
+        );
+
+        /*
+         * with lane==2
+         * 
+         *  :index : {
+         *      :start : { :next = [n0, n0, n0, ] },
+         *      n0 : { :next = [ , , , ] }
+         *  }
+         */
+        index = EmptyNodeState.EMPTY_NODE.builder();
+        store.setLane(2);
+        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
+        
+        n = index.getChildNode(START);
+        assertNotNull("There should always be a :start", n);
+        assertEquals(":start's :next should always point to the first element", 
+            ImmutableList.of(n0, n0, n0, ""),
+            n.getProperty(NEXT).getValue(Type.STRINGS)
+        );
+        n = index.getChildNode(n0);
+        assertNotNull(n);
+        assertEquals(OrderedContentMirrorStoreStrategy.EMPTY_NEXT,
+            n.getProperty(NEXT).getValue(Type.STRINGS)
+        );
+        
+        /*
+         * with lane==3
+         * 
+         *  :index : {
+         *      :start : { :next = [n0, n0, n0, n0 ] },
+         *      n0 : { :next = [ , , , ] }
+         *  }
+         */
+        index = EmptyNodeState.EMPTY_NODE.builder();
+        store.setLane(3);
+        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
+        
+        n = index.getChildNode(START);
         assertNotNull("There should always be a :start", n);
         assertEquals(":start's :next should always point to the first element", 
             ImmutableList.of(n0, n0, n0, n0),
             n.getProperty(NEXT).getValue(Type.STRINGS)
         );
-    }    
+        n = index.getChildNode(n0);
+        assertNotNull(n);
+        assertEquals(OrderedContentMirrorStoreStrategy.EMPTY_NEXT,
+            n.getProperty(NEXT).getValue(Type.STRINGS)
+        );
+    }
+    
+
+    /**
+     * tests the insert of an item that has to be appended 
+     */
+    @Test
+    public void laneInsert2ItemsAlreadyOrdere() {
+        MockOrderedContentMirrorStoreStrategy store = new MockOrderedContentMirrorStoreStrategy();
+        NodeBuilder index = null;
+        NodeBuilder n = null;
+        String n0 = KEYS[0];
+        String n1 = KEYS[1];
+        
+        // this one should be covered by insertWithLanes1Item(). Not testing
+        
+        /* 
+         * if lane is 0 we're expecting the following
+         * 
+         *  :index : {
+         *      :start  : { :next : [n0, , , ] },
+         *      n0      : { :next : [n1, , , ] }
+         *      n1      : { :next : [ , , , ] }
+         *  }
+         */
+        index = EmptyNodeState.EMPTY_NODE.builder();
+        store.setLane(0);
+        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
+        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n1));
+        n = index.getChildNode(START); 
+        assertNotNull(n);
+        assertNotNull(n.getProperty(NEXT));
+        assertEquals(ImmutableList.of(n0, "", "", ""), n.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        n = index.getChildNode(n0); 
+        assertNotNull(n);
+        assertNotNull(n.getProperty(NEXT));
+        assertEquals(ImmutableList.of(n1, "", "", ""), n.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        n = index.getChildNode(n1); 
+        assertNotNull(n);
+        assertNotNull(n.getProperty(NEXT));
+        assertEquals(OrderedContentMirrorStoreStrategy.EMPTY_NEXT,
+            n.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /* 
+         * if lane == 1 on n1 insert
+         * 
+         *  :index : {
+         *      :start  : { :next : [n0, n1, , ] },
+         *      n0      : { :next : [n1, , , ] }
+         *      n1      : { :next : [ , , , ] }
+         *  }
+         */
+        index = EmptyNodeState.EMPTY_NODE.builder();
+        store.setLane(0);
+        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
+        store.setLane(1);
+        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n1));
+        n = index.getChildNode(START); 
+        assertNotNull(n);
+        assertNotNull(n.getProperty(NEXT));
+        assertEquals(ImmutableList.of(n0, n1, "", ""), n.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        n = index.getChildNode(n0); 
+        assertNotNull(n);
+        assertNotNull(n.getProperty(NEXT));
+        assertEquals(ImmutableList.of(n1, "", "", ""), n.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        n = index.getChildNode(n1); 
+        assertNotNull(n);
+        assertNotNull(n.getProperty(NEXT));
+        assertEquals(OrderedContentMirrorStoreStrategy.EMPTY_NEXT,
+            n.getProperty(NEXT).getValue(Type.STRINGS));
+
+    }
 }

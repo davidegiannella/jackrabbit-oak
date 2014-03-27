@@ -20,9 +20,11 @@ package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Random;
 
@@ -112,19 +114,23 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         NodeBuilder start = index.child(START);
 
         // identifying the right place for insert
-        String n = getNext(start);
+        String n = getPropertyNext(start);
         if (Strings.isNullOrEmpty(n)) {
             // new/empty index
             localkey = index.child(key);
             setNext(localkey, EMPTY_NEXT_ARRAY);
-            setNext(start, key, key, key, key);
+            List<String> nexts = new ArrayList<String>();
+            for (int i = 0; i <= getLane(); i++) {
+                nexts.add(key);
+            }
+            setNext(start, Iterables.toArray(nexts, String.class));
         } else {
             // specific use-case where the item has to be added as first of the list
             String nextKey = n;
             Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(index.getNodeState(),
                                                                               true);
             for (ChildNodeEntry child : children) {
-                nextKey = getNext(child);
+                nextKey = getPropertyNext(child);
                 if (Strings.isNullOrEmpty(nextKey)) {
                     // we're at the last element, therefore our 'key' has to be appended
                     setNext(index.getChildNode(child.getName()), key);
@@ -172,7 +178,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                             index.getNodeState(), node.getNodeState());
                     LOG.debug("previous: {}", previous);
                     // (2) find the next element
-                    String next = getNext(node); 
+                    String next = getPropertyNext(node); 
                     if (next == null) {
                         next = "";
                     }
@@ -247,7 +253,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         Iterable<? extends ChildNodeEntry> cne = null;
         final NodeState start = index.getChildNode(START);
 
-        String startNext = getNext(start); 
+        String startNext = getPropertyNext(start); 
         if ((!start.exists() || Strings.isNullOrEmpty(startNext)) && !includeStart) {
             // if the property is not there or is empty it means we're empty
             cne = Collections.emptyList();
@@ -492,7 +498,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         @Override
         public boolean hasNext() {
             return (includeStart && start.equals(current))
-                   || (!includeStart && !Strings.isNullOrEmpty(getNext(current)));
+                   || (!includeStart && !Strings.isNullOrEmpty(getPropertyNext(current)));
         }
 
         @Override
@@ -504,7 +510,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 includeStart = false;
             } else {
                 if (hasNext()) {
-                    currentName = getNext(current);
+                    currentName = getPropertyNext(current);
                     current = index.getChildNode(currentName);
                     entry = new OrderedChildNodeEntry(currentName, current);
                 } else {
@@ -611,20 +617,49 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             return new SeekedIterator(index, start, first);
         }
     }
-    
+
     /**
-     * seek for an element in the index given the provided Predicate
-     * 
-     * @param index the index content node {@code :index}
-     * @param condition the predicate to evaluate
-     * @return the entry or null if not found
+     * see {@link #seek(NodeState, Predicate<ChildNodeEntry>, ChildNodeEntry[])} passing null as
+     * last argument
      */
     static ChildNodeEntry seek(@Nonnull NodeState index,
                                       @Nonnull Predicate<ChildNodeEntry> condition) {
-        
+        return seek(index, condition, null);
+    }
+    
+    /**
+     * seek for an element in the index given the provided Predicate. If {@code walkedLanes} won't
+     * be null it will have on the way out the last elements of each lane walked through during the
+     * seek.
+     * 
+     * @param index the index content node {@code :index}
+     * @param condition the predicate to evaluate
+     * @param walkedLanes if not null will contain the last element of the walked lanes with each
+     *            lane represented by the corresponding position in the array. <b>Beware</b> that
+     *            whatever is passed into won't be considered and overwritten.
+     * @return the entry or null if not found
+     */
+    static ChildNodeEntry seek(@Nonnull NodeState index,
+                               @Nonnull Predicate<ChildNodeEntry> condition,
+                               @Nullable ChildNodeEntry[] walkedLanes) {
+//        boolean keepWalked = false;
+//        NodeState start = index.getChildNode(START);
+//        ChildNodeEntry current = null;
+//        
+//        if (walkedLanes != null) {
+//            // re-initialising to be sure about the state
+//            walkedLanes = new ChildNodeEntry[4];
+//            keepWalked = true;
+//            current = new OrderedChildNodeEntry(START, start);
+//            //when we start iteration we always start with :start
+//            walkedLanes[0] = walkedLanes[1] = walkedLanes[2] = walkedLanes[3] = current; 
+//        }
+//
+//        return null;
         // TODO the FullIterable will have to be replaced with something else once we'll have the
         // Skip part of the list implemented.
         Iterable<ChildNodeEntry> children = new FullIterable(index, false);
+                
         ChildNodeEntry entry = null;
         for (ChildNodeEntry child : children) {
             if (condition.apply(child)) {
@@ -788,7 +823,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @param nodeState the node state to inspect
      * @return the next value
      */
-    static String getNext(@Nonnull final NodeState nodeState) {
+    static String getPropertyNext(@Nonnull final NodeState nodeState) {
         String next = "";
         PropertyState ps = nodeState.getProperty(NEXT);
         if (ps != null) {
@@ -800,15 +835,15 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     /**
      * short-cut for using NodeBuilder. See {@code getNext(NodeState)}
      */
-    static String getNext(@Nonnull final NodeBuilder node) {
-        return getNext(node.getNodeState());
+    static String getPropertyNext(@Nonnull final NodeBuilder node) {
+        return getPropertyNext(node.getNodeState());
     }
     
     /**
      * short-cut for using ChildNodeEntry. See {@code getNext(NodeState)}
      */
-    static String getNext(@Nonnull final ChildNodeEntry child) {
-        return getNext(child.getNodeState());
+    static String getPropertyNext(@Nonnull final ChildNodeEntry child) {
+        return getPropertyNext(child.getNodeState());
     }
     
     /**
