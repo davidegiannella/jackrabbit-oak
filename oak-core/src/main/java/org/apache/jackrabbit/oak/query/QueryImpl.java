@@ -129,13 +129,16 @@ public class QueryImpl implements Query {
     
     private double estimatedCost;
 
+    private final QueryEngineSettings settings;
+
     QueryImpl(String statement, SourceImpl source, ConstraintImpl constraint,
-            ColumnImpl[] columns, NamePathMapper mapper) {
+            ColumnImpl[] columns, NamePathMapper mapper, QueryEngineSettings settings) {
         this.statement = statement;
         this.source = source;
         this.constraint = constraint;
         this.columns = columns;
         this.namePathMapper = mapper;
+        this.settings = settings;
     }
 
     @Override
@@ -446,7 +449,7 @@ public class QueryImpl implements Query {
             orderBy = ResultRowImpl.getComparator(orderings);
         }
         Iterator<ResultRowImpl> it = 
-                FilterIterators.newCombinedFilter(rowIt, distinct, limit, offset, orderBy);
+                FilterIterators.newCombinedFilter(rowIt, distinct, limit, offset, orderBy, settings);
         if (measure) {
             // run the query
             while (it.hasNext()) {
@@ -792,6 +795,9 @@ public class QueryImpl implements Query {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("cost for " + index.getIndexName() + " is " + cost);
             }
+            if (cost < 0) {
+                LOG.error("cost below 0 for " + index.getIndexName() + " is " + cost);
+            }
             if (cost < bestCost) {
                 bestCost = cost;
                 bestIndex = index;
@@ -885,6 +891,10 @@ public class QueryImpl implements Query {
 
     public String getStatement() {
         return statement;
+    }
+
+    public QueryEngineSettings getSettings() {
+        return settings;
     }
 
 }

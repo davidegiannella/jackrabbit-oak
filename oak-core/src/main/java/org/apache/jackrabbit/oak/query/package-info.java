@@ -16,7 +16,7 @@
  */
 @Version("0.16")
 @Export(optional = "provide:=true")
-package org.apache.jackrabbit.oak.namepath;
+package org.apache.jackrabbit.oak.query;
 
 import aQute.bnd.annotation.Version;
 import aQute.bnd.annotation.Export;

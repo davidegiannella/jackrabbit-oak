@@ -55,14 +55,19 @@ public class Utils {
      * possibly be too large to be used for the primary key for the document
      * store.
      */
-    private static final int PATH_SHORT = Integer.getInteger("oak.pathShort", 330);
+    private static final int PATH_SHORT = Integer.getInteger("oak.pathShort", 165);
 
     /**
      * The maximum length of the parent path, in bytes. If the parent path is
      * longer, then the id of a document is no longer the path, but the hash of
      * the parent, and then the node name.
      */
-    private static final int PATH_LONG = Integer.getInteger("oak.pathLong", 700);
+    private static final int PATH_LONG = Integer.getInteger("oak.pathLong", 350);
+
+    /**
+     * The maximum size a node name, in bytes. This is only a problem for long path.
+     */
+    private static final int NODE_NAME_LIMIT = Integer.getInteger("oak.nodeNameLimit", 150);
 
     private static final Charset UTF_8 = Charset.forName("UTF-8");
 
@@ -258,6 +263,10 @@ public class Utils {
         if (parent.length < PATH_LONG) {
             return false;
         }
+        String name = PathUtils.getName(path);
+        if (name.getBytes(UTF_8).length > NODE_NAME_LIMIT) {
+            throw new IllegalArgumentException("Node name is too long: " + path);
+        }
         return true;
     }
     
@@ -274,21 +283,21 @@ public class Utils {
         return id.substring(index + 1);
     }
 
-    public static String getPreviousIdFor(String id, Revision r) {
-        StringBuilder sb = new StringBuilder(id.length() + REVISION_LENGTH + 3);
-        int index = id.indexOf(':');
-        int depth = 0;
-        for (int i = 0; i < index; i++) {
-            depth *= 10;
-            depth += Character.digit(id.charAt(i), 10);
+    public static String getPreviousPathFor(String path, Revision r, int height) {
+        if (!PathUtils.isAbsolute(path)) {
+            throw new IllegalArgumentException("path must be absolute: " + path);
         }
-        sb.append(depth + 1).append(":p");
-        sb.append(id, index + 1, id.length());
+        StringBuilder sb = new StringBuilder(path.length() + REVISION_LENGTH + 3);
+        sb.append("p").append(path);
         if (sb.charAt(sb.length() - 1) != '/') {
             sb.append('/');
         }
-        r.toStringBuilder(sb);
+        r.toStringBuilder(sb).append("/").append(height);
         return sb.toString();
+    }
+
+    public static String getPreviousIdFor(String path, Revision r, int height) {
+        return getIdFromPath(getPreviousPathFor(path, r, height));
     }
 
     /**

@@ -53,14 +53,17 @@ import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.ContentSession;
 import org.apache.jackrabbit.oak.api.Root;
 import org.apache.jackrabbit.oak.api.jmx.IndexStatsMBean;
+import org.apache.jackrabbit.oak.api.jmx.QueryEngineSettingsMBean;
 import org.apache.jackrabbit.oak.api.jmx.RepositoryManagementMBean;
 import org.apache.jackrabbit.oak.core.ContentRepositoryImpl;
+import org.apache.jackrabbit.oak.management.RepositoryManager;
 import org.apache.jackrabbit.oak.plugins.commit.ConflictHook;
 import org.apache.jackrabbit.oak.plugins.index.AsyncIndexUpdate;
 import org.apache.jackrabbit.oak.plugins.index.CompositeIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
+import org.apache.jackrabbit.oak.query.QueryEngineSettings;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
@@ -86,6 +89,7 @@ import org.apache.jackrabbit.oak.spi.whiteboard.DefaultWhiteboard;
 import org.apache.jackrabbit.oak.spi.whiteboard.Registration;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardAware;
+import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,8 +110,10 @@ public class Oak {
     public static final String DEFAULT_WORKSPACE_NAME = "default";
 
     private final NodeStore store;
-
+    
     private final List<RepositoryInitializer> initializers = newArrayList();
+
+    private QueryEngineSettings queryEngineSettings = new QueryEngineSettings();
 
     private final List<QueryIndexProvider> queryIndexProviders = newArrayList();
 
@@ -306,6 +312,12 @@ public class Oak {
         return this;
     }
 
+    @Nonnull
+    public Oak with(@Nonnull QueryEngineSettings queryEngineSettings) {
+        this.queryEngineSettings = queryEngineSettings;
+        return this;
+    }
+
     /**
      * Associates the given query index provider with the repository to
      * be created.
@@ -446,7 +458,10 @@ public class Oak {
         if (securityProvider instanceof WhiteboardAware) {
             ((WhiteboardAware) securityProvider).setWhiteboard(whiteboard);
         }
-
+        QueryEngineSettings queryEngineSettings = WhiteboardUtils.getService(whiteboard, QueryEngineSettings.class);
+        if (queryEngineSettings != null) {
+            this.queryEngineSettings = queryEngineSettings;
+        }
         return this;
     }
 
@@ -494,6 +509,9 @@ public class Oak {
             registerMBean(whiteboard, IndexStatsMBean.class,
                     task.getIndexStats(), IndexStatsMBean.TYPE, name);
         }
+        
+        registerMBean(whiteboard, QueryEngineSettingsMBean.class,
+                queryEngineSettings, QueryEngineSettingsMBean.TYPE, "settings");
 
         // FIXME: OAK-810 move to proper workspace initialization
         // initialize default workspace
@@ -506,7 +524,7 @@ public class Oak {
                             }
                         });
         OakInitializer.initialize(workspaceInitializers, store,
-                defaultWorkspaceName, indexEditors, indexProvider,
+                defaultWorkspaceName, indexEditors, queryEngineSettings, indexProvider,
                 CompositeHook.compose(initHooks));
 
         // add index hooks later to prevent the OakInitializer to do excessive indexing
@@ -526,6 +544,7 @@ public class Oak {
                 store,
                 CompositeHook.compose(commitHooks),
                 defaultWorkspaceName,
+                queryEngineSettings,
                 indexProvider,
                 securityProvider);
     }
