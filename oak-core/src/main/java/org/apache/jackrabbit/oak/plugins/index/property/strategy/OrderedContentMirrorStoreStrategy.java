@@ -649,6 +649,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         Predicate<ChildNodeEntry> walkingPredicate = direction.isAscending() 
                                                              ? new PredicateLessThan(searchfor, true)
                                                              : new PredicateGreaterThan(searchfor, true);
+        // we always begin with :start
+        ChildNodeEntry current = new OrderedChildNodeEntry(START, index.getChildNode(START));
         ChildNodeEntry found = null;
         
         if (walkedLanes != null) {
@@ -659,15 +661,13 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             }
             // ensuring the right data
             for (int i = 0; i < walkedLanes.length; i++) {
-                walkedLanes[i] = null;
+                walkedLanes[i] = current;
             }
             keepWalked = true;
         }
 
         int lane = OrderedIndex.LANES - 1;
         boolean stillLaning;
-        // we always begin with :start
-        ChildNodeEntry current = new OrderedChildNodeEntry(START, index.getChildNode(START));
         String nextkey = null; 
         ChildNodeEntry next = null;
         
@@ -687,7 +687,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 } else {
                     current = next;
                     if (keepWalked) {
-                        walkedLanes[lane] = current;
+                        for (int l = lane; l >= 0; l--) {
+                            walkedLanes[l] = current;
+                        }
                     }
                 }
             }
