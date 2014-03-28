@@ -91,6 +91,14 @@ public interface OrderedIndex {
         public static boolean isDescending(NodeState indexMeta) {
             return DESC.equals(fromIndexMeta(indexMeta));
         }
+        
+        public boolean isAscending() {
+            return ASC.equals(this);
+        }
+        
+        public boolean isDescending() {
+            return DESC.equals(this);
+        }
 
         /**
          * convenience method that tells if the provided index definition is ascending

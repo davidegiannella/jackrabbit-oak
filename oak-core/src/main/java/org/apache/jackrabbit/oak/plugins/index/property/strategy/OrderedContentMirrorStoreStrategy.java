@@ -20,8 +20,6 @@ package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 
-import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.Predicate;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
@@ -37,6 +35,7 @@ import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.Predicate;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
@@ -623,7 +622,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * see {@link #seek(NodeState, Predicate<ChildNodeEntry>, ChildNodeEntry[])} passing null as
      * last argument
      */
-    static ChildNodeEntry seek(@Nonnull NodeState index,
+    ChildNodeEntry seek(@Nonnull NodeState index,
                                       @Nonnull Predicate<ChildNodeEntry> condition) {
         return seek(index, condition, null);
     }
@@ -641,24 +640,57 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      *            {@link IllegalArgumentException} will be raised
      * @return the entry or null if not found
      */
-    static ChildNodeEntry seek(@Nonnull final NodeState index,
+    ChildNodeEntry seek(@Nonnull final NodeState index,
                                @Nonnull final Predicate<ChildNodeEntry> condition,
                                @Nullable final ChildNodeEntry[] walkedLanes) {
 //        boolean keepWalked = false;
-//        NodeState current = index.getChildNode(START);
-//        Predicate walkingPredicate = null;
+//        String searchfor = condition.getSearchFor();
+//        LOG.debug("Searching for: {}", condition.getSearchFor());        
+//        Predicate<ChildNodeEntry> walkingPredicate = direction.isAscending() 
+//                                                             ? new PredicateLessThan(searchfor)
+//                                                             : new PredicateGreaterThan(searchfor);
+//        
+//        
 //        if (walkedLanes != null) {
 //            if (walkedLanes.length != OrderedIndex.LANES) {
 //                throw new IllegalArgumentException(String.format(
 //                    "Wrong size for keeping track of the Walked Lanes. Expected %d but was %d",
 //                    OrderedIndex.LANES, walkedLanes.length));
 //            }
+//            // ensuring the right data
+//            for (int i = 0; i < walkedLanes.length; i++) {
+//                walkedLanes[i] = null;
+//            }
 //            keepWalked = true;
 //        }
 //
-//        String next = getPropertyNext(current, 3);
+//        // we always begin with :start
+//        int lane = OrderedIndex.LANES - 1;
+//        ChildNodeEntry current = new OrderedChildNodeEntry(START, index.getChildNode(START));
+//        String nextkey = getPropertyNext(current, lane);
+//        ChildNodeEntry next = (Strings.isNullOrEmpty(nextkey)) 
+//            ? null 
+//            : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
+//        
+//        while (walkingPredicate.apply(next)) {
+//            if (keepWalked) {
+//                walkedLanes[lane] = current;
+//            }
+//            current = next;
+//            nextkey = getPropertyNext(current, lane);
+//            ChildNodeEntry temp = (Strings.isNullOrEmpty(nextkey)) 
+//                ? null 
+//                : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
+//            while (lane > 0 && (Strings.isNullOrEmpty(nextkey) || !walkingPredicate.apply(temp))) {
+//                // Not really the one above but almost. It's not current but it's the possible next
+//                // we have to inspect with the predicate
+//                // in case is empty or doens't walk we have lower the lane up the lowest one in case
+//                // needed
+//                lane--;
+//            }
+//        }
+//        
 //        //TODO we'll have to consider the descending use-case as well
-//        if ( condition.)
 //        return null;
         // TODO the FullIterable will have to be replaced with something else once we'll have the
         // Skip part of the list implemented.
@@ -879,7 +911,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     static String getPropertyNext(@Nonnull final ChildNodeEntry child) {
         return getPropertyNext(child.getNodeState());
     }
-    
+
+    static String getPropertyNext(@Nonnull final ChildNodeEntry child, int lane) {
+        return getPropertyNext(child.getNodeState(), lane);
+    }
+
     /**
      * retrieve the lane to be updated based on probabilistic approach.
      * 
