@@ -18,6 +18,7 @@ package org.apache.jackrabbit.oak.plugins.document;
 
 import javax.sql.DataSource;
 
+import com.mongodb.BasicDBObject;
 import org.apache.jackrabbit.oak.plugins.document.memory.MemoryDocumentStore;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
 import org.apache.jackrabbit.oak.plugins.document.rdb.RDBDataSourceFactory;
@@ -40,13 +41,15 @@ public abstract class DocumentStoreFixture {
 
     public abstract String getName();
 
-    public abstract DocumentStore getDocumentStore();
+    public abstract DocumentStore createDocumentStore();
 
     public boolean isAvailable() {
         return true;
     }
 
-    private static class MemoryFixture extends DocumentStoreFixture {
+    public void dispose() throws Exception {}
+
+    public static class MemoryFixture extends DocumentStoreFixture {
 
         DocumentStore ds = new MemoryDocumentStore();
 
@@ -56,12 +59,12 @@ public abstract class DocumentStoreFixture {
         }
 
         @Override
-        public DocumentStore getDocumentStore() {
+        public DocumentStore createDocumentStore() {
             return ds;
         }
     }
 
-    private static class RDBFixture extends DocumentStoreFixture {
+    public static class RDBFixture extends DocumentStoreFixture {
 
         DocumentStore ds;
         String name;
@@ -82,7 +85,7 @@ public abstract class DocumentStoreFixture {
         }
 
         @Override
-        public DocumentStore getDocumentStore() {
+        public DocumentStore createDocumentStore() {
             return ds;
         }
 
@@ -92,18 +95,16 @@ public abstract class DocumentStoreFixture {
         }
     }
 
-    private static class MongoFixture extends DocumentStoreFixture {
+    public static class MongoFixture extends DocumentStoreFixture {
+        public static final String DEFAULT_URI = "mongodb://localhost:27017/oak-test";
+        private String uri;
 
-        DocumentStore ds;
+        public MongoFixture(){
+            this(DEFAULT_URI);
+        }
 
-        public MongoFixture(String db) {
-            try {
-                MongoConnection connection = new MongoConnection(db);
-                DB mongoDB = connection.getDB();
-                this.ds = new MongoDocumentStore(mongoDB, new DocumentMK.Builder());
-            } catch (Exception e) {
-                LOG.info("Mongo instance not available at " + db + ", skipping tests...");
-            }
+        public MongoFixture(String dbUri) {
+            this.uri = dbUri;
         }
 
         @Override
@@ -112,13 +113,26 @@ public abstract class DocumentStoreFixture {
         }
 
         @Override
-        public DocumentStore getDocumentStore() {
-            return ds;
+        public DocumentStore createDocumentStore() {
+            try {
+                MongoConnection connection = new MongoConnection(uri);
+                DB db = connection.getDB();
+                MongoUtils.dropCollections(db);
+                return new MongoDocumentStore(db, new DocumentMK.Builder());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
 
         @Override
         public boolean isAvailable() {
-            return this.ds != null;
+            try{
+                MongoConnection connection = new MongoConnection(uri);
+                connection.getDB().command(new BasicDBObject("ping", 1));
+                return true;
+            }catch(Exception e){
+                return false;
+            }
         }
     }
 }

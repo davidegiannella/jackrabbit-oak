@@ -167,6 +167,14 @@ public class RDBDocumentStore implements CachingDocumentStore {
     }
 
     @Override
+    public <T extends Document> void remove(Collection<T> collection, List<String> keys) {
+        //TODO Use batch delete
+        for(String key : keys){
+            remove(collection, key);
+        }
+    }
+
+    @Override
     public <T extends Document> boolean create(Collection<T> collection, List<UpdateOp> updateOps) {
         return internalCreate(collection, updateOps);
     }
@@ -592,6 +600,16 @@ public class RDBDocumentStore implements CachingDocumentStore {
                 return getData(rs, 1, 2);
             } else {
                 return null;
+            }
+        } catch (SQLException ex) {
+            LOG.error("attempting to read " + id + " (id length is " + id.length() + ")", ex);
+            // DB2 throws an SQLException for invalid keys; handle this more
+            // gracefully
+            if ("22001".equals(ex.getSQLState())) {
+                connection.rollback();
+                return null;
+            } else {
+                throw (ex);
             }
         } finally {
             stmt.close();

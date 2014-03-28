@@ -36,6 +36,7 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Splitter;
 
+import com.google.common.collect.Lists;
 import org.apache.jackrabbit.mk.api.MicroKernelException;
 import org.apache.jackrabbit.oak.cache.CacheStats;
 import org.apache.jackrabbit.oak.cache.CacheValue;
@@ -86,6 +87,8 @@ public class MongoDocumentStore implements CachingDocumentStore {
 
     private static final DBObject BY_ID_ASC = new BasicDBObject(Document.ID, 1);
 
+    public static final int IN_CLAUSE_BATCH_SIZE = 500;
+
     private final DBCollection nodes;
     private final DBCollection clusterNodes;
     private final DBCollection settings;
@@ -135,6 +138,14 @@ public class MongoDocumentStore implements CachingDocumentStore {
         options.put("unique", Boolean.FALSE);
         options.put("sparse", Boolean.TRUE);
         this.nodes.ensureIndex(index, options);
+
+        index = new BasicDBObject();
+        index.put(NodeDocument.DELETED_ONCE, 1);
+        options = new BasicDBObject();
+        options.put("unique", Boolean.FALSE);
+        options.put("sparse", Boolean.TRUE);
+        this.nodes.ensureIndex(index, options);
+
 
         // TODO expire entries if the parent was changed
         if (builder.useOffHeapCache()) {
@@ -203,6 +214,13 @@ public class MongoDocumentStore implements CachingDocumentStore {
             }
         }
     }
+
+    public <T extends Document> void invalidateCache(Collection<T> collection, List<String> keys) {
+        for(String key : keys){
+            invalidateCache(collection, key);
+        }
+    }
+
 
     @Override
     public <T extends Document> T find(Collection<T> collection, String key) {
@@ -378,6 +396,20 @@ public class MongoDocumentStore implements CachingDocumentStore {
         } finally {
             end("remove", start);
         }
+    }
+
+    @Override
+    public <T extends Document> void remove(Collection<T> collection, List<String> keys) {
+        DBCollection dbCollection = getDBCollection(collection);
+        for(List<String> keyBatch : Lists.partition(keys, IN_CLAUSE_BATCH_SIZE)){
+            DBObject query = QueryBuilder.start(Document.ID).in(keyBatch).get();
+            WriteResult writeResult = dbCollection.remove(query, WriteConcern.SAFE);
+            invalidateCache(collection, keyBatch);
+            if (writeResult.getError() != null) {
+                throw new MicroKernelException("Remove failed: " + writeResult.getError());
+            }
+        }
+
     }
 
     @CheckForNull
