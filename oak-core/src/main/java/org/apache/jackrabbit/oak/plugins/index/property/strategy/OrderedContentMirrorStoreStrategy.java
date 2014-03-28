@@ -110,44 +110,79 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     @Override
     NodeBuilder fetchKeyNode(@Nonnull NodeBuilder index, @Nonnull String key) {
         // this is where the actual adding and maintenance of index's keys happen
-        NodeBuilder localkey = null;
+        NodeBuilder node = null;
         NodeBuilder start = index.child(START);
-
-        // identifying the right place for insert
-        String n = getPropertyNext(start);
-        if (Strings.isNullOrEmpty(n)) {
-            // new/empty index
-            localkey = index.child(key);
-            setNext(localkey, EMPTY_NEXT_ARRAY);
-            List<String> nexts = new ArrayList<String>();
-            for (int i = 0; i <= getLane(); i++) {
-                nexts.add(key);
-            }
-            setNext(start, Iterables.toArray(nexts, String.class));
+        Predicate<ChildNodeEntry> condition = direction.isAscending() 
+            ? new PredicateGreaterThan(key, true)
+            : new PredicateLessThan(key, true);
+        ChildNodeEntry[] walked = new ChildNodeEntry[OrderedIndex.LANES];
+        
+        if (Strings.isNullOrEmpty(getPropertyNext(start))) {
+            // it means we're in an empty/new index. Setting properly the :start's :next
+            setPropertyNext(start, EMPTY_NEXT_ARRAY);
+        }
+        
+        // we use the seek for seeking the right spot. The walkedLanes will have all our
+        // predecessors
+        ChildNodeEntry entry = seek(index.getNodeState(), condition, walked);
+        if (entry != null && entry.getName().equals(key)) {
+            // it's an existing node. We should not need to update anything around pointers
+            node = index.getChildNode(key);
         } else {
-            // specific use-case where the item has to be added as first of the list
-            String nextKey = n;
-            Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(index.getNodeState(),
-                                                                              true);
-            for (ChildNodeEntry child : children) {
-                nextKey = getPropertyNext(child);
-                if (Strings.isNullOrEmpty(nextKey)) {
-                    // we're at the last element, therefore our 'key' has to be appended
-                    setNext(index.getChildNode(child.getName()), key);
-                    localkey = index.child(key);
-                    localkey.setProperty(NEXT, EMPTY_NEXT, Type.STRINGS);
-                } else {
-                    if (isInsertHere(key, nextKey)) {
-                        setNext(index.getChildNode(child.getName()), key);
-                        localkey = index.child(key); 
-                        setNext(localkey, nextKey);
-                        break;
-                    }
-                }
+            // the entry does not exits yet
+            node = index.child(key);
+            // it's a brand new node. let's start setting an empty next
+            setPropertyNext(node, EMPTY_NEXT_ARRAY);
+            int lane = getLane();
+            String next;
+            NodeBuilder predecessor;
+            for (int l = lane; l >= 0; l--) {
+                // let's update the predecessors starting from the coin-flip lane
+                predecessor = index.getChildNode(walked[l].getName());
+                next = getPropertyNext(predecessor, l);
+                setPropertyNext(predecessor, key, l);
+                setPropertyNext(node, next, l);
             }
         }
-
-        return localkey;
+        return node;
+//        NodeBuilder localkey = null;
+//        NodeBuilder start = index.child(START);
+//
+//        // identifying the right place for insert
+//        String n = getPropertyNext(start);
+//        if (Strings.isNullOrEmpty(n)) {
+//            // new/empty index
+//            localkey = index.child(key);
+//            setNext(localkey, EMPTY_NEXT_ARRAY);
+//            List<String> nexts = new ArrayList<String>();
+//            for (int i = 0; i <= getLane(); i++) {
+//                nexts.add(key);
+//            }
+//            setNext(start, Iterables.toArray(nexts, String.class));
+//        } else {
+//            // specific use-case where the item has to be added as first of the list
+//            String nextKey = n;
+//            Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(index.getNodeState(),
+//                                                                              true);
+//            for (ChildNodeEntry child : children) {
+//                nextKey = getPropertyNext(child);
+//                if (Strings.isNullOrEmpty(nextKey)) {
+//                    // we're at the last element, therefore our 'key' has to be appended
+//                    setNext(index.getChildNode(child.getName()), key);
+//                    localkey = index.child(key);
+//                    localkey.setProperty(NEXT, EMPTY_NEXT, Type.STRINGS);
+//                } else {
+//                    if (isInsertHere(key, nextKey)) {
+//                        setNext(index.getChildNode(child.getName()), key);
+//                        localkey = index.child(key); 
+//                        setNext(localkey, nextKey);
+//                        break;
+//                    }
+//                }
+//            }
+//        }
+//
+//        return localkey;
     }
 
     /**
@@ -183,7 +218,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                         next = "";
                     }
                     // (3) re-link the previous to the next
-                    setNext(index.getChildNode(previous.getName()), next);
+                    setPropertyNext(index.getChildNode(previous.getName()), next);
                 } 
                 node.remove();
             }
@@ -645,7 +680,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                                @Nullable final ChildNodeEntry[] walkedLanes) {
         boolean keepWalked = false;
         String searchfor = condition.getSearchFor();
-        LOG.debug("Searching for: {}", condition.getSearchFor());        
+        LOG.debug("seek() - Searching for: {}", condition.getSearchFor());        
         Predicate<ChildNodeEntry> walkingPredicate = direction.isAscending() 
                                                              ? new PredicateLessThan(searchfor, true)
                                                              : new PredicateGreaterThan(searchfor, true);
@@ -668,8 +703,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 
         int lane = OrderedIndex.LANES - 1;
         boolean stillLaning;
-        String nextkey = null; 
-        ChildNodeEntry next = null;
+        String nextkey; 
+        ChildNodeEntry next;
         
         do {
             stillLaning = lane > 0;
@@ -686,7 +721,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     found = next;
                 } else {
                     current = next;
-                    if (keepWalked) {
+                    if (keepWalked && current != null) {
                         for (int l = lane; l >= 0; l--) {
                             walkedLanes[l] = current;
                         }
@@ -861,7 +896,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @param node the node to modify
      * @param next the 'next' value
      */
-    static void setNext(@Nonnull final NodeBuilder node, final String... next) {
+    static void setPropertyNext(@Nonnull final NodeBuilder node, final String... next) {
         if (node != null && next != null) {
             String n1 = (next.length > 0) ? next[0] : "";
             String n2 = (next.length > 1) ? next[1] : "";
@@ -869,6 +904,26 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             String n4 = (next.length > 3) ? next[3] : "";
             
             node.setProperty(NEXT, ImmutableList.of(n1, n2, n3, n4), Type.STRINGS);
+        }
+    }
+    
+    /**
+     * set the value of the :next at the given position. If the property :next won't be there by the
+     * time this method is invoked it won't perform any action
+     * 
+     * @param node
+     * @param value
+     * @param lane
+     */
+    static void setPropertyNext(@Nonnull final NodeBuilder node, 
+                                final String value, final int lane) {
+        if (node != null && value != null && lane >= 0 && lane < OrderedIndex.LANES) {
+            PropertyState next = node.getProperty(NEXT);
+            if (next != null) {
+                String[] values = Iterables.toArray(next.getValue(Type.STRINGS), String.class);
+                values[lane] = value;
+                setPropertyNext(node, values);
+            }
         }
     }
 

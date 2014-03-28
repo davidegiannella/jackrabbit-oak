@@ -48,6 +48,7 @@ import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.OrderedChildNodeEntry;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.PredicateLessThan;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
@@ -58,6 +59,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -1676,51 +1678,59 @@ public class OrderedContentMirrorStorageStrategyTest {
     public void setNext() {
         NodeBuilder n = EmptyNodeState.EMPTY_NODE.builder();
         
-        OrderedContentMirrorStoreStrategy.setNext(n, "foobar");
+        OrderedContentMirrorStoreStrategy.setPropertyNext(n, "foobar");
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals(ImmutableList.of("foobar", "", "", ""), 
             n.getProperty(NEXT).getValue(Type.STRINGS));
         
-        OrderedContentMirrorStoreStrategy.setNext(n, (String[]) null);
+        OrderedContentMirrorStoreStrategy.setPropertyNext(n, (String[]) null);
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals("If I set a value to null, nothing should change",
             ImmutableList.of("foobar", "", "", ""), n.getProperty(NEXT).getValue(Type.STRINGS));
 
-        OrderedContentMirrorStoreStrategy.setNext(n, "");
+        OrderedContentMirrorStoreStrategy.setPropertyNext(n, "");
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals(ImmutableList.of("", "", "", ""), 
             n.getProperty(NEXT).getValue(Type.STRINGS));
         
         n = EmptyNodeState.EMPTY_NODE.builder();
-        OrderedContentMirrorStoreStrategy.setNext(n, "a", "b");
+        OrderedContentMirrorStoreStrategy.setPropertyNext(n, "a", "b");
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals(ImmutableList.of("a", "b", "", ""), 
             n.getProperty(NEXT).getValue(Type.STRINGS));
 
         n = EmptyNodeState.EMPTY_NODE.builder();
-        OrderedContentMirrorStoreStrategy.setNext(n, "a", "b", "c");
+        OrderedContentMirrorStoreStrategy.setPropertyNext(n, "a", "b", "c");
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals(ImmutableList.of("a", "b", "c", ""), 
             n.getProperty(NEXT).getValue(Type.STRINGS));
 
         n = EmptyNodeState.EMPTY_NODE.builder();
-        OrderedContentMirrorStoreStrategy.setNext(n, "a", "b", "c", "d");
+        OrderedContentMirrorStoreStrategy.setPropertyNext(n, "a", "b", "c", "d");
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals(ImmutableList.of("a", "b", "c", "d"), 
             n.getProperty(NEXT).getValue(Type.STRINGS));
 
         n = EmptyNodeState.EMPTY_NODE.builder();
-        OrderedContentMirrorStoreStrategy.setNext(n, "a", "b", "c", "d", "e", "f");
+        OrderedContentMirrorStoreStrategy.setPropertyNext(n, "a", "b", "c", "d", "e", "f");
         assertNotNull(n);
         assertNotNull(":next cannot be null", n.getProperty(NEXT));
         assertEquals("even if we provide more than 4 nexts we expect it to take only the first 4s", 
             ImmutableList.of("a", "b", "c", "d"), 
+            n.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        n = EmptyNodeState.EMPTY_NODE.builder();
+        n.setProperty(NEXT, ImmutableList.of("a", "b", "c", "d"), Type.STRINGS);
+        OrderedContentMirrorStoreStrategy.setPropertyNext(n, "a", 3);
+        assertNotNull(n);
+        assertNotNull(":next cannot be null", n.getProperty(NEXT));
+        assertEquals(ImmutableList.of("a", "b", "c", "a"),
             n.getProperty(NEXT).getValue(Type.STRINGS));
     }
     
@@ -1976,7 +1986,629 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertNotNull(n.getProperty(NEXT));
         assertEquals(OrderedContentMirrorStoreStrategy.EMPTY_NEXT,
             n.getProperty(NEXT).getValue(Type.STRINGS));
+    }
+    
+    /**
+     * Testing The Insert Of Shuffled Items And Lanes Recreating The Following Index Structure
+     * 
+     *  <Code>
+     *      List Structure
+     *      ==============
+     *      (Above The Node Names Is The Insert Order)
+     *      
+     *              9   5   6   4   7   1   0   3   10  2   12  11  8
+     *         -----------------------------------------------------------
+     *         Str 000 001 002 003 004 005 006 007 008 009 010 011 012 Nil
+     *          |-->O-->O-->O-->O-->O-->O-->O-->O-->O-->O-->O-->O-->O-->|
+     *          |------>O------>O------>O------>O---------->O---------->|
+     *          |-------------->O-------------->O---------->O---------->|
+     *          |------------------------------------------>O---------->|
+     *  </Code>
+     */
+    @Test
+    public void insertShuffledItemsWithLanes() {
+        MockOrderedContentMirrorStoreStrategy store = new MockOrderedContentMirrorStoreStrategy();
+        NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
+        NodeBuilder node;
+        String n00 = KEYS[0];
+        String n01 = KEYS[1];
+        String n02 = KEYS[2];
+        String n03 = KEYS[3];
+        String n04 = KEYS[4];
+        String n05 = KEYS[5];
+        String n06 = KEYS[6];
+        String n07 = KEYS[7];
+        String n08 = KEYS[8];
+        String n09 = KEYS[9];
+        String n10 = KEYS[10];
+        String n11 = KEYS[11];
+        String n12 = KEYS[12];
+        
+        /*
+         * Stage 0
+         */
+        store.setLane(0);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n06));
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(OrderedContentMirrorStoreStrategy.EMPTY_NEXT,
+            node.getProperty(NEXT).getValue(Type.STRINGS));
 
+        /*
+         * Stage 1
+         */
+        store.setLane(1);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n05));
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, n05, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(OrderedContentMirrorStoreStrategy.EMPTY_NEXT,
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /*
+         * Stage 2
+         */
+        store.setLane(0);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n09));
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, n05, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /*
+         * Stage 3
+         */
+        store.setLane(2);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n07));
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, n05, n07, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, n07, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n07, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n07);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /*
+         * Stage 4
+         */
+        store.setLane(2);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n03));
+
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n03, n03, n03, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n03);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, n05, n07, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, n07, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n07, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n07);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /*
+         * Stage 5
+         */
+        store.setLane(1);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n01));
+
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n01, n01, n03, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n01);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n03, n03, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n03);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, n05, n07, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, n07, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n07, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n07);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /*
+         * Stage 6
+         */
+        store.setLane(0);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n02));
+
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n01, n01, n03, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n01);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n02, n03, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n02);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n03, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n03);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, n05, n07, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, n07, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n07, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n07);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /*
+         * Stage 7
+         */
+        store.setLane(0);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n04));
+
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n01, n01, n03, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n01);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n02, n03, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n02);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n03, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n03);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n04, n05, n07, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n04);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, n07, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n07, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n07);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /*
+         * Stage 8
+         */
+        store.setLane(0);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n12));
+
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n01, n01, n03, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n01);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n02, n03, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n02);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n03, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n03);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n04, n05, n07, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n04);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, n07, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n07, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n07);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n12, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n12);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /*
+         * Stage 9
+         */
+        store.setLane(0);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n00));
+
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n00, n01, n03, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n00);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n01, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n01);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n02, n03, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n02);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n03, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n03);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n04, n05, n07, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n04);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, n07, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n07, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n07);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n12, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n12);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /**
+         * Stage 10
+         */
+        store.setLane(0);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n08));
+
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n00, n01, n03, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n00);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n01, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n01);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n02, n03, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n02);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n03, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n03);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n04, n05, n07, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n04);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, n07, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n07, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n07);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n08, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n08);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n12, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n12);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /**
+         * Stage 11
+         */
+        store.setLane(0);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n11));
+
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n00, n01, n03, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n00);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n01, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n01);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n02, n03, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n02);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n03, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n03);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n04, n05, n07, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n04);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, n07, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n07, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n07);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n08, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n08);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n11, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n11);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n12, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n12);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        /*
+         * Stage 12
+         */
+        store.setLane(3);
+        store.update(index, "/a", EMPTY_KEY_SET, newHashSet(n10));
+
+        node = index.getChildNode(START);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n00, n01, n03, n10),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n00);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n01, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n01);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n02, n03, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n02);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n03, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n03);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n04, n05, n07, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n04);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n05, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n05);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n06, n07, "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n06);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n07, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n07);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n08, n10, n10, ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n08);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n09, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        
+        node = index.getChildNode(n09);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n10, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n10);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n11, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n11);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of(n12, "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        node = index.getChildNode(n12);
+        assertNotNull(node);
+        assertEquals(ImmutableList.of("", "", "", ""),
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+
+        printSkipList(index.getNodeState());
     }
     
     /**
@@ -2122,7 +2754,7 @@ public class OrderedContentMirrorStorageStrategyTest {
     
     @Test
     public void seekLessThanWithLanes() {
-        
+        fail();
     }
     
     @Test
@@ -2177,5 +2809,27 @@ public class OrderedContentMirrorStorageStrategyTest {
         }
 
         LOG.debug("\n{}", sb.toString());
+    }
+    
+    @Test
+    public void predicateLessThan() {
+        Predicate<ChildNodeEntry> predicate;
+        String searchfor;
+        ChildNodeEntry entry;
+        
+        searchfor = "b";
+        predicate = new PredicateLessThan(searchfor, true);
+        entry = new OrderedChildNodeEntry("a", EmptyNodeState.EMPTY_NODE);
+        assertTrue(predicate.apply(entry));
+
+        searchfor = "a";
+        predicate = new PredicateLessThan(searchfor, true);
+        entry = new OrderedChildNodeEntry("b", EmptyNodeState.EMPTY_NODE);
+        assertFalse(predicate.apply(entry));
+
+        searchfor = "a";
+        predicate = new PredicateLessThan(searchfor, true);
+        entry = null;
+        assertFalse(predicate.apply(entry));
     }
 }
