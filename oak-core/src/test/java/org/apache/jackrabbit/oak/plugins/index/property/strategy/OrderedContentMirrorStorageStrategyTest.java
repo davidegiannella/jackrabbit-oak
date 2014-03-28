@@ -54,7 +54,6 @@ import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +63,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
-import com.google.common.collect.Lists;
 
 /**
  *
@@ -75,21 +73,9 @@ public class OrderedContentMirrorStorageStrategyTest {
     /**
      * ascending ordered set of keys. Useful for testing
      */
-    private static final String[] KEYS = new String[] { 
-                                                        "dianno",
-                                                        "dickinson",
-                                                        "donald", 
-                                                        "floyd",
-                                                        "gers",
-                                                        "goofy", 
-                                                        "harris",
-                                                        "mcbrian",
-                                                        "mickey", 
-                                                        "minnie",
-                                                        "murray",
-                                                        "pink",
-                                                        "smith",
-                                                      };
+    private static final String[] KEYS = new String[] { "000", "001", "002", "003", "004", "005",
+                                                       "006", "007", "008", "009", "010", "011",
+                                                       "012", "013", "014", };
     private static final Set<String> EMPTY_KEY_SET = newHashSet();
     private static final NumberFormat NF = new DecimalFormat("00000");
     
@@ -1530,6 +1516,8 @@ public class OrderedContentMirrorStorageStrategyTest {
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n2));
         store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n3));
 
+        printSkipList(index.getNodeState());
+        
         String searchFor = n2;
 
         ChildNodeEntry item = store.seek(index.getNodeState(),
@@ -1991,6 +1979,17 @@ public class OrderedContentMirrorStorageStrategyTest {
     
     /**
      * testing the seek method and the returned lanes with the following index structure
+     * 
+     *  <code>
+     *      List Structure
+     *      ==============
+     *      
+     *         STR 000 001 002 003 004 005 006 007 008 009 010 011 012 NIL
+     *          |-->o-->o-->o-->o-->o-->o-->o-->o-->o-->o-->o-->o-->o-->|
+     *          |------>o------>o------>o------>o---------->o---------->|
+     *          |-------------->o-------------->o---------->o---------->|
+     *          |------------------------------------------>o---------->|
+     *  </code>
      */
     @Test
     public void seekWithLanes() {
@@ -2031,39 +2030,48 @@ public class OrderedContentMirrorStorageStrategyTest {
         printSkipList(index);
 
         // testing the exception in case of wrong parameters
-//        String searchFor = n12;
-//        NodeState node = index.getChildNode(searchFor);
-//        ChildNodeEntry entry = new OrderedChildNodeEntry(
-//            searchFor, node);
-//        ChildNodeEntry[] wl = new ChildNodeEntry[0];
-//        ChildNodeEntry item = null;
-//        ChildNodeEntry lane0, lane1, lane2, lane3;
-//        
-//        try {
-//            item = store.seek(index,
-//                new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl);
-//            fail("With a wrong size for the lane it should have raised an exception");
-//        } catch (IllegalArgumentException e) {
-//            // so far so good. It was expected
-//        }
-//        
-//        searchFor = n12;
-//        lane0 = new OrderedChildNodeEntry(n11, index.getChildNode(n11));
-//        lane1 = null;
-//        lane2 = null;
-//        lane3 = new OrderedChildNodeEntry(START, index.getChildNode(START));
-//        
-//        entry = new OrderedChildNodeEntry(searchFor,
-//            index.getChildNode(searchFor));
-//        wl = new ChildNodeEntry[OrderedIndex.LANES];
-//        item = store.seek(index,
-//            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl);
-//        assertNotNull(wl);
-//        assertEquals(OrderedIndex.LANES, wl.length);
-//        assertEquals("Wrong lane", lane0, wl[0]);
-//        assertEquals("Wrong item returned", entry, item);
+        String searchFor = n12;
+        NodeState node = index.getChildNode(searchFor);
+        ChildNodeEntry entry = new OrderedChildNodeEntry(
+            searchFor, node);
+        ChildNodeEntry[] wl = new ChildNodeEntry[0];
+        ChildNodeEntry item = null;
+        ChildNodeEntry lane0, lane1, lane2, lane3;
+        
+        try {
+            item = store.seek(index,
+                new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl);
+            fail("With a wrong size for the lane it should have raised an exception");
+        } catch (IllegalArgumentException e) {
+            // so far so good. It was expected
+        }
+        
+        // testing equality
+        searchFor = n12;
+        lane0 = new OrderedChildNodeEntry(n11, index.getChildNode(n11));
+        lane1 = null;
+        lane2 = null;
+        lane3 = new OrderedChildNodeEntry(n10, index.getChildNode(n10));
+        
+        entry = new OrderedChildNodeEntry(searchFor,
+            index.getChildNode(searchFor));
+        wl = new ChildNodeEntry[OrderedIndex.LANES];
+        item = store.seek(index,
+            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl);
+        assertNotNull(wl);
+        assertEquals(OrderedIndex.LANES, wl.length);
+        assertEquals("Wrong lane", lane0, wl[0]);
+        assertEquals("Wrong lane", lane1, wl[1]);
+        assertEquals("Wrong lane", lane2, wl[2]);
+        assertEquals("Wrong lane", lane3, wl[3]);
+        assertEquals("Wrong item returned", entry, item);
     }
     
+    @Test
+    public void seekWithLanesDescending() {
+        // testing the walking lanes with a descending order index
+        fail("Implemnet the test");
+    }
     /**
      * convenience method for printing the current index as SkipList
      * 
@@ -2077,7 +2085,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         
         // printing the elements
         NodeState current = index.getChildNode(START);
-        sb.append("str ");
+        sb.append("STR ");
         String next = getNext(current);
         int position = 0;
         while (!Strings.isNullOrEmpty(next)) {
@@ -2086,7 +2094,7 @@ public class OrderedContentMirrorStorageStrategyTest {
             sb.append(String.format("%03d ", position++));
             next = getNext(current);
         }
-        sb.append("nil");
+        sb.append("NIL");
 
         for (int lane = 0; lane < OrderedIndex.LANES; lane++) {
             current = index.getChildNode(START);

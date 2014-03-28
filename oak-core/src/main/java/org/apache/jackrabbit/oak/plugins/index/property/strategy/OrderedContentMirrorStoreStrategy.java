@@ -643,67 +643,69 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     ChildNodeEntry seek(@Nonnull final NodeState index,
                                @Nonnull final Predicate<ChildNodeEntry> condition,
                                @Nullable final ChildNodeEntry[] walkedLanes) {
-//        boolean keepWalked = false;
-//        String searchfor = condition.getSearchFor();
-//        LOG.debug("Searching for: {}", condition.getSearchFor());        
-//        Predicate<ChildNodeEntry> walkingPredicate = direction.isAscending() 
-//                                                             ? new PredicateLessThan(searchfor)
-//                                                             : new PredicateGreaterThan(searchfor);
-//        
-//        
-//        if (walkedLanes != null) {
-//            if (walkedLanes.length != OrderedIndex.LANES) {
-//                throw new IllegalArgumentException(String.format(
-//                    "Wrong size for keeping track of the Walked Lanes. Expected %d but was %d",
-//                    OrderedIndex.LANES, walkedLanes.length));
-//            }
-//            // ensuring the right data
-//            for (int i = 0; i < walkedLanes.length; i++) {
-//                walkedLanes[i] = null;
-//            }
-//            keepWalked = true;
-//        }
-//
-//        // we always begin with :start
-//        int lane = OrderedIndex.LANES - 1;
-//        ChildNodeEntry current = new OrderedChildNodeEntry(START, index.getChildNode(START));
-//        String nextkey = getPropertyNext(current, lane);
-//        ChildNodeEntry next = (Strings.isNullOrEmpty(nextkey)) 
-//            ? null 
-//            : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
-//        
-//        while (walkingPredicate.apply(next)) {
-//            if (keepWalked) {
-//                walkedLanes[lane] = current;
-//            }
-//            current = next;
-//            nextkey = getPropertyNext(current, lane);
-//            ChildNodeEntry temp = (Strings.isNullOrEmpty(nextkey)) 
-//                ? null 
-//                : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
-//            while (lane > 0 && (Strings.isNullOrEmpty(nextkey) || !walkingPredicate.apply(temp))) {
-//                // Not really the one above but almost. It's not current but it's the possible next
-//                // we have to inspect with the predicate
-//                // in case is empty or doens't walk we have lower the lane up the lowest one in case
-//                // needed
-//                lane--;
-//            }
-//        }
-//        
-//        //TODO we'll have to consider the descending use-case as well
-//        return null;
+        boolean keepWalked = false;
+        String searchfor = condition.getSearchFor();
+        LOG.debug("Searching for: {}", condition.getSearchFor());        
+        Predicate<ChildNodeEntry> walkingPredicate = direction.isAscending() 
+                                                             ? new PredicateLessThan(searchfor, true)
+                                                             : new PredicateGreaterThan(searchfor, true);
+        ChildNodeEntry found = null;
+        
+        if (walkedLanes != null) {
+            if (walkedLanes.length != OrderedIndex.LANES) {
+                throw new IllegalArgumentException(String.format(
+                    "Wrong size for keeping track of the Walked Lanes. Expected %d but was %d",
+                    OrderedIndex.LANES, walkedLanes.length));
+            }
+            // ensuring the right data
+            for (int i = 0; i < walkedLanes.length; i++) {
+                walkedLanes[i] = null;
+            }
+            keepWalked = true;
+        }
+
+        int lane = OrderedIndex.LANES - 1;
+        boolean stillLaning;
+        // we always begin with :start
+        ChildNodeEntry current = new OrderedChildNodeEntry(START, index.getChildNode(START));
+        String nextkey = null; 
+        ChildNodeEntry next = null;
+        
+        do {
+            stillLaning = lane > 0;
+            nextkey = getPropertyNext(current, lane);
+            next = (Strings.isNullOrEmpty(nextkey)) 
+                ? null 
+                : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
+            if ((next == null || !walkingPredicate.apply(next)) && lane > 0) {
+                // if we're currently pointing to NIL or the next element does not fit the search
+                // but we still have lanes left, let's lower the lane;
+                lane--;
+            } else {
+                if (condition.apply(next)) {
+                    found = next;
+                } else {
+                    current = next;
+                    if (keepWalked) {
+                        walkedLanes[lane] = current;
+                    }
+                }
+            }
+        } while (((next != null && walkingPredicate.apply(next)) || stillLaning) && (found == null));
+        
+        return found;
         // TODO the FullIterable will have to be replaced with something else once we'll have the
         // Skip part of the list implemented.
-        Iterable<ChildNodeEntry> children = new FullIterable(index, false);
-                
-        ChildNodeEntry entry = null;
-        for (ChildNodeEntry child : children) {
-            if (condition.apply(child)) {
-                entry = child;
-                break;
-            }
-        }
-        return entry;
+//        Iterable<ChildNodeEntry> children = new FullIterable(index, false);
+//                
+//        ChildNodeEntry entry = null;
+//        for (ChildNodeEntry child : children) {
+//            if (condition.apply(child)) {
+//                entry = child;
+//                break;
+//            }
+//        }
+//        return entry;
     }
     
     /**
