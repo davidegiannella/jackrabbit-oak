@@ -22,21 +22,34 @@ package org.apache.jackrabbit.oak.plugins.document;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.base.Joiner;
+import com.google.common.base.StandardSystemProperty;
+import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableList;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoVersionGCSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class VersionGarbageCollector {
+public class VersionGarbageCollector {
     private final DocumentNodeStore nodeStore;
     private final VersionGCSupport versionStore;
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    private volatile long maxRevisionAge = TimeUnit.DAYS.toMillis(1);
+    /**
+     * Split document types which can be safely Garbage Collected
+     */
+    private static final Set<NodeDocument.SplitDocType> GC_TYPES = EnumSet.of(
+            NodeDocument.SplitDocType.DEFAULT_NO_CHILD,
+            NodeDocument.SplitDocType.PROP_COMMIT_ONLY,
+            NodeDocument.SplitDocType.INTERMEDIATE);
+
 
     VersionGarbageCollector(DocumentNodeStore nodeStore) {
         this.nodeStore = nodeStore;
@@ -49,10 +62,15 @@ class VersionGarbageCollector {
         }
     }
 
-    public VersionGCStats gc() {
+    public VersionGCStats gc(long maxRevisionAge, TimeUnit unit) {
+        long maxRevisionAgeInMillis = unit.toMillis(maxRevisionAge);
+        Stopwatch sw = Stopwatch.createStarted();
         VersionGCStats stats = new VersionGCStats();
-        final long oldestRevTimeStamp = nodeStore.getClock().getTime() - maxRevisionAge;
+        final long oldestRevTimeStamp = nodeStore.getClock().getTime() - maxRevisionAgeInMillis;
         final Revision headRevision = nodeStore.getHeadRevision();
+
+        log.info("Starting revision garbage collection. Revisions older than [{}] would be " +
+                "removed",Revision.timestampToString(oldestRevTimeStamp));
 
         //Check for any registered checkpoint which prevent the GC from running
         Revision checkpoint = nodeStore.getCheckpoints().getOldestRevisionToKeep();
@@ -66,8 +84,16 @@ class VersionGarbageCollector {
         }
 
         collectDeletedDocuments(stats, headRevision, oldestRevTimeStamp);
+        collectSplitDocuments(stats, oldestRevTimeStamp);
 
+        sw.stop();
+        log.info("Version garbage collected in {}. {}", sw, stats);
         return stats;
+    }
+
+    private void collectSplitDocuments(VersionGCStats stats, long oldestRevTimeStamp) {
+        int count = versionStore.deleteSplitDocuments(GC_TYPES, oldestRevTimeStamp);
+        stats.splitDocGCCount += count;
     }
 
     private void collectDeletedDocuments(VersionGCStats stats, Revision headRevision, long oldestRevTimeStamp) {
@@ -82,7 +108,7 @@ class VersionGarbageCollector {
                 if (doc.getNodeAtRevision(nodeStore, headRevision, null) == null) {
                     docIdsToDelete.add(doc.getId());
                     //Collect id of all previous docs also
-                    for (NodeDocument prevDoc : doc.getAllPreviousDocs()) {
+                    for (NodeDocument prevDoc : ImmutableList.copyOf(doc.getAllPreviousDocs())) {
                         docIdsToDelete.add(prevDoc.getId());
                     }
                 }
@@ -90,17 +116,30 @@ class VersionGarbageCollector {
         } finally {
             close(itr);
         }
-        nodeStore.getDocumentStore().remove(Collection.NODES, docIdsToDelete);
-        stats.deletedDocCount += docIdsToDelete.size();
-    }
 
-    public void setMaxRevisionAge(long maxRevisionAge) {
-        this.maxRevisionAge = maxRevisionAge;
+        if(log.isDebugEnabled()) {
+            StringBuilder sb = new StringBuilder("Deleted document with following ids were deleted as part of GC \n");
+            Joiner.on(StandardSystemProperty.LINE_SEPARATOR.value()).appendTo(sb, docIdsToDelete);
+            log.debug(sb.toString());
+        }
+        nodeStore.getDocumentStore().remove(Collection.NODES, docIdsToDelete);
+        stats.deletedDocGCCount += docIdsToDelete.size();
     }
 
     public static class VersionGCStats {
         boolean ignoredGCDueToCheckPoint;
-        int deletedDocCount;
+        int deletedDocGCCount;
+        int splitDocGCCount;
+
+
+        @Override
+        public String toString() {
+            return "VersionGCStats{" +
+                    "ignoredGCDueToCheckPoint=" + ignoredGCDueToCheckPoint +
+                    ", deletedDocGCCount=" + deletedDocGCCount +
+                    ", splitDocGCCount=" + splitDocGCCount +
+                    '}';
+        }
     }
 
     private void close(Object obj){

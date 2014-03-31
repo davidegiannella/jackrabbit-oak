@@ -20,12 +20,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Queue;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.annotation.CheckForNull;
@@ -34,7 +37,10 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
+import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterators;
+import com.google.common.collect.Queues;
 import org.apache.jackrabbit.oak.cache.CacheValue;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.document.memory.MemoryDocumentStore;
@@ -117,9 +123,9 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
     static final String COLLISIONS = "_collisions";
 
     /**
-     * The modified time (5 second resolution).
+     * The modified time in seconds (5 second resolution).
      */
-    public static final String MODIFIED = "_modified";
+    public static final String MODIFIED_IN_SECS = "_modified";
 
     private static final NavigableMap<Revision, Range> EMPTY_RANGE_MAP =
             Maps.unmodifiableNavigableMap(new TreeMap<Revision, Range>());
@@ -194,11 +200,82 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
 
     public static final String HAS_BINARY_FLAG = "_bin";
 
+    //~----------------------------< Split Document Types >
+
+    /**
+     * Defines the type of split document. Its value is an integer whose value is
+     * defined as per
+     *
+     * @see org.apache.jackrabbit.oak.plugins.document.NodeDocument.SplitDocType
+     */
+    public static final String SD_TYPE = "_sdType";
+
+    /**
+     * Property name which refers to timestamp (long) of the latest revision kept
+     * in the document
+     */
+    public static final String SD_MAX_REV_TIME_IN_SECS = "_sdMaxRevTime";
+
+    /**
+     * A document which is created from splitting a main document can be classified
+     * into multiple types depending on the content i.e. weather it contains
+     * REVISIONS, COMMIT_ROOT, property history etc
+     */
+    public static enum SplitDocType {
+        /**
+         * Not a split document
+         */
+        NONE(-1),
+        /**
+         * A split document which contains all types of data
+         */
+        DEFAULT(10),
+        /**
+         * A split document which contains all types of data. In addition
+         * when the split document was created the main document did not had
+         * any child.
+         */
+        DEFAULT_NO_CHILD(20),
+        /**
+         * A split document which does not contain REVISIONS history
+         */
+        PROP_COMMIT_ONLY(30),
+        /**
+         * Its an intermediate split document which only contains version ranges
+         * and does not contain any other attributes
+         */
+        INTERMEDIATE(40)
+        ;
+
+        final int type;
+
+        private SplitDocType(int type){
+            this.type = type;
+        }
+
+        public int typeCode() {
+            return type;
+        }
+
+        static SplitDocType valueOf(Integer type){
+            if(type == null){
+                return NONE;
+            }
+            for(SplitDocType docType : values()){
+                if(docType.type == type){
+                    return docType;
+                }
+            }
+            throw new IllegalArgumentException("Not a valid SplitDocType :" + type);
+        }
+    }
+
+
     /**
      * Properties to ignore when a document is split.
      */
     private static final Set<String> IGNORE_ON_SPLIT = ImmutableSet.of(
-            ID, MOD_COUNT, MODIFIED, PREVIOUS, LAST_REV, CHILDREN_FLAG,
+            ID, MOD_COUNT, MODIFIED_IN_SECS, PREVIOUS, LAST_REV, CHILDREN_FLAG,
             HAS_BINARY_FLAG, PATH, DELETED_ONCE);
 
     public static final long HAS_BINARY_VAL = 1;
@@ -260,7 +337,8 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
     }
 
     /**
-     * Returns <tt>true</tt> if this node possibly has children
+     * Returns <tt>true</tt> if this node possibly has children.
+     * If false then that indicates that there are no child
      *
      * @return <tt>true</tt> if this node has children
      */
@@ -280,13 +358,44 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
     /**
      * Checks if this document has been modified after the given lastModifiedTime
      *
-     * @param lastModifiedTime time to compare against
+     * @param lastModifiedTime time to compare against in millis
      * @return <tt>true</tt> if this document was modified after the given
      *  lastModifiedTime
      */
     public boolean hasBeenModifiedSince(long lastModifiedTime){
-        Long modified = (Long) get(MODIFIED);
-        return modified != null && modified > lastModifiedTime;
+        Long modified = (Long) get(MODIFIED_IN_SECS);
+        return modified != null && modified > TimeUnit.MILLISECONDS.toSeconds(lastModifiedTime);
+    }
+
+    /**
+     * Checks if revision time of all entries in this document is less than the passed
+     * time
+     *
+     * @param maxRevisionTime timemstamp (in millis) of revision to check
+     * @return <tt>true</tt> if timestamp of maximum revision stored in this document
+     * is less than than the passed revision timestamp
+     */
+    public boolean hasAllRevisionLessThan(long maxRevisionTime){
+        Long maxRevTimeStamp = (Long) get(SD_MAX_REV_TIME_IN_SECS);
+        return maxRevTimeStamp != null && maxRevTimeStamp < TimeUnit.MILLISECONDS.toSeconds(maxRevisionTime);
+    }
+
+    /**
+     * Determines if this document is a split document
+     *
+     * @return <tt>true</tt> if this document is a split document
+     */
+    public boolean isSplitDocument(){
+        return getSplitDocType() != SplitDocType.NONE;
+    }
+
+    /**
+     * Determines the type of split document
+     *
+     * @return type of Split Document
+     */
+    public SplitDocType getSplitDocType(){
+        return SplitDocType.valueOf((Integer) get(SD_TYPE));
     }
 
     /**
@@ -322,9 +431,12 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
         return lastCheckTime.get();
     }
 
-    public int hasBinary() {
+    public boolean hasBinary() {
         Number flag = (Number) get(HAS_BINARY_FLAG);
-        return flag != null ? flag.intValue() : 0;
+        if(flag == null){
+            return false;
+        }
+        return flag.intValue() == HAS_BINARY_VAL;
     }
 
     /**
@@ -691,7 +803,9 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
                                  @Nonnull Revision baseRevision,
                                  @Nonnull RevisionContext context) {
         // did existence of node change after baseRevision?
-        Map<Revision, String> deleted = getDeleted();
+        // only check local deleted map, which contains the most
+        // recent values
+        Map<Revision, String> deleted = getLocalDeleted();
         for (Map.Entry<Revision, String> entry : deleted.entrySet()) {
             if (isRevisionNewer(context, entry.getKey(), baseRevision)) {
                 return true;
@@ -743,17 +857,12 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
         if (id == null) {
             throw new IllegalStateException("document does not have an id: " + this);
         }
-        // what's the most recent previous revision?
-        Revision recentPrevious = null;
+        // collect ranges and create a histogram of the height
         Map<Integer, List<Range>> prevHisto = Maps.newHashMap();
         for (Map.Entry<Revision, Range> entry : previous.entrySet()) {
             Revision rev = entry.getKey();
             if (rev.getClusterId() != context.getClusterId()) {
                 continue;
-            }
-            if (recentPrevious == null
-                    || isRevisionNewer(context, rev, recentPrevious)) {
-                recentPrevious = rev;
             }
             Range r = entry.getValue();
             List<Range> list = prevHisto.get(r.getHeight());
@@ -780,11 +889,8 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
                 if (rev.getClusterId() != context.getClusterId()) {
                     continue;
                 }
-                if (recentPrevious == null
-                        || isRevisionNewer(context, rev, recentPrevious)) {
-                    if (isCommitted(rev)) {
-                        splitMap.put(rev, entry.getValue());
-                    }
+                if (isCommitted(rev)) {
+                    splitMap.put(rev, entry.getValue());
                 }
             }
         }
@@ -835,6 +941,7 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
             // check size of old document
             NodeDocument oldDoc = new NodeDocument(store);
             UpdateUtils.applyChanges(oldDoc, old, context.getRevisionComparator());
+            setSplitDocProps(this, oldDoc, old, high);
             // only split if half of the data can be moved to old document
             if (oldDoc.getMemory() > getMemory() * SPLIT_RATIO) {
                 splitOps.add(old);
@@ -873,6 +980,7 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
                 for (Range r : entry.getValue()) {
                     setPrevious(intermediate, r);
                 }
+                setIntermediateDocProps(intermediate, h);
                 splitOps.add(intermediate);
             }
         }
@@ -953,17 +1061,7 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
                 @Override
                 public NodeDocument apply(Map.Entry<Revision, Range> input) {
                     if (input.getValue().includes(revision)) {
-                        Revision r = input.getKey();
-                        int h = input.getValue().height;
-                        String prevId = Utils.getPreviousIdFor(mainPath, r, h);
-                        //TODO Use the maxAge variant such that in case of Mongo call for
-                        //previous doc are directed towards replicas first
-                        NodeDocument prev = store.find(Collection.NODES, prevId);
-                        if (prev != null) {
-                            return prev;
-                        } else {
-                            LOG.warn("Document with previous revisions not found: " + prevId);
-                        }
+                       return getPreviousDoc(input.getKey(), input.getValue());
                     }
                     return null;
                 }
@@ -977,35 +1075,43 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
     }
 
     @Nonnull
-    Iterable<NodeDocument> getAllPreviousDocs() {
+    Iterator<NodeDocument> getAllPreviousDocs() {
         if (getPreviousRanges().isEmpty()) {
-            return Collections.emptyList();
+            return Iterators.emptyIterator();
         }
-        final String mainPath = getMainPath();
-        return filter(transform(getPreviousRanges().entrySet(),
-                new Function<Map.Entry<Revision, Range>, NodeDocument>() {
-                    @Override
-                    public NodeDocument apply(Map.Entry<Revision, Range> input) {
-                        Revision r = input.getKey();
-                        int h = input.getValue().height;
-                        String prevId = Utils.getPreviousIdFor(mainPath, r, h);
-                        //TODO Use the maxAge variant such that in case of Mongo call for
-                        //previous doc are directed towards replicas first
-                        NodeDocument prev = store.find(Collection.NODES, prevId);
-                        if (prev != null) {
-                            return prev;
-                        } else {
-                            LOG.warn("Document with previous revisions not found: " + prevId);
-                        }
-                        return null;
+        //Currently this method would fire one query per previous doc
+        //If that poses a problem we can try to find all prev doc by relying
+        //on property that all prevDoc id would starts <depth+2>:p/path/to/node
+        return new AbstractIterator<NodeDocument>(){
+            private Queue<Map.Entry<Revision, Range>> previousRanges =
+                    Queues.newArrayDeque(getPreviousRanges().entrySet());
+            @Override
+            protected NodeDocument computeNext() {
+                if(!previousRanges.isEmpty()){
+                    Map.Entry<Revision, Range> e = previousRanges.remove();
+                    NodeDocument prev = getPreviousDoc(e.getKey(), e.getValue());
+                    if(prev != null){
+                        previousRanges.addAll(prev.getPreviousRanges().entrySet());
+                        return prev;
                     }
                 }
-        ), new Predicate<NodeDocument>() {
-            @Override
-            public boolean apply(@Nullable NodeDocument input) {
-                return input != null;
+                return endOfData();
             }
-        });
+        };
+    }
+
+    private NodeDocument getPreviousDoc(Revision rev, Range range){
+        int h = range.height;
+        String prevId = Utils.getPreviousIdFor(getMainPath(), rev, h);
+        //TODO Use the maxAge variant such that in case of Mongo call for
+        //previous doc are directed towards replicas first
+        NodeDocument prev = store.find(Collection.NODES, prevId);
+        if (prev != null) {
+            return prev;
+        } else {
+            LOG.warn("Document with previous revisions not found: " + prevId);
+        }
+        return null;
     }
 
     /**
@@ -1051,7 +1157,7 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
 
     public static void setModified(@Nonnull UpdateOp op,
                                    @Nonnull Revision revision) {
-        checkNotNull(op).set(MODIFIED, Commit.getModified(checkNotNull(revision).getTimestamp()));
+        checkNotNull(op).set(MODIFIED_IN_SECS, Commit.getModifiedInSecs(checkNotNull(revision).getTimestamp()));
     }
 
     public static void setRevision(@Nonnull UpdateOp op,
@@ -1141,6 +1247,18 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
         checkNotNull(op).set(HAS_BINARY_FLAG, HAS_BINARY_VAL);
     }
 
+    //----------------------------< internal modifiers >------------------------
+
+    private static void setSplitDocType(@Nonnull UpdateOp op,
+                                        @Nonnull SplitDocType type) {
+        checkNotNull(op).set(SD_TYPE, type.type);
+    }
+
+    private static void setSplitDocMaxRev(@Nonnull UpdateOp op,
+                                          @Nonnull Revision maxRev) {
+        checkNotNull(op).set(SD_MAX_REV_TIME_IN_SECS, Commit.getModifiedInSecs(maxRev.getTimestamp()));
+    }
+
     //----------------------------< internal >----------------------------------
 
     /**
@@ -1188,6 +1306,44 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
             }
         }
         return depth;
+    }
+
+    /**
+     * Set various split document related flag/properties
+     *
+     * @param mainDoc main document from which split document is being created
+     * @param old updateOp of the old document created via split
+     * @param oldDoc old document created via split
+     * @param maxRev max revision stored in the split document oldDoc
+     */
+    private static void setSplitDocProps(NodeDocument mainDoc, NodeDocument oldDoc,
+                                         UpdateOp old, Revision maxRev) {
+        setSplitDocMaxRev(old, maxRev);
+
+        SplitDocType type = SplitDocType.DEFAULT;
+        if(!mainDoc.hasChildren()){
+            type = SplitDocType.DEFAULT_NO_CHILD;
+        } else if (oldDoc.getLocalRevisions().isEmpty()){
+            type = SplitDocType.PROP_COMMIT_ONLY;
+        }
+
+        //Copy over the hasBinary flag
+        if(mainDoc.hasBinary()){
+            setHasBinary(old);
+        }
+
+        setSplitDocType(old,type);
+    }
+
+    /**
+     * Set various properties for intermediate split document
+     *
+     * @param intermediate updateOp of the intermediate doc getting created
+     * @param maxRev max revision stored in the intermediate
+     */
+    private static void setIntermediateDocProps(UpdateOp intermediate, Revision maxRev) {
+        setSplitDocMaxRev(intermediate, maxRev);
+        setSplitDocType(intermediate,SplitDocType.INTERMEDIATE);
     }
 
     /**

@@ -59,6 +59,9 @@ import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.commons.json.JsopReader;
 import org.apache.jackrabbit.oak.commons.json.JsopTokenizer;
 import org.apache.jackrabbit.oak.plugins.blob.BlobStoreBlob;
+import org.apache.jackrabbit.oak.plugins.blob.MarkSweepGarbageCollector;
+import org.apache.jackrabbit.oak.plugins.document.mongo.MongoBlobReferenceIterator;
+import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
 import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.commons.json.JsopStream;
 import org.apache.jackrabbit.oak.commons.json.JsopWriter;
@@ -72,6 +75,7 @@ import org.apache.jackrabbit.oak.plugins.document.util.LoggingDocumentStoreWrapp
 import org.apache.jackrabbit.oak.plugins.document.util.StringValue;
 import org.apache.jackrabbit.oak.plugins.document.util.TimingDocumentStoreWrapper;
 import org.apache.jackrabbit.oak.plugins.document.util.Utils;
+import org.apache.jackrabbit.oak.spi.blob.GarbageCollectableBlobStore;
 import org.apache.jackrabbit.oak.spi.commit.ChangeDispatcher;
 import org.apache.jackrabbit.oak.spi.commit.Observable;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
@@ -284,6 +288,8 @@ public final class DocumentNodeStore
 
     private final VersionGarbageCollector versionGarbageCollector;
 
+    private final MarkSweepGarbageCollector blobGarbageCollector;
+
     public DocumentNodeStore(DocumentMK.Builder builder) {
         this.blobStore = builder.getBlobStore();
         if (builder.isUseSimpleRevision()) {
@@ -314,6 +320,7 @@ public final class DocumentNodeStore
         this.branches = new UnmergedBranches(getRevisionComparator());
         this.asyncDelay = builder.getAsyncDelay();
         this.versionGarbageCollector = new VersionGarbageCollector(this);
+        this.blobGarbageCollector = createBlobGarbageCollector(blobStore);
         this.missing = new DocumentNodeState(this, "MISSING", new Revision(0, 0, 0)) {
             @Override
             public int getMemory() {
@@ -909,7 +916,7 @@ public final class DocumentNodeStore
         for (Map.Entry<Key, Operation> op : commit.getChanges().entrySet()) {
             String name = op.getKey().getName();
             if (NodeDocument.isRevisionsEntry(name)
-                    || NodeDocument.MODIFIED.equals(name)
+                    || NodeDocument.MODIFIED_IN_SECS.equals(name)
                     || NodeDocument.COLLISIONS.equals(name)) {
                 continue;
             }
@@ -1454,12 +1461,12 @@ public final class DocumentNodeStore
 
     private void diffManyChildren(JsopWriter w, String path, Revision fromRev, Revision toRev) {
         long minTimestamp = Math.min(fromRev.getTimestamp(), toRev.getTimestamp());
-        long minValue = Commit.getModified(minTimestamp);
+        long minValue = Commit.getModifiedInSecs(minTimestamp);
         String fromKey = Utils.getKeyLowerLimit(path);
         String toKey = Utils.getKeyUpperLimit(path);
         Set<String> paths = Sets.newHashSet();
         for (NodeDocument doc : store.query(Collection.NODES, fromKey, toKey,
-                NodeDocument.MODIFIED, minValue, Integer.MAX_VALUE)) {
+                NodeDocument.MODIFIED_IN_SECS, minValue, Integer.MAX_VALUE)) {
             paths.add(doc.getPath());
         }
         // also consider nodes with not yet stored modifications (OAK-1107)
@@ -1597,6 +1604,30 @@ public final class DocumentNodeStore
     }
 
     /**
+     * Creates and returns a MarkSweepGarbageCollector if the current BlobStore
+     * supports garbage collection
+     *
+     * @param blobStore the blobStore used by DocumentNodeStore
+     *
+     * @return garbage collector of the BlobStore supports GC otherwise null
+     */
+    @Nullable
+    private MarkSweepGarbageCollector createBlobGarbageCollector(BlobStore blobStore) {
+        MarkSweepGarbageCollector blobGC = null;
+        if(blobStore instanceof GarbageCollectableBlobStore){
+            blobGC = new MarkSweepGarbageCollector();
+            try {
+                blobGC.init(new DocumentBlobReferenceRetriever(this),
+                        (GarbageCollectableBlobStore) blobStore);
+            } catch (IOException e) {
+                throw new RuntimeException("Error occurred while initializing " +
+                        "the MarkSweepGarbageCollector",e);
+            }
+        }
+        return blobGC;
+    }
+
+    /**
      * A background thread.
      */
     static class BackgroundOperation implements Runnable {
@@ -1644,7 +1675,19 @@ public final class DocumentNodeStore
         return blobSerializer;
     }
 
+    /**
+     * Returns an iterator for all the blob present in the store.
+     *
+     * <p>In some cases the iterator might implement {@link java.io.Closeable}. So
+     * callers should check for such iterator and close them</p>
+     *
+     * @see org.apache.jackrabbit.oak.plugins.document.mongo.MongoBlobReferenceIterator
+     * @return an iterator for all the blobs
+     */
     public Iterator<Blob> getReferencedBlobsIterator() {
+        if(store instanceof MongoDocumentStore){
+            return new MongoBlobReferenceIterator(this, (MongoDocumentStore) store);
+        }
         return new BlobReferenceIterator(this);
     }
 
@@ -1660,7 +1703,13 @@ public final class DocumentNodeStore
         return checkpoints;
     }
 
+    @Nonnull
     public VersionGarbageCollector getVersionGarbageCollector() {
         return versionGarbageCollector;
+    }
+
+    @CheckForNull
+    public MarkSweepGarbageCollector getBlobGarbageCollector() {
+        return blobGarbageCollector;
     }
 }

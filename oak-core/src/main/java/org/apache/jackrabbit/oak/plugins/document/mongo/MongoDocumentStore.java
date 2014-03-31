@@ -126,14 +126,14 @@ public class MongoDocumentStore implements CachingDocumentStore {
         // the _id field is the primary key, so we don't need to define it
         DBObject index = new BasicDBObject();
         // modification time (descending)
-        index.put(NodeDocument.MODIFIED, -1L);
+        index.put(NodeDocument.MODIFIED_IN_SECS, -1L);
         DBObject options = new BasicDBObject();
         options.put("unique", Boolean.FALSE);
         nodes.ensureIndex(index, options);
 
         // index on the _bin flag to faster access nodes with binaries for GC
         index = new BasicDBObject();
-        index.put(NodeDocument.HAS_BINARY_FLAG, Integer.valueOf(1));
+        index.put(NodeDocument.HAS_BINARY_FLAG, 1);
         options = new BasicDBObject();
         options.put("unique", Boolean.FALSE);
         options.put("sparse", Boolean.TRUE);
@@ -141,6 +141,13 @@ public class MongoDocumentStore implements CachingDocumentStore {
 
         index = new BasicDBObject();
         index.put(NodeDocument.DELETED_ONCE, 1);
+        options = new BasicDBObject();
+        options.put("unique", Boolean.FALSE);
+        options.put("sparse", Boolean.TRUE);
+        this.nodes.ensureIndex(index, options);
+
+        index = new BasicDBObject();
+        index.put(NodeDocument.SD_TYPE, 1);
         options = new BasicDBObject();
         options.put("unique", Boolean.FALSE);
         options.put("sparse", Boolean.TRUE);
