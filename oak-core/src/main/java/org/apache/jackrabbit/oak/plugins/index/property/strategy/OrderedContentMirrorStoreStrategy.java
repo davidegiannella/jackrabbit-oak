@@ -143,60 +143,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             }
         }
         return node;
-//        NodeBuilder localkey = null;
-//        NodeBuilder start = index.child(START);
-//
-//        // identifying the right place for insert
-//        String n = getPropertyNext(start);
-//        if (Strings.isNullOrEmpty(n)) {
-//            // new/empty index
-//            localkey = index.child(key);
-//            setNext(localkey, EMPTY_NEXT_ARRAY);
-//            List<String> nexts = new ArrayList<String>();
-//            for (int i = 0; i <= getLane(); i++) {
-//                nexts.add(key);
-//            }
-//            setNext(start, Iterables.toArray(nexts, String.class));
-//        } else {
-//            // specific use-case where the item has to be added as first of the list
-//            String nextKey = n;
-//            Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(index.getNodeState(),
-//                                                                              true);
-//            for (ChildNodeEntry child : children) {
-//                nextKey = getPropertyNext(child);
-//                if (Strings.isNullOrEmpty(nextKey)) {
-//                    // we're at the last element, therefore our 'key' has to be appended
-//                    setNext(index.getChildNode(child.getName()), key);
-//                    localkey = index.child(key);
-//                    localkey.setProperty(NEXT, EMPTY_NEXT, Type.STRINGS);
-//                } else {
-//                    if (isInsertHere(key, nextKey)) {
-//                        setNext(index.getChildNode(child.getName()), key);
-//                        localkey = index.child(key); 
-//                        setNext(localkey, nextKey);
-//                        break;
-//                    }
-//                }
-//            }
-//        }
-//
-//        return localkey;
     }
-
-//    /**
-//     * tells whether or not the is right to insert here a new item.
-//     * 
-//     * @param newItemKey the new item key to be added
-//     * @param existingItemKey the 'here' of the existing index
-//     * @return true for green light on insert false otherwise.
-//     */
-//    private boolean isInsertHere(@Nonnull String newItemKey, @Nonnull String existingItemKey) {
-//        if (OrderDirection.ASC.equals(direction)) {
-//            return newItemKey.compareTo(existingItemKey) < 0;
-//        } else {
-//            return newItemKey.compareTo(existingItemKey) > 0;
-//        }
-//    }
                                         
     @Override
     void prune(final NodeBuilder index, final Deque<NodeBuilder> builders, final String key) {
@@ -232,43 +179,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             }
         }
     }
-
-//    /**
-//     * find the previous item (ChildNodeEntry) in the index given the provided NodeState for
-//     * comparison
-//     * 
-//     * in an index sorted in ascending manner where we have @{code [1, 2, 3, 4, 5]} if we ask for 
-//     * a previous given 4 it will be 3. previous(4)=3.
-//     * 
-//     * in an index sorted in descending manner where we have @{code [5, 4, 3, 2, 1]} if we as for
-//     * a previous given 4 it will be 5. previous(4)=5.
-//     * 
-//     * @param index the index we want to look into ({@code :index})
-//     * @param node the node we want to compare
-//     * @return the previous item or null if not found.
-//     */
-//    @Nullable
-//    ChildNodeEntry findPrevious(@Nonnull final NodeState index, @Nonnull final NodeState node) {
-//        ChildNodeEntry previous = null;
-//        ChildNodeEntry current = null;
-//        boolean found = false;
-//        Iterator<? extends ChildNodeEntry> it = getChildNodeEntries(index, true).iterator();
-//
-//        while (!found && it.hasNext()) {
-//            current = it.next();
-//            if (previous == null) {
-//                // first iteration
-//                previous = current;
-//            } else {
-//                found = node.equals(current.getNodeState());
-//                if (!found) {
-//                    previous = current;
-//                }
-//            }
-//        }
-//
-//        return found ? previous : null;
-//    }
 
     /**
      * retrieve an Iterable for going through the index in the right order without the :start node
@@ -739,18 +649,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         } while (((next != null && walkingPredicate.apply(next)) || stillLaning) && (found == null));
         
         return found;
-        // TODO the FullIterable will have to be replaced with something else once we'll have the
-        // Skip part of the list implemented.
-//        Iterable<ChildNodeEntry> children = new FullIterable(index, false);
-//                
-//        ChildNodeEntry entry = null;
-//        for (ChildNodeEntry child : children) {
-//            if (condition.apply(child)) {
-//                entry = child;
-//                break;
-//            }
-//        }
-//        return entry;
     }
     
     /**
@@ -758,27 +656,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      */
     static class PredicateEquals implements Predicate<ChildNodeEntry> {
         private String searchfor;
-//        private NodeState searchNode;
         
         public PredicateEquals(@Nonnull String searchfor) {
             this.searchfor = searchfor;
-//            this.searchNode = null;
         }
         
-//        public PredicateEquals(@Nonnull NodeState searchfor) {
-//            this.searchfor = null;
-//            this.searchNode = searchfor;
-//        }
-
         @Override
         public boolean apply(ChildNodeEntry arg0) {
-            boolean b = false;
-//            if (searchNode == null) {
-                b = arg0 != null && searchfor.equals(arg0.getName());
-//            } else {
-//                b = arg0 != null && searchNode.equals(arg0.getNodeState());
-//            }
-            return b;
+            return arg0 != null && searchfor.equals(arg0.getName());
         }
 
         @Override
