@@ -20,11 +20,9 @@ package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Random;
 
@@ -185,41 +183,68 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 //        return localkey;
     }
 
-    /**
-     * tells whether or not the is right to insert here a new item.
-     * 
-     * @param newItemKey the new item key to be added
-     * @param existingItemKey the 'here' of the existing index
-     * @return true for green light on insert false otherwise.
-     */
-    private boolean isInsertHere(@Nonnull String newItemKey, @Nonnull String existingItemKey) {
-        if (OrderDirection.ASC.equals(direction)) {
-            return newItemKey.compareTo(existingItemKey) < 0;
-        } else {
-            return newItemKey.compareTo(existingItemKey) > 0;
-        }
-    }
+//    /**
+//     * tells whether or not the is right to insert here a new item.
+//     * 
+//     * @param newItemKey the new item key to be added
+//     * @param existingItemKey the 'here' of the existing index
+//     * @return true for green light on insert false otherwise.
+//     */
+//    private boolean isInsertHere(@Nonnull String newItemKey, @Nonnull String existingItemKey) {
+//        if (OrderDirection.ASC.equals(direction)) {
+//            return newItemKey.compareTo(existingItemKey) < 0;
+//        } else {
+//            return newItemKey.compareTo(existingItemKey) > 0;
+//        }
+//    }
                                         
     @Override
-    void prune(final NodeBuilder index, final Deque<NodeBuilder> builders) {
+    void prune(final NodeBuilder index, final Deque<NodeBuilder> builders, final String key) {
         for (NodeBuilder node : builders) {
             if (node.hasProperty("match") || node.getChildNodeCount(1) > 0) {
                 return;
             } else if (node.exists()) {
                 if (node.hasProperty(NEXT)) {
-                    // it's an index key and we have to relink the list
-                    // (1) find the previous element
-                    ChildNodeEntry previous = findPrevious(
-                            index.getNodeState(), node.getNodeState());
-                    LOG.debug("previous: {}", previous);
-                    // (2) find the next element
-                    String next = getPropertyNext(node); 
-                    if (next == null) {
-                        next = "";
+                    //TODO we should find a better way for cleaning the pointers.
+                    // Using the walked lanes of seek() doesn't work properly as we could have
+                    // not walked all the pointers. For example we could have jumped to the item
+                    // straight from lane 4 without passing the slowest lane if we prune "002"
+                    // in a situation like the following
+                    //      STR 000 001 002 NIL
+                    //       |-->o-->o-->o-->|
+                    //       |------>o-->o-->|
+                    //       |---------->o-->|
+                    //       |---------->o-->|
+                    String currentNext, previousNext;
+                    NodeBuilder n;
+                    ChildNodeEntry current;
+                    Predicate<ChildNodeEntry> walkingPredicate = direction.isAscending() ? 
+                          new PredicateLessThan(key, true)
+                        : new PredicateGreaterThan(key, true);
+
+                    for (int lane = 0; lane < OrderedIndex.LANES; lane++) {
+                        // we always start with :start
+                        current = new OrderedChildNodeEntry(START, index.getChildNode(START)
+                            .getNodeState());
+                        do {
+                            previousNext = getPropertyNext(current, lane);
+                            if (Strings.isNullOrEmpty(previousNext)) {
+                                // we're already pointing to NIL. Let's break it
+                                break;
+                            } else {
+                                if (key.equals(previousNext)) {
+                                    // re-linking as this was pointing to us
+                                    n = index.getChildNode(current.getName());
+                                    currentNext = getPropertyNext(node, lane);
+                                    setPropertyNext(n, currentNext, lane);
+                                    break;
+                                }
+                            }
+                            current = new OrderedChildNodeEntry(previousNext, index.getChildNode(
+                                previousNext).getNodeState());
+                        } while (walkingPredicate.apply(current));
                     }
-                    // (3) re-link the previous to the next
-                    setPropertyNext(index.getChildNode(previous.getName()), next);
-                } 
+                }
                 node.remove();
             }
         }
@@ -362,7 +387,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         return value.replaceAll("%3A", ":");
     }
     
-    static final class OrderedChildNodeEntry extends AbstractChildNodeEntry {
+    static class OrderedChildNodeEntry extends AbstractChildNodeEntry {
         private final String name;
         private final NodeState state;
 
@@ -750,14 +775,27 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      */
     static class PredicateEquals implements Predicate<ChildNodeEntry> {
         private String searchfor;
-
+        private NodeState searchNode;
+        
         public PredicateEquals(@Nonnull String searchfor) {
             this.searchfor = searchfor;
+            this.searchNode = null;
+        }
+        
+        public PredicateEquals(@Nonnull NodeState searchfor) {
+            this.searchfor = null;
+            this.searchNode = searchfor;
         }
 
         @Override
         public boolean apply(ChildNodeEntry arg0) {
-            return arg0 != null && searchfor.equals(arg0.getName());
+            boolean b = false;
+            if (searchNode == null) {
+                b = arg0 != null && searchfor.equals(arg0.getName());
+            } else {
+                b = arg0 != null && searchNode.equals(arg0.getNodeState());
+            }
+            return b;
         }
 
         @Override

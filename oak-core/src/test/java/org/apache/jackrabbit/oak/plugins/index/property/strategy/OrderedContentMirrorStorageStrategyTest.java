@@ -55,7 +55,6 @@ import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -3346,31 +3345,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertEquals("Wrong lane", lane3, wl[3]);
         assertEquals("Wrong item returned", entry, item);
     }
-    
-    @Test
-    @Ignore("easing the merge")
-    public void seekGreaterThanWithLanes() {
-        fail();
-    }
-    
-    @Test
-    @Ignore("easing the merge")
-    public void seekGreaterThenEqualWithLanes() {
-        fail();
-    }
-    
-    @Test
-    @Ignore("easing the merge")
-    public void seekLessThanWithLanes() {
-        fail();
-    }
-    
-    @Test
-    @Ignore("easing the merge")
-    public void seekLessThanEqualsWithLanes() {
-        fail();
-    }
-    
+        
     /**
      * convenience method for printing the current index as SkipList
      * 
@@ -3421,7 +3396,7 @@ public class OrderedContentMirrorStorageStrategyTest {
     }
     
     @Test
-    public void predicateLessThan() {
+    public void predicateLessThan() { 
         Predicate<ChildNodeEntry> predicate;
         String searchfor;
         ChildNodeEntry entry;
@@ -3440,5 +3415,91 @@ public class OrderedContentMirrorStorageStrategyTest {
         predicate = new PredicateLessThan(searchfor, true);
         entry = null;
         assertFalse(predicate.apply(entry));
+    }
+
+    /**
+     * tests the pruning with a mult-value index
+     */
+    @Test
+    public void prune() {
+        MockOrderedContentMirrorStoreStrategy store = new MockOrderedContentMirrorStoreStrategy();
+        NodeBuilder index;
+        NodeBuilder node;
+        final String path0 = "/content/doc0";
+        final String path1 = "/content/doc1";
+        final String path2 = "/content/doc2";
+        final String n0 = KEYS[0];
+        final String n1 = KEYS[1];
+        final String n2 = KEYS[2];
+
+
+        index = EmptyNodeState.EMPTY_NODE.builder();
+        store.setLane(0);
+        store.update(index, path0, EMPTY_KEY_SET, newHashSet(n0));
+        store.update(index, path1, EMPTY_KEY_SET, newHashSet(n1));
+        store.update(index, path2, EMPTY_KEY_SET, newHashSet(n2));
+
+        // as we trust the store we skip the check and goes straight to Stage 2.
+
+        printSkipList(index.getNodeState());
+
+        // removing n2
+        store.update(index, path2, newHashSet(n2), EMPTY_KEY_SET);
+
+        printSkipList(index.getNodeState());
+
+        node = index.getChildNode(START);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(n0, "", "", ""), 
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n0);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(n1, "", "", ""), 
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n1);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of("", "", "", ""), 
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n2);
+        assertFalse(node.exists());
+
+        // creating
+        // STR 000 001 002 NIL
+        //  |-->o-->o-->o-->|
+        //  |------>o-->o-->|
+        //  |---------->o-->|
+        //  |---------->o-->|
+        index = EmptyNodeState.EMPTY_NODE.builder();
+        store.setLane(0);
+        store.update(index, path0, EMPTY_KEY_SET, newHashSet(n0));
+        store.setLane(1);
+        store.update(index, path1, EMPTY_KEY_SET, newHashSet(n1));
+        store.setLane(3);
+        store.update(index, path2, EMPTY_KEY_SET, newHashSet(n2));
+
+        // and after this update we should have
+        // STR 000 001 NIL
+        //  |-->o-->o-->|
+        //  |------>o-->|
+        //  |---------->|
+        //  |---------->|
+        store.update(index, path2, newHashSet(n2), EMPTY_KEY_SET);
+
+        // checking key nodes
+        node = index.getChildNode(START);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(n0, n1, "", ""), 
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n0);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(n1, "", "", ""), 
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        node = index.getChildNode(n1);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of("", "", "", ""), 
+            node.getProperty(NEXT).getValue(Type.STRINGS));
+        assertFalse(index.hasChildNode(n2));
+        
+        // TODO test with at least a couple of hops per lane
     }
 }
