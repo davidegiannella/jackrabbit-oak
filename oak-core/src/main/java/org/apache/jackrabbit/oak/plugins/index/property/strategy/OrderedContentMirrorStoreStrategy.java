@@ -250,42 +250,42 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
     }
 
-    /**
-     * find the previous item (ChildNodeEntry) in the index given the provided NodeState for
-     * comparison
-     * 
-     * in an index sorted in ascending manner where we have @{code [1, 2, 3, 4, 5]} if we ask for 
-     * a previous given 4 it will be 3. previous(4)=3.
-     * 
-     * in an index sorted in descending manner where we have @{code [5, 4, 3, 2, 1]} if we as for
-     * a previous given 4 it will be 5. previous(4)=5.
-     * 
-     * @param index the index we want to look into ({@code :index})
-     * @param node the node we want to compare
-     * @return the previous item or null if not found.
-     */
-    @Nullable
-    ChildNodeEntry findPrevious(@Nonnull final NodeState index, @Nonnull final NodeState node) {
-        ChildNodeEntry previous = null;
-        ChildNodeEntry current = null;
-        boolean found = false;
-        Iterator<? extends ChildNodeEntry> it = getChildNodeEntries(index, true).iterator();
-
-        while (!found && it.hasNext()) {
-            current = it.next();
-            if (previous == null) {
-                // first iteration
-                previous = current;
-            } else {
-                found = node.equals(current.getNodeState());
-                if (!found) {
-                    previous = current;
-                }
-            }
-        }
-
-        return found ? previous : null;
-    }
+//    /**
+//     * find the previous item (ChildNodeEntry) in the index given the provided NodeState for
+//     * comparison
+//     * 
+//     * in an index sorted in ascending manner where we have @{code [1, 2, 3, 4, 5]} if we ask for 
+//     * a previous given 4 it will be 3. previous(4)=3.
+//     * 
+//     * in an index sorted in descending manner where we have @{code [5, 4, 3, 2, 1]} if we as for
+//     * a previous given 4 it will be 5. previous(4)=5.
+//     * 
+//     * @param index the index we want to look into ({@code :index})
+//     * @param node the node we want to compare
+//     * @return the previous item or null if not found.
+//     */
+//    @Nullable
+//    ChildNodeEntry findPrevious(@Nonnull final NodeState index, @Nonnull final NodeState node) {
+//        ChildNodeEntry previous = null;
+//        ChildNodeEntry current = null;
+//        boolean found = false;
+//        Iterator<? extends ChildNodeEntry> it = getChildNodeEntries(index, true).iterator();
+//
+//        while (!found && it.hasNext()) {
+//            current = it.next();
+//            if (previous == null) {
+//                // first iteration
+//                previous = current;
+//            } else {
+//                found = node.equals(current.getNodeState());
+//                if (!found) {
+//                    previous = current;
+//                }
+//            }
+//        }
+//
+//        return found ? previous : null;
+//    }
 
     /**
      * retrieve an Iterable for going through the index in the right order without the :start node

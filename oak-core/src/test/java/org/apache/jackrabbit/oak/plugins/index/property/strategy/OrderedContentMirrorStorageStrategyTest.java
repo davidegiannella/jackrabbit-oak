@@ -708,39 +708,39 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertTrue("/foobar should have match=true", node.getBoolean("match"));
     }
 
-    /**
-     * <p>
-     * find a previous item given a key in an index with 1 element only
-     * </p>
-     *
-     * <p>
-     * <i>it relies on the functionality of the store.update() for creating the
-     * index</i>
-     * </p>
-     *
-     * <code>
-     *    :index {
-     *       :start : { :next=n0 },
-     *       n0 = { :next= }
-     *    }
-     * </code>
-     */
-    @Test
-    public void findPrevious1ItemIndex() {
-        final OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
-        final String n0 = KEYS[0];
-        final NodeState nodeStart = EmptyNodeState.EMPTY_NODE.builder().setProperty(NEXT, n0).getNodeState();
-        final NodeState node0 = EmptyNodeState.EMPTY_NODE.builder().setProperty(NEXT, "").getNodeState();
-        final NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
-
-        index.setChildNode(START, nodeStart);
-        index.setChildNode(n0, node0);
-
-        NodeState indexState = index.getNodeState();
-        ChildNodeEntry previous = store.findPrevious(indexState, node0);
-        assertNotNull(previous);
-        assertEquals("the :start node is expected", nodeStart, previous.getNodeState());
-    }
+//    /**
+//     * <p>
+//     * find a previous item given a key in an index with 1 element only
+//     * </p>
+//     *
+//     * <p>
+//     * <i>it relies on the functionality of the store.update() for creating the
+//     * index</i>
+//     * </p>
+//     *
+//     * <code>
+//     *    :index {
+//     *       :start : { :next=n0 },
+//     *       n0 = { :next= }
+//     *    }
+//     * </code>
+//     */
+//    @Test
+//    public void findPrevious1ItemIndex() {
+//        final OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy();
+//        final String n0 = KEYS[0];
+//        final NodeState nodeStart = EmptyNodeState.EMPTY_NODE.builder().setProperty(NEXT, n0).getNodeState();
+//        final NodeState node0 = EmptyNodeState.EMPTY_NODE.builder().setProperty(NEXT, "").getNodeState();
+//        final NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
+//
+//        index.setChildNode(START, nodeStart);
+//        index.setChildNode(n0, node0);
+//
+//        NodeState indexState = index.getNodeState();
+//        ChildNodeEntry previous = store.findPrevious(indexState, node0);
+//        assertNotNull(previous);
+//        assertEquals("the :start node is expected", nodeStart, previous.getNodeState());
+//    }
 
     /**
      * test the use case where a document change the indexed property. For
@@ -1181,56 +1181,56 @@ public class OrderedContentMirrorStorageStrategyTest {
                    Strings.isNullOrEmpty(getNext(index.getChildNode(n0))));
     }
 
-    /**
-     * test finding a previous item in a descending ordered index.
-     *
-     * <code>
-     *      Stage 1
-     *      =======
-     *
-     *      :index {
-     *          :start : { :next=n0 },
-     *          n0 : { :next= }
-     *      }
-     *
-     *      findPrevious(n0)=:start
-     *
-     *      Stage 2
-     *      =======
-     *
-     *      :index {
-     *          :start : { :next=n1 },
-     *          n0 : { :next= }
-     *          n1 : { :next=n0 }
-     *      }
-     *
-     *      findPrevious(n0)=n1;
-     * </code>
-     */
-    @Test
-    public void descendingOrderFindPrevious() {
-        OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy(OrderDirection.DESC);
-        NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
-        String n0 = KEYS[0];
-        String n1 = KEYS[1];
-        NodeState indexState;
-        NodeState previous;
-        NodeState node;
-
-        //Stage 1
-        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
-        indexState = index.getNodeState();
-        node = indexState.getChildNode(n0);
-        previous = indexState.getChildNode(START);
-        assertEquals(previous, store.findPrevious(indexState, node).getNodeState());
-
-        //Stage 2
-        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n1));
-        indexState = index.getNodeState();
-        node = indexState.getChildNode(n0);
-        previous = indexState.getChildNode(n1);
-        assertEquals(previous, store.findPrevious(indexState, node).getNodeState());
-    }
+//    /**
+//     * test finding a previous item in a descending ordered index.
+//     *
+//     * <code>
+//     *      Stage 1
+//     *      =======
+//     *
+//     *      :index {
+//     *          :start : { :next=n0 },
+//     *          n0 : { :next= }
+//     *      }
+//     *
+//     *      findPrevious(n0)=:start
+//     *
+//     *      Stage 2
+//     *      =======
+//     *
+//     *      :index {
+//     *          :start : { :next=n1 },
+//     *          n0 : { :next= }
+//     *          n1 : { :next=n0 }
+//     *      }
+//     *
+//     *      findPrevious(n0)=n1;
+//     * </code>
+//     */
+//    @Test
+//    public void descendingOrderFindPrevious() {
+//        OrderedContentMirrorStoreStrategy store = new OrderedContentMirrorStoreStrategy(OrderDirection.DESC);
+//        NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
+//        String n0 = KEYS[0];
+//        String n1 = KEYS[1];
+//        NodeState indexState;
+//        NodeState previous;
+//        NodeState node;
+//
+//        //Stage 1
+//        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n0));
+//        indexState = index.getNodeState();
+//        node = indexState.getChildNode(n0);
+//        previous = indexState.getChildNode(START);
+//        assertEquals(previous, store.findPrevious(indexState, node).getNodeState());
+//
+//        //Stage 2
+//        store.update(index, "/a/b", EMPTY_KEY_SET, newHashSet(n1));
+//        indexState = index.getNodeState();
+//        node = indexState.getChildNode(n0);
+//        previous = indexState.getChildNode(n1);
+//        assertEquals(previous, store.findPrevious(indexState, node).getNodeState());
+//    }
 
     /**
      * test the insert of 1 item in a descending order index. it should not really matter but just
