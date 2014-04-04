@@ -60,6 +60,7 @@ import org.apache.jackrabbit.oak.query.ast.PropertyValueImpl;
 import org.apache.jackrabbit.oak.query.ast.SameNodeImpl;
 import org.apache.jackrabbit.oak.query.ast.SameNodeJoinConditionImpl;
 import org.apache.jackrabbit.oak.query.ast.SelectorImpl;
+import org.apache.jackrabbit.oak.query.ast.SimilarImpl;
 import org.apache.jackrabbit.oak.query.ast.SourceImpl;
 import org.apache.jackrabbit.oak.query.ast.UpperCaseImpl;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
@@ -205,6 +206,13 @@ public class QueryImpl implements Query {
 
             @Override
             public boolean visit(NativeFunctionImpl node) {
+                node.setQuery(query);
+                node.bindSelector(source);
+                return super.visit(node);
+            }
+            
+            @Override
+            public boolean visit(SimilarImpl node) {
                 node.setQuery(query);
                 node.bindSelector(source);
                 return super.visit(node);
@@ -808,6 +816,9 @@ public class QueryImpl implements Query {
         if (traversalEnabled) {
             QueryIndex traversal = new TraversingIndex();
             double cost = traversal.getCost(filter, rootState);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("cost for " + traversal.getIndexName() + " is " + cost);
+            }
             if (cost < bestCost || bestCost == Double.POSITIVE_INFINITY) {
                 bestCost = cost;
                 bestIndex = traversal;

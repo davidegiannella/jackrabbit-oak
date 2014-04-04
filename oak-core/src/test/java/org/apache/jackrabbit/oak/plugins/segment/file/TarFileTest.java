@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.UUID;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -34,40 +33,38 @@ public class TarFileTest {
 
     @Before
     public void setUp() throws IOException {
-        file = File.createTempFile("TarFileTest", ".tar");
-    }
-
-    @After
-    public void tearDown() {
-        file.delete();
-    }
-
-    @Test
-    public void testOpenClose() throws IOException {
-        new TarFile(file, 10240, true).close();
-        new TarFile(file, 10240, false).close();
+        file = File.createTempFile("TarFileTest", ".tar", new File("target"));
     }
 
     @Test
     public void testWriteAndRead() throws IOException {
         UUID id = UUID.randomUUID();
+        long msb = id.getMostSignificantBits();
+        long lsb = id.getLeastSignificantBits() & (-1 >>> 4); // OAK-1672
         byte[] data = "Hello, World!".getBytes(UTF_8);
 
-        TarFile tar = new TarFile(file, 10240, false);
+        TarWriter writer = new TarWriter(file);
         try {
-            tar.writeEntry(id, data, 0, data.length);
-            assertEquals(ByteBuffer.wrap(data), tar.readEntry(id));
+            writer.writeEntry(msb, lsb, data, 0, data.length);
+            assertEquals(ByteBuffer.wrap(data), writer.readEntry(msb, lsb));
         } finally {
-            tar.close();
+            writer.close();
         }
 
-        assertEquals(10240, file.length());
+        assertEquals(3072, file.length());
 
-        tar = new TarFile(file, 10240, false);
+        TarReader reader = new TarReader(file, false);
         try {
-            assertEquals(ByteBuffer.wrap(data), tar.readEntry(id));
+            assertEquals(ByteBuffer.wrap(data), reader.readEntry(msb, lsb));
         } finally {
-            tar.close();
+            reader.close();
+        }
+
+        reader = new TarReader(file, false);
+        try {
+            assertEquals(ByteBuffer.wrap(data), reader.readEntry(msb, lsb));
+        } finally {
+            reader.close();
         }
     }
 

@@ -18,10 +18,12 @@ package org.apache.jackrabbit.oak.plugins.index.solr.query;
 
 import java.util.Collection;
 import javax.annotation.CheckForNull;
+
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.plugins.index.aggregate.NodeAggregator;
 import org.apache.jackrabbit.oak.plugins.index.solr.configuration.OakSolrConfiguration;
+import org.apache.jackrabbit.oak.query.QueryImpl;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextAnd;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextOr;
@@ -50,6 +52,7 @@ import static org.apache.jackrabbit.oak.commons.PathUtils.getName;
 public class SolrQueryIndex implements FulltextQueryIndex {
 
     private static final String NATIVE_SOLR_QUERY = "native*solr";
+    private static final String NATIVE_LUCENE_QUERY = "native*lucene";
 
     public static final String TYPE = "solr";
 
@@ -107,12 +110,15 @@ public class SolrQueryIndex implements FulltextQueryIndex {
         if (propertyRestrictions != null && !propertyRestrictions.isEmpty()) {
             for (Filter.PropertyRestriction pr : propertyRestrictions) {
                 // native query support
-                if (NATIVE_SOLR_QUERY.equals(pr.propertyName)) {
+                if (NATIVE_SOLR_QUERY.equals(pr.propertyName) || NATIVE_LUCENE_QUERY.equals(pr.propertyName)) {
                     String nativeQueryString = String.valueOf(pr.first.getValue(pr.first.getType()));
                     if (isSupportedHttpRequest(nativeQueryString)) {
                         // pass through the native HTTP Solr request
                         String requestHandlerString = nativeQueryString.substring(0, nativeQueryString.indexOf('?'));
                         if (!"select".equals(requestHandlerString)) {
+                            if (requestHandlerString.charAt(0) != '/') {
+                                requestHandlerString = "/" + requestHandlerString;
+                            }
                             solrQuery.setRequestHandler(requestHandlerString);
                         }
                         String parameterString = nativeQueryString.substring(nativeQueryString.indexOf('?') + 1);
@@ -121,6 +127,23 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                             if (kv.length != 2) {
                                 throw new RuntimeException("Unparsable native HTTP Solr query");
                             } else {
+                                if ("stream.body".equals(kv[0])) {
+                                    kv[0] = "q";
+                                    String mltFlString = "mlt.fl=";
+                                    int mltFlIndex = parameterString.indexOf(mltFlString);
+                                    if (mltFlIndex > -1) {
+                                        int beginIndex = mltFlIndex + mltFlString.length();
+                                        int endIndex = parameterString.indexOf('&',beginIndex);
+                                        String fields;
+                                        if (endIndex > beginIndex) {
+                                            fields = parameterString.substring(beginIndex, endIndex);
+                                        }
+                                        else {
+                                            fields = parameterString.substring(beginIndex);
+                                        }
+                                        kv[1] = "_query_:\"{!dismax qf="+fields+" q.op=OR}"+kv[1]+"\"";
+                                    }
+                                }
                                 solrQuery.setParam(kv[0], kv[1]);
                             }
                         }
@@ -189,6 +212,11 @@ public class SolrQueryIndex implements FulltextQueryIndex {
         if (filter.getFullTextConstraint() != null) {
             queryBuilder.append(getFullTextQuery(filter.getFullTextConstraint()));
             queryBuilder.append(' ');
+        } else if (filter.getFulltextConditions() != null) {
+            Collection<String> fulltextConditions = filter.getFulltextConditions();
+            for (String fulltextCondition : fulltextConditions) {
+                queryBuilder.append(fulltextCondition).append(" ");
+            }
         }
 
         Filter.PathRestriction pathRestriction = filter.getPathRestriction();
@@ -203,10 +231,6 @@ public class SolrQueryIndex implements FulltextQueryIndex {
             }
         }
 
-        Collection<String> fulltextConditions = filter.getFulltextConditions();
-        for (String fulltextCondition : fulltextConditions) {
-            queryBuilder.append(fulltextCondition).append(" ");
-        }
         if (queryBuilder.length() == 0) {
             queryBuilder.append("*:*");
         }
@@ -295,6 +319,7 @@ public class SolrQueryIndex implements FulltextQueryIndex {
 
     private void setDefaults(SolrQuery solrQuery) {
         solrQuery.setParam("q.op", "AND");
+        solrQuery.setParam("fl", "* score");
         String catchAllField = configuration.getCatchAllField();
         if (catchAllField != null && catchAllField.length() > 0) {
             solrQuery.setParam("df", catchAllField);
@@ -387,6 +412,14 @@ public class SolrQueryIndex implements FulltextQueryIndex {
 
                     @Override
                     public PropertyValue getValue(String columnName) {
+                        if (QueryImpl.JCR_SCORE.equals(columnName)) {
+                            float score = 0f;
+                            Object scoreObj = doc.get("score");
+                            if (scoreObj != null) {
+                                score = (Float) scoreObj;
+                            }
+                            return PropertyValues.newDouble((double) score);
+                        }
                         Object o = doc.getFieldValue(columnName);
                         return o == null ? null : PropertyValues.newString(o.toString());
                     }

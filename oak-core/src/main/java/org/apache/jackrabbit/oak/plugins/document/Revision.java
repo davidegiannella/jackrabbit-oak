@@ -16,13 +16,17 @@
  */
 package org.apache.jackrabbit.oak.plugins.document;
 
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
+import org.apache.jackrabbit.oak.plugins.document.util.Utils;
+import org.apache.jackrabbit.oak.stats.Clock;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * A revision.
@@ -58,6 +62,27 @@ public class Revision {
      */
     private final boolean branch;
 
+    /** Only set for testing */
+    private static Clock clock;
+
+    /**
+     * <b>
+     * Only to be used for testing.
+     * Do Not Use Otherwise
+     * </b>
+     * 
+     * @param c - the clock
+     */
+    static void setClock(Clock c) {
+        checkNotNull(c);
+        clock = c;
+    }
+
+    static void resetClockToDefault(){
+        clock = Clock.SIMPLE;
+        lastTimestamp = clock.getTime();
+
+    }
     public Revision(long timestamp, int counter, int clusterId) {
         this(timestamp, counter, clusterId, false);
     }
@@ -150,6 +175,9 @@ public class Revision {
      */
     public static long getCurrentTimestamp() {
         long timestamp = System.currentTimeMillis();
+        if (clock != null) {
+            timestamp = clock.getTime();
+        }
         if (timestamp < lastTimestamp) {
             // protect against decreases in the system time,
             // time machines, and other fluctuations in the time continuum
@@ -198,13 +226,6 @@ public class Revision {
         return new Revision(timestamp, c, clusterId, isBranch);
     }
 
-    /**
-     * Provides a readable string for given timestamp
-     */
-    public static String timestampToString(long timestamp){
-        return (new Timestamp(timestamp) + "00").substring(0, 23);
-    }
-
     @Override
     public String toString() {
         return toStringBuilder(new StringBuilder()).toString();
@@ -242,7 +263,7 @@ public class Revision {
         buff.append("revision: \"").append(toString()).append("\"");
         buff.append(", clusterId: ").append(clusterId);
         buff.append(", time: \"").
-            append(timestampToString(timestamp)).
+            append(Utils.timestampToString(timestamp)).
             append("\"");
         if (counter > 0) {
             buff.append(", counter: ").append(counter);

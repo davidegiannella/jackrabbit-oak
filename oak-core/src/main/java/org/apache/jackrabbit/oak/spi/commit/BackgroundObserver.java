@@ -51,7 +51,6 @@ import org.slf4j.LoggerFactory;
  * to just one change.
  */
 public class BackgroundObserver implements Observer, Closeable {
-    private static final Logger LOG = LoggerFactory.getLogger(BackgroundObserver.class);
 
     /**
      * Signal for the background thread to stop processing changes.
@@ -78,11 +77,6 @@ public class BackgroundObserver implements Observer, Closeable {
      */
     private final BlockingQueue<ContentChange> queue;
 
-    /**
-     * Maximal number of elements before queue will start to block
-     */
-    private final int queueLength;
-
     private static class ContentChange {
         private final NodeState root;
         private final CommitInfo info;
@@ -103,11 +97,6 @@ public class BackgroundObserver implements Observer, Closeable {
      * the queue was full.
      */
     private boolean full;
-
-    /**
-     * Log a warning once when the queue is full. Reset once the queue is back empty.
-     */
-    private volatile boolean warnOnFullQueue = true;
 
     /**
      * Current background task
@@ -156,7 +145,6 @@ public class BackgroundObserver implements Observer, Closeable {
         this.executor = checkNotNull(executor);
         this.exceptionHandler = checkNotNull(exceptionHandler);
         this.queue = newArrayBlockingQueue(queueLength);
-        this.queueLength = queueLength;
     }
 
     public BackgroundObserver(
@@ -233,10 +221,6 @@ public class BackgroundObserver implements Observer, Closeable {
         // Try to add this change to the queue without blocking, and
         // mark the queue as full if there wasn't enough space
         full = !queue.offer(change);
-        if (full && warnOnFullQueue) {
-            warnOnFullQueue = false;
-            LOG.warn("Revision queue is full. Further revisions will be compacted.");
-        }
 
         if (!full) {
             // Keep track of the last change added, so we can do the

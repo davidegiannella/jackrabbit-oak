@@ -19,8 +19,19 @@
 
 package org.apache.jackrabbit.oak.plugins.blob.datastore;
 
+import java.io.File;
+import java.lang.ref.WeakReference;
+import java.util.AbstractMap;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Set;
+
 import com.google.common.base.Charsets;
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import com.google.common.io.BaseEncoding;
+import com.google.common.io.Files;
+import org.apache.jackrabbit.core.data.DataIdentifier;
 import org.apache.jackrabbit.core.data.DataStoreException;
 import org.apache.jackrabbit.core.data.FileDataStore;
 
@@ -30,6 +41,30 @@ import org.apache.jackrabbit.core.data.FileDataStore;
  */
 public class OakFileDataStore extends FileDataStore {
     private byte[] referenceKey;
+
+    public OakFileDataStore() {
+        //TODO FIXME Temporary workaround for OAK-1666. Override the default
+        //synchronized map with a Noop. This should be removed when fix
+        //for JCR-3764 is part of release.
+        inUse = new NoOpMap<DataIdentifier, WeakReference<DataIdentifier>>();
+    }
+
+    @Override
+    public Iterator<DataIdentifier> getAllIdentifiers() {
+        return Files.fileTreeTraverser().postOrderTraversal(new File(getPath()))
+                .filter(new Predicate<File>() {
+                    @Override
+                    public boolean apply(File input) {
+                        return input.isFile();
+                    }
+                })
+                .transform(new Function<File, DataIdentifier>() {
+                    @Override
+                    public DataIdentifier apply(File input) {
+                        return new DataIdentifier(input.getName());
+                    }
+                }).iterator();
+    }
 
     @Override
     protected byte[] getOrCreateReferenceKey() throws DataStoreException {
@@ -64,5 +99,22 @@ public class OakFileDataStore extends FileDataStore {
 
     public void setReferenceKey(byte[] referenceKey) {
         this.referenceKey = referenceKey;
+    }
+
+    /**
+     * Noop map which eats up all the put call
+     */
+    static class NoOpMap<K,V> extends AbstractMap<K,V> {
+
+        @Override
+        public V put(K key, V value) {
+            //Eat the put call
+            return null;
+        }
+
+        @Override
+        public Set<Entry<K, V>> entrySet() {
+            return Collections.emptySet();
+        }
     }
 }

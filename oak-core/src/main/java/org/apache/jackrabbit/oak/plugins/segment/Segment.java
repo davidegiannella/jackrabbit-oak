@@ -88,7 +88,7 @@ public class Segment {
      */
     static final int MEDIUM_LIMIT = (1 << (16 - 2)) + SMALL_LIMIT;
 
-    static int REF_COUNT_OFFSET = 5;
+    public static int REF_COUNT_OFFSET = 5;
 
     static int ROOT_COUNT_OFFSET = 6;
 
@@ -118,12 +118,18 @@ public class Segment {
      */
     private final ConcurrentMap<Integer, Template> templates = newConcurrentMap();
 
+    private volatile long accessed = 0;
+
     public Segment(SegmentTracker tracker, SegmentId id, ByteBuffer data) {
         this.tracker = checkNotNull(tracker);
         this.id = checkNotNull(id);
         this.data = checkNotNull(data);
 
         if (id.isDataSegmentId()) {
+            checkState(data.get(0) == '0'
+                    && data.get(1) == 'a'
+                    && data.get(2) == 'K'
+                    && data.get(3) == '\n');
             this.refids = new SegmentId[getRefCount()];
             refids[0] = id;
         } else {
@@ -138,6 +144,15 @@ public class Segment {
 
         this.refids = new SegmentId[SEGMENT_REFERENCE_LIMIT + 1];
         refids[0] = id;
+    }
+
+    void access() {
+        accessed++;
+    }
+
+    boolean accessed() {
+        accessed >>>= 1;
+        return accessed != 0;
     }
 
     /**

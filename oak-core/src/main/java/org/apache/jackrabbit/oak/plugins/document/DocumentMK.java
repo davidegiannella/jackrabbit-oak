@@ -17,6 +17,7 @@
 package org.apache.jackrabbit.oak.plugins.document;
 
 import java.io.InputStream;
+import java.util.concurrent.Executor;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -25,6 +26,7 @@ import javax.sql.DataSource;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.Weigher;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.mongodb.DB;
 
 import org.apache.jackrabbit.mk.api.MicroKernel;
@@ -462,6 +464,7 @@ public class DocumentMK implements MicroKernel {
         private long splitDocumentAgeMillis = 5 * 60 * 1000;
         private long offHeapCacheSize = -1;
         private Clock clock = Clock.SIMPLE;
+        private Executor executor;
 
         public Builder() {
             memoryCacheSize(DEFAULT_MEMORY_CACHE_SIZE);
@@ -500,31 +503,6 @@ public class DocumentMK implements MicroKernel {
          */
         public Builder setMongoDB(DB db) {
             return setMongoDB(db, 8);
-        }
-
-        /**
-         * Sets a JDBC connection URL to use for the RDB document and blob
-         * stores.
-         *
-         * @return this
-         */
-        public Builder setRDBConnection(String jdbcurl, String username, String password) {
-            this.documentStore = new RDBDocumentStore(jdbcurl, username, password, this);
-            this.blobStore = new RDBBlobStore(jdbcurl, username, password);
-            return this;
-        }
-
-        /**
-         * Sets a JDBC connection URLs to use for the RDB document and blob
-         * stores.
-         *
-         * @return this
-         */
-        public Builder setRDBConnection(String dsjdbcurl, String dsusername, String dspassword, String bsjdbcurl,
-                String bsusername, String bspassword) {
-            this.documentStore = new RDBDocumentStore(dsjdbcurl, dsusername, dspassword, this);
-            this.blobStore = new RDBBlobStore(bsjdbcurl, bsusername, bspassword);
-            return this;
         }
 
         /**
@@ -728,6 +706,18 @@ public class DocumentMK implements MicroKernel {
 
         public Builder offHeapCacheSize(long offHeapCacheSize) {
             this.offHeapCacheSize = offHeapCacheSize;
+            return this;
+        }
+
+        public Executor getExecutor() {
+            if(executor == null){
+                return MoreExecutors.sameThreadExecutor();
+            }
+            return executor;
+        }
+
+        public Builder setExecutor(Executor executor){
+            this.executor = executor;
             return this;
         }
 

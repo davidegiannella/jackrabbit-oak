@@ -16,6 +16,9 @@
  */
 package org.apache.jackrabbit.oak.plugins.document;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.jackrabbit.oak.plugins.document.Document.ID;
+
 import java.lang.management.ManagementFactory;
 import java.net.NetworkInterface;
 import java.util.ArrayList;
@@ -26,10 +29,9 @@ import java.util.UUID;
 
 import org.apache.jackrabbit.mk.api.MicroKernelException;
 import org.apache.jackrabbit.oak.commons.StringUtils;
+import org.apache.jackrabbit.oak.stats.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.apache.jackrabbit.oak.plugins.document.Document.ID;
 
 /**
  * Information about a cluster node.
@@ -57,7 +59,51 @@ public class ClusterNodeInfo {
     /**
      * The end of the lease.
      */
-    private static final String LEASE_END_KEY = "leaseEnd";
+    public static final String LEASE_END_KEY = "leaseEnd";
+
+    /**
+     * The state of the cluster. On proper shutdown the state should be cleared.
+     *
+     * @see org.apache.jackrabbit.oak.plugins.document.ClusterNodeInfo.ClusterNodeState
+     */
+    public static final String STATE = "state";
+
+    public static enum ClusterNodeState {
+        NONE,
+        /**
+         * Indicates that cluster node is currently active
+         */
+        ACTIVE;
+
+        static ClusterNodeState fromString(String state){
+            if(state == null){
+                return NONE;
+            }
+            return valueOf(state);
+        }
+    }
+
+    /**
+     * Flag to indicate whether the _lastRev recovery is in progress.
+     *
+     * @see RecoverLockState
+     */
+    public static final String REV_RECOVERY_LOCK = "recoveryLock";
+
+    public static enum RecoverLockState {
+        NONE,
+        /**
+         * _lastRev recovery in progress
+         */
+        ACQUIRED;
+
+        static RecoverLockState fromString(String state){
+            if(state == null){
+                return NONE;
+            }
+            return valueOf(state);
+        }
+    }
 
     /**
      * Additional info, such as the process id, for support.
@@ -65,7 +111,8 @@ public class ClusterNodeInfo {
     private static final String INFO_KEY = "info";
 
     /**
-     * The read/write mode key.
+     * The read/write mode key. Specifies the read/write preference to be used with
+     * DocumentStore
      */
     private static final String READ_WRITE_MODE_KEY = "readWriteMode";
 
@@ -85,10 +132,18 @@ public class ClusterNodeInfo {
     private static final String WORKING_DIR = System.getProperty("user.dir", "");
 
     /**
+     * <b>Only Used For Testing</b>
+     */
+    private static Clock clock = Clock.SIMPLE;
+
+
+    public static final int DEFAULT_LEASE_DURATION_MILLIS = 1000 * 60;
+
+    /**
      * The number of milliseconds for a lease (1 minute by default, and
      * initially).
      */
-    private long leaseTime = 1000 * 60;
+    private long leaseTime = DEFAULT_LEASE_DURATION_MILLIS;
 
     /**
      * The assigned cluster id.
@@ -130,13 +185,40 @@ public class ClusterNodeInfo {
      */
     private String readWriteMode;
 
-    ClusterNodeInfo(int id, DocumentStore store, String machineId, String instanceId) {
+    /**
+     * The state of the cluter node.
+     */
+    private ClusterNodeState state;
+
+    /**
+     * The revLock value of the cluster;
+     */
+    private RecoverLockState revRecoveryLock;
+
+    /**
+     * In memory flag indicating that this ClusterNode is entry is new and is being added to
+     * DocumentStore for the first time
+     *
+     * If false then it indicates that a previous entry for current node existed and that is being
+     * reused
+     */
+    private boolean newEntry;
+
+    private ClusterNodeInfo(int id, DocumentStore store, String machineId, String instanceId, ClusterNodeState state,
+            RecoverLockState revRecoveryLock, Long leaseEnd, boolean newEntry) {
         this.id = id;
-        this.startTime = System.currentTimeMillis();
-        this.leaseEndTime = startTime;
+        this.startTime = getCurrentTime();
+        if (leaseEnd == null) {
+            this.leaseEndTime = startTime;
+        } else {
+            this.leaseEndTime = leaseEnd;
+        }
         this.store = store;
         this.machineId = machineId;
         this.instanceId = instanceId;
+        this.state = state;
+        this.revRecoveryLock = revRecoveryLock;
+        this.newEntry = newEntry;
     }
 
     public int getId() {
@@ -145,12 +227,25 @@ public class ClusterNodeInfo {
 
     /**
      * Create a cluster node info instance for the store, with the
-     *
+     * 
      * @param store the document store (for the lease)
      * @return the cluster node info
      */
     public static ClusterNodeInfo getInstance(DocumentStore store) {
-        return getInstance(store, MACHINE_ID, WORKING_DIR);
+        return getInstance(store, MACHINE_ID, WORKING_DIR, false);
+    }
+
+    /**
+     * Create a cluster node info instance for the store.
+     * 
+     * @param store the document store (for the lease)
+     * @param machineId the machine id (null for MAC address)
+     * @param instanceId the instance id (null for current working directory)
+     * @return the cluster node info
+     */
+    public static ClusterNodeInfo getInstance(DocumentStore store, String machineId,
+            String instanceId) {
+        return getInstance(store, machineId, instanceId, true);
     }
 
     /**
@@ -159,9 +254,11 @@ public class ClusterNodeInfo {
      * @param store the document store (for the lease)
      * @param machineId the machine id (null for MAC address)
      * @param instanceId the instance id (null for current working directory)
+     * @param updateLease whether to update the lease
      * @return the cluster node info
      */
-    public static ClusterNodeInfo getInstance(DocumentStore store, String machineId, String instanceId) {
+    public static ClusterNodeInfo getInstance(DocumentStore store, String machineId,
+            String instanceId, boolean updateLease) {
         if (machineId == null) {
             machineId = MACHINE_ID;
         }
@@ -174,23 +271,45 @@ public class ClusterNodeInfo {
             update.set(ID, String.valueOf(clusterNode.id));
             update.set(MACHINE_ID_KEY, clusterNode.machineId);
             update.set(INSTANCE_ID_KEY, clusterNode.instanceId);
-            update.set(LEASE_END_KEY, System.currentTimeMillis() + clusterNode.leaseTime);
+            if (updateLease) {
+                update.set(LEASE_END_KEY, getCurrentTime() + clusterNode.leaseTime);
+            } else {
+                update.set(LEASE_END_KEY, clusterNode.leaseEndTime);
+            }
             update.set(INFO_KEY, clusterNode.toString());
-            boolean success = store.create(Collection.CLUSTER_NODES, Collections.singletonList(update));
-            if (success) {
+            update.set(STATE, clusterNode.state.name());
+            update.set(REV_RECOVERY_LOCK, clusterNode.revRecoveryLock.name());
+
+            final boolean success;
+            if (clusterNode.newEntry) {
+                //For new entry do a create. This ensures that if two nodes create
+                //entry with same id then only one would succeed
+                success = store.create(Collection.CLUSTER_NODES, Collections.singletonList(update));
+            } else {
+                // No expiration of earlier cluster info, so update
+                store.createOrUpdate(Collection.CLUSTER_NODES, update);
+                success = true;
+            }
+
+            if(success){
                 return clusterNode;
             }
         }
         throw new MicroKernelException("Could not get cluster node info");
     }
 
-    private static ClusterNodeInfo createInstance(DocumentStore store, String machineId, String instanceId) {
-        long now = System.currentTimeMillis();
+    private static ClusterNodeInfo createInstance(DocumentStore store, String machineId,
+            String instanceId) {
+        long now = getCurrentTime();
         // keys between "0" and "a" includes all possible numbers
         List<ClusterNodeInfoDocument> list = store.query(Collection.CLUSTER_NODES,
-                "0", "a", Integer.MAX_VALUE);
+                ClusterNodeInfoDocument.MIN_ID_VALUE, ClusterNodeInfoDocument.MAX_ID_VALUE,
+                Integer.MAX_VALUE);
         int clusterNodeId = 0;
         int maxId = 0;
+        ClusterNodeState state = ClusterNodeState.NONE;
+        Long prevLeaseEnd = null;
+        boolean newEntry = false;
         for (Document doc : list) {
             String key = doc.getId();
             int id;
@@ -217,33 +336,45 @@ public class ClusterNodeInfo {
                 // a different machine or instance
                 continue;
             }
-            // remove expired matching entries
-            store.remove(Collection.CLUSTER_NODES, key);
+
+            //and cluster node which matches current machine identity but
+            //not being used
             if (clusterNodeId == 0 || id < clusterNodeId) {
                 // if there are multiple, use the smallest value
                 clusterNodeId = id;
+                state = ClusterNodeState.fromString((String) doc.get(STATE));
+                prevLeaseEnd = leaseEnd;
             }
         }
+
+        //No existing entry with matching signature found so
+        //create a new entry
         if (clusterNodeId == 0) {
             clusterNodeId = maxId + 1;
+            newEntry = true;
         }
-        return new ClusterNodeInfo(clusterNodeId, store, machineId, instanceId);
+
+        // Do not expire entries and stick on the earlier state, and leaseEnd so,
+        // that _lastRev recovery if needed is done.        
+        return new ClusterNodeInfo(clusterNodeId, store, machineId, instanceId, state, 
+                RecoverLockState.NONE, prevLeaseEnd, newEntry);
     }
 
     /**
      * Renew the cluster id lease. This method needs to be called once in a while,
      * to ensure the same cluster id is not re-used by a different instance.
-     *
+     * 
      * @param nextCheckMillis the millisecond offset
      */
     public void renewLease(long nextCheckMillis) {
-        long now = System.currentTimeMillis();
+        long now = getCurrentTime();
         if (now + nextCheckMillis + nextCheckMillis < leaseEndTime) {
             return;
         }
         UpdateOp update = new UpdateOp("" + id, true);
         leaseEndTime = now + leaseTime;
         update.set(LEASE_END_KEY, leaseEndTime);
+        update.set(STATE, ClusterNodeState.ACTIVE.name());
         ClusterNodeInfoDocument doc = store.createOrUpdate(Collection.CLUSTER_NODES, update);
         String mode = (String) doc.get(READ_WRITE_MODE_KEY);
         if (mode != null && !mode.equals(readWriteMode)) {
@@ -263,6 +394,8 @@ public class ClusterNodeInfo {
     public void dispose() {
         UpdateOp update = new UpdateOp("" + id, true);
         update.set(LEASE_END_KEY, null);
+        update.set(STATE, null);
+        update.set(REV_RECOVERY_LOCK, null);
         store.createOrUpdate(Collection.CLUSTER_NODES, update);
     }
 
@@ -273,8 +406,27 @@ public class ClusterNodeInfo {
                 "machineId: " + machineId + ",\n" +
                 "instanceId: " + instanceId + ",\n" +
                 "pid: " + PROCESS_ID + ",\n" +
-                "uuid: " + uuid +",\n" +
-                "readWriteMode: " + readWriteMode;
+                "uuid: " + uuid + ",\n" +
+                "readWriteMode: " + readWriteMode + ",\n" +
+                "state: " + state + ",\n" +
+                "revLock: " + revRecoveryLock;
+    }
+
+    /**
+     * Specify a custom clock to be used for determining current time.
+     *
+     * <b>Only Used For Testing</b>
+     */
+    static void setClock(Clock c) {
+        checkNotNull(c);
+        clock = c;
+    }
+
+    /**
+     * Resets the clock to the default
+     */
+    static void resetClockToDefault(){
+        clock = Clock.SIMPLE;
     }
 
     private static long getProcessId() {
@@ -290,7 +442,7 @@ public class ClusterNodeInfo {
     /**
      * Calculate the unique machine id. This is the lowest MAC address if
      * available. As an alternative, a randomly generated UUID is used.
-     *
+     * 
      * @return the unique id
      */
     private static String getMachineId() {
@@ -316,6 +468,10 @@ public class ClusterNodeInfo {
             LOG.error("Error calculating the machine id", e);
         }
         return RANDOM_PREFIX + UUID.randomUUID().toString();
+    }
+
+    private static long getCurrentTime() {
+        return clock.getTime();
     }
 
 }
