@@ -3441,12 +3441,8 @@ public class OrderedContentMirrorStorageStrategyTest {
 
         // as we trust the store we skip the check and goes straight to Stage 2.
 
-        printSkipList(index.getNodeState());
-
         // removing n2
         store.update(index, path2, newHashSet(n2), EMPTY_KEY_SET);
-
-        printSkipList(index.getNodeState());
 
         node = index.getChildNode(START);
         assertTrue(node.exists());

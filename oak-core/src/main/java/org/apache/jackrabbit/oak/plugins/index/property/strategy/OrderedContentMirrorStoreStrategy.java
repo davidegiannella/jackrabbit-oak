@@ -205,45 +205,31 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 return;
             } else if (node.exists()) {
                 if (node.hasProperty(NEXT)) {
-                    //TODO we should find a better way for cleaning the pointers.
-                    // Using the walked lanes of seek() doesn't work properly as we could have
-                    // not walked all the pointers. For example we could have jumped to the item
-                    // straight from lane 4 without passing the slowest lane if we prune "002"
-                    // in a situation like the following
-                    //      STR 000 001 002 NIL
-                    //       |-->o-->o-->o-->|
-                    //       |------>o-->o-->|
-                    //       |---------->o-->|
-                    //       |---------->o-->|
-                    String currentNext, previousNext;
-                    NodeBuilder n;
-                    ChildNodeEntry current;
-                    Predicate<ChildNodeEntry> walkingPredicate = direction.isAscending() ? 
-                          new PredicateLessThan(key, true)
-                        : new PredicateGreaterThan(key, true);
-
-                    for (int lane = 0; lane < OrderedIndex.LANES; lane++) {
-                        // we always start with :start
-                        current = new OrderedChildNodeEntry(START, index.getChildNode(START)
-                            .getNodeState());
-                        do {
-                            previousNext = getPropertyNext(current, lane);
-                            if (Strings.isNullOrEmpty(previousNext)) {
-                                // we're already pointing to NIL. Let's break it
-                                break;
-                            } else {
-                                if (key.equals(previousNext)) {
-                                    // re-linking as this was pointing to us
-                                    n = index.getChildNode(current.getName());
-                                    currentNext = getPropertyNext(node, lane);
-                                    setPropertyNext(n, currentNext, lane);
-                                    break;
-                                }
+                    ChildNodeEntry[] walkedLanes = new ChildNodeEntry[OrderedIndex.LANES];
+                    ChildNodeEntry entry;
+                    String lane0Next, prevNext, currNext;
+                    
+                    // for as long as we have the an entry and we didn't update the lane0 we have
+                    // to keep searching and update
+                    do {
+                        entry = seek(index.getNodeState(),
+                            new PredicateEquals(key),
+                            walkedLanes
+                            );
+                        lane0Next = getPropertyNext(walkedLanes[0]);
+                        for (int lane = walkedLanes.length - 1; lane >= 0; lane--) {
+                            prevNext = getPropertyNext(walkedLanes[lane], lane);
+                            if (key.equals(prevNext)) {
+                                // if it's actually pointing to us let's deal with it
+                                currNext = getPropertyNext(node, lane);
+                                setPropertyNext(index.getChildNode(walkedLanes[lane].getName()),
+                                    currNext, lane);
+                                
+                                // TODO checking all the lanes of the current element could speed up
+                                // the operations
                             }
-                            current = new OrderedChildNodeEntry(previousNext, index.getChildNode(
-                                previousNext).getNodeState());
-                        } while (walkingPredicate.apply(current));
-                    }
+                        }
+                    } while (entry != null && !key.equals(lane0Next));
                 }
                 node.remove();
             }
@@ -775,26 +761,26 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      */
     static class PredicateEquals implements Predicate<ChildNodeEntry> {
         private String searchfor;
-        private NodeState searchNode;
+//        private NodeState searchNode;
         
         public PredicateEquals(@Nonnull String searchfor) {
             this.searchfor = searchfor;
-            this.searchNode = null;
+//            this.searchNode = null;
         }
         
-        public PredicateEquals(@Nonnull NodeState searchfor) {
-            this.searchfor = null;
-            this.searchNode = searchfor;
-        }
+//        public PredicateEquals(@Nonnull NodeState searchfor) {
+//            this.searchfor = null;
+//            this.searchNode = searchfor;
+//        }
 
         @Override
         public boolean apply(ChildNodeEntry arg0) {
             boolean b = false;
-            if (searchNode == null) {
+//            if (searchNode == null) {
                 b = arg0 != null && searchfor.equals(arg0.getName());
-            } else {
-                b = arg0 != null && searchNode.equals(arg0.getNodeState());
-            }
+//            } else {
+//                b = arg0 != null && searchNode.equals(arg0.getNodeState());
+//            }
             return b;
         }
 
