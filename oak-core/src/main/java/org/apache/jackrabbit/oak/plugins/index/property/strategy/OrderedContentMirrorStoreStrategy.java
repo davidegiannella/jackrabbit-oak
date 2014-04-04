@@ -224,9 +224,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                                 currNext = getPropertyNext(node, lane);
                                 setPropertyNext(index.getChildNode(walkedLanes[lane].getName()),
                                     currNext, lane);
-                                
-                                // TODO checking all the lanes of the current element could speed up
-                                // the operations
                             }
                         }
                     } while (entry != null && !key.equals(lane0Next));

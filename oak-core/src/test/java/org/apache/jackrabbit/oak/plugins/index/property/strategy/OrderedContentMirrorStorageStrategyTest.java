@@ -1683,6 +1683,10 @@ public class OrderedContentMirrorStorageStrategyTest {
         return Iterables.toArray(node.getProperty(NEXT).getValue(Type.STRINGS), String.class)[lane];
     }
 
+    private static Iterable<String> getMultiNext(@Nonnull NodeState node) {
+        return node.getProperty(NEXT).getValue(Type.STRINGS);
+    }
+    
     @Test
     public void setNext() {
         NodeBuilder n = EmptyNodeState.EMPTY_NODE.builder();
@@ -3496,6 +3500,79 @@ public class OrderedContentMirrorStorageStrategyTest {
             node.getProperty(NEXT).getValue(Type.STRINGS));
         assertFalse(index.hasChildNode(n2));
         
-        // TODO test with at least a couple of hops per lane
+        index = EmptyNodeState.EMPTY_NODE.builder();
+        store.setLane(0);
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[0]));
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[2]));
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[4]));
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[6]));
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[8]));
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[9]));
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[11]));
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[12]));
+        store.setLane(1);
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[1]));
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[5]));
+        store.setLane(2);
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[3]));
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[7]));
+        store.setLane(3);
+        store.update(index, "/foo/bar", EMPTY_KEY_SET, newHashSet(KEYS[10]));
+
+        store.update(index, "/foo/bar", newHashSet(KEYS[5]), EMPTY_KEY_SET);
+
+        node = index.getChildNode(START);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[0], KEYS[1], KEYS[3], KEYS[10]),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[0]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[1], "", "", ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[1]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[2], KEYS[3], "", ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[2]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[3], "", "", ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[3]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[4], KEYS[7], KEYS[7], ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[4]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[6], "", "", ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[6]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[7], "", "", ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[7]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[8], KEYS[10], KEYS[10], ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[8]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[9], "", "", ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[9]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[10], "", "", ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[10]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[11], "", "", ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[11]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of(KEYS[12], "", "", ""),
+            getMultiNext(node.getNodeState()));
+        node = index.getChildNode(KEYS[12]);
+        assertTrue(node.exists());
+        assertEquals(ImmutableList.of("", "", "", ""),
+            getMultiNext(node.getNodeState()));
+        assertFalse(node.getChildNode(KEYS[5]).exists());
     }
 }
