@@ -91,6 +91,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 
     private static final Logger LOG = LoggerFactory.getLogger(OrderedContentMirrorStoreStrategy.class);
     
+    private static final Random RND = new Random(System.currentTimeMillis());
+    
     /**
      * the direction of the index.
      */
@@ -896,7 +898,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @return the lane to start updating from.
      */
     public int getLane() {
-        return getLane(new Random(System.currentTimeMillis()));
+        return getLane(RND);
     }
     
     /**
