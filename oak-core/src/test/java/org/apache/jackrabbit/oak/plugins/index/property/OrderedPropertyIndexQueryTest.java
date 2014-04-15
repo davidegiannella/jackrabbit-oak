@@ -705,11 +705,6 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         List<ValuePathTuple> nodes = addChildNodes(
             generateOrderedDates(10, direction, start), test, direction, Type.DATE);
         root.commit();
-
-        for (ValuePathTuple n : nodes) {
-            n.toString();
-            // System.out.println("+++" + n);
-        }
         
         Calendar searchForCalendarStart = (Calendar) start.clone();
         searchForCalendarStart.add(Calendar.HOUR_OF_DAY, 36);
@@ -729,9 +724,6 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
             new ValuePathTuple.BetweenPredicate(searchForStart, searchForEnd, false, true))
             .iterator();
 
-        while (filtered.hasNext()) {
-            System.out.println("---" + filtered.next());
-        }
         filtered = Iterables.filter(nodes,
             new ValuePathTuple.BetweenPredicate(searchForStart, searchForEnd, false, true))
             .iterator();
@@ -762,11 +754,6 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         List<ValuePathTuple> nodes = addChildNodes(
             generateOrderedDates(10, direction, start), test, direction, Type.DATE);
         root.commit();
-
-        for (ValuePathTuple n : nodes) {
-            n.toString();
-            // System.out.println("+++" + n);
-        }
         
         Calendar searchForCalendarStart = (Calendar) start.clone();
         searchForCalendarStart.add(Calendar.HOUR_OF_DAY, 36);
@@ -786,9 +773,6 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
             new ValuePathTuple.BetweenPredicate(searchForStart, searchForEnd, false, true))
             .iterator();
 
-        while (filtered.hasNext()) {
-            System.out.println("---" + filtered.next());
-        }
         filtered = Iterables.filter(nodes,
             new ValuePathTuple.BetweenPredicate(searchForStart, searchForEnd, true, true))
             .iterator();
