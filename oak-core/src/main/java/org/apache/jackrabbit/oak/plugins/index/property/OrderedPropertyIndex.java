@@ -133,20 +133,16 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
                         createPlan = true;
                     } else if (pr.first != null && !pr.first.equals(pr.last)) {
                         // '>' & '>=' use cases
-                        if (lookup.isAscending(root, propertyName, filter)) {
+//                        if (lookup.isAscending(root, propertyName, filter)) {
                             value = pr.first;
-                            createPlan = true;
-                        } else {
-                            createPlan = false;
-                        }
-                    } else if (pr.last != null && !pr.last.equals(pr.first)) {
-                        // '<' & '<='
-//                        if (!lookup.isAscending(root, propertyName, filter)) {
-                            value = pr.last;
                             createPlan = true;
 //                        } else {
 //                            createPlan = false;
 //                        }
+                    } else if (pr.last != null && !pr.last.equals(pr.first)) {
+                        // '<' & '<='
+                        value = pr.last;
+                        createPlan = true;
                     }
                     if (createPlan) {
                         // we always return a sorted set

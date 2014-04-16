@@ -23,6 +23,7 @@ import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 
 import java.text.ParseException;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -150,19 +151,27 @@ public class OrderedPropertyIndexDescendingQueryTest extends BasicOrderedPropert
         Tree rTree = root.getTree("/");
         Tree test = rTree.addChild("test");
         Calendar start = midnightFirstJan2013();
-        addChildNodes(
+        List<ValuePathTuple> nodes = addChildNodes(
             generateOrderedDates(NUMBER_OF_NODES, direction, start), test, direction, Type.DATE);
         root.commit();
 
         Calendar searchForCalendar = (Calendar) start.clone();
         searchForCalendar.add(Calendar.HOUR_OF_DAY, 36);
         String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+        
+        // re-sorting descending for matching the actual index direction
+        Collections.sort(nodes, Collections.reverseOrder());
+        Iterator<ValuePathTuple> filtered = Iterables.filter(nodes,
+            new ValuePathTuple.GreaterThanPredicate(searchFor)).iterator();
+
         Map<String, PropertyValue> filter = ImmutableMap.of(ORDERED_PROPERTY,
             PropertyValues.newDate(searchFor));
         Iterator<? extends ResultRow> results = executeQuery(
             String.format(query, ORDERED_PROPERTY, ORDERED_PROPERTY), SQL2, filter).getRows()
             .iterator();
-        assertFalse("We should not return any results as of the cost", results.hasNext());
+
+        assertRightOrder(Lists.newArrayList(filtered), results);
+        assertFalse("no more results expected", results.hasNext());
 
         setTravesalEnabled(true);
     }

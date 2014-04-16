@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.PropertyResourceBundle;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -386,18 +387,41 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     v.visit(content);
                     count = v.getEstimatedCount();
                 }
-            } else if (lpr.first != null && !lpr.first.equals(lpr.last)
-                       && OrderDirection.ASC.equals(direction)) {
+            } else if (lpr.first != null && !lpr.first.equals(lpr.last)) {
                 // > & >= in ascending index
-                Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(content);
-                CountingNodeVisitor v;
                 value = lpr.first.getValue(Type.STRING);
+                final String vv = value;
+                final boolean include = lpr.firstIncluding;
+                final OrderDirection dd = direction;
+
+                Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(content);
+                Predicate<String> predicate = new Predicate<String>() {
+                    private String v = vv;
+                    private boolean i = include;
+                    private OrderDirection d = dd;
+                    
+                    @Override
+                    public boolean apply(String input) {
+                        boolean b;
+                        
+                        if (d.equals(OrderDirection.ASC)) {
+                            b = v.compareTo(input) > 0;
+                        } else {
+                            b = v.compareTo(input) < 0;
+                        }
+                        
+                        b = b || (i && v.equals(input));
+                        
+                        return b;
+                    }
+                };
+
+                CountingNodeVisitor v;
                 int depthTotal = 0;
                 // seeking the right starting point
                 for (ChildNodeEntry child : children) {
                     String converted = convert(child.getName());
-                    if (value.compareTo(converted) < 0
-                        || (lpr.firstIncluding && value.equals(converted))) {
+                    if (predicate.apply(converted)) {
                         // here we are let's start counting
                         v = new CountingNodeVisitor(max);
                         v.visit(content.getChildNode(child.getName()));
@@ -436,9 +460,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                             b = v.compareTo(input) > 0;
                         }
                         
+                        b = b || (i && v.equals(input));
+                        
                         return b;
                     }
-                    
                 };
                 
                 CountingNodeVisitor v;
@@ -446,8 +471,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 // seeking the right starting point
                 for (ChildNodeEntry child : children) {
                     String converted = convert(child.getName());
-                    if (predicate.apply(converted)
-                        || (lpr.lastIncluding && value.equals(converted))) {
+                    if (predicate.apply(converted)) {
                         // here we are let's start counting
                         v = new CountingNodeVisitor(max);
                         v.visit(content.getChildNode(child.getName()));
@@ -468,7 +492,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
         return count;
     }
-    
+        
     /**
      * wrap an {@code Iterable<ChildNodeEntry>} in something that can be understood by the Query
      * Engine
