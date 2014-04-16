@@ -279,22 +279,11 @@
       <optional>true</optional>
     </dependency>
 
-    <!-- db blob store -->
-    <dependency>
-      <groupId>com.h2database</groupId>
-      <artifactId>h2</artifactId>
-      <version>1.3.175</version>
-    </dependency>
     <dependency>
       <groupId>commons-dbcp</groupId>
       <artifactId>commons-dbcp</artifactId>
       <version>1.4</version>
     </dependency>
-    <!--<dependency>
-      <groupId>commons-pool</groupId>
-      <artifactId>commons-pool</artifactId>
-      <version>1.6</version>
-    </dependency>-->
 
     <!-- Logging -->
     <dependency>
@@ -346,6 +335,12 @@
       <groupId>org.apache.jackrabbit</groupId>
       <artifactId>oak-mk</artifactId>
       <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>${h2.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
