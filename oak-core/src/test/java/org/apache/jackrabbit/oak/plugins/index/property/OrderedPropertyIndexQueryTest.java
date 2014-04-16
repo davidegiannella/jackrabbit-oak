@@ -246,7 +246,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         Tree test = rTree.addChild("test");
         Calendar start = midnightFirstJan2013();
         List<ValuePathTuple> nodes = addChildNodes(
-            generateOrderedDates(10, direction, start), test, direction, Type.DATE);
+            generateOrderedDates(NUMBER_OF_NODES, direction, start), test, direction, Type.DATE);
         root.commit();
 
         Calendar searchForCalendar = (Calendar) start.clone();
@@ -301,19 +301,27 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         Tree rTree = root.getTree("/");
         Tree test = rTree.addChild("test");
         Calendar start = midnightFirstJan2013();
-        addChildNodes(
+        List<ValuePathTuple> nodes = addChildNodes(
             generateOrderedDates(NUMBER_OF_NODES, direction, start), test, direction, Type.DATE);
         root.commit();
 
         Calendar searchForCalendar = (Calendar) start.clone();
         searchForCalendar.add(Calendar.HOUR_OF_DAY, -36);
         String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+        
+        // re-sorting ascending as the index is ASC and the results will be returned as ASC
+        Collections.sort(nodes);
+        Iterator<ValuePathTuple> filtered = Iterables.filter(nodes,
+            new ValuePathTuple.LessThanPredicate(searchFor, true)).iterator();
+        
         Map<String, PropertyValue> filter = ImmutableMap.of(ORDERED_PROPERTY,
             PropertyValues.newDate(searchFor));
         Iterator<? extends ResultRow> results = executeQuery(
             String.format(query, ORDERED_PROPERTY, ORDERED_PROPERTY), SQL2, filter).getRows()
             .iterator();
-        assertFalse("We should have no results as of the cost and index direction", results.hasNext());
+        
+        assertRightOrder(Lists.newArrayList(filtered), results);
+        assertFalse("We should have looped throught all the results", results.hasNext());
 
         setTravesalEnabled(true);
     }
