@@ -294,8 +294,17 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             return it;
         } else if (pr.last != null && !pr.last.equals(pr.first)) {
             // '<' & '<=' use case
-            ChildNodeEntry firstValueableItem = seek(index,
-                new PredicateLessThan(pr.last.getValue(Type.STRING), pr.lastIncluding));
+            final String searchfor = pr.last.getValue(Type.STRING);
+            final boolean include = pr.lastIncluding;
+            Predicate<ChildNodeEntry> predicate = new PredicateLessThan(searchfor, include);
+            
+            LOG.debug("< & <= case. - searchfor: {} - include: {} - predicate: {}",
+                new Object[] { searchfor, include, predicate });
+
+            ChildNodeEntry firstValueableItem = seek(index, predicate);
+            
+            LOG.debug("firstValuableItem: {}", firstValueableItem);
+            
             Iterable<String> it = Collections.emptyList();
             if (firstValueableItem != null) {
                 it = new QueryResultsWrapper(filter, indexName, new SeekedIterable(index,

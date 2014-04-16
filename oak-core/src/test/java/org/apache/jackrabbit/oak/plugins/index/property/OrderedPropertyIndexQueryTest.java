@@ -26,6 +26,7 @@ import static org.junit.Assert.assertNotNull;
 
 import java.text.ParseException;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,8 @@ import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.util.NodeUtil;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -64,6 +67,8 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
 public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQueryTest {
+    private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexQueryTest.class);
+    
     private static final EditorHook HOOK = new EditorHook(new IndexUpdateProvider(
         new OrderedPropertyIndexEditorProvider()));
 
@@ -241,24 +246,33 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         Tree test = rTree.addChild("test");
         Calendar start = midnightFirstJan2013();
         List<ValuePathTuple> nodes = addChildNodes(
-            generateOrderedDates(NUMBER_OF_NODES, direction, start), test, direction, Type.DATE);
+            generateOrderedDates(10, direction, start), test, direction, Type.DATE);
         root.commit();
 
         Calendar searchForCalendar = (Calendar) start.clone();
         searchForCalendar.add(Calendar.HOUR_OF_DAY, -36);
         String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+
+        // re-sorting ascending as the index is ASC and the results will be returned as ASC
+        Collections.sort(nodes);
+        Iterator<ValuePathTuple> filtered = Iterables.filter(nodes,
+            new ValuePathTuple.LessThanPredicate(searchFor, false)).iterator();
         
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("-- Expected results:");
+            while (filtered.hasNext()) {
+                LOG.debug("{}", filtered.next());
+            }
+            // re-initialising the filtered for the test
+            filtered = Iterables.filter(nodes,
+                new ValuePathTuple.LessThanPredicate(searchFor, false)).iterator();
+        }
+
         Map<String, PropertyValue> filter = ImmutableMap.of(ORDERED_PROPERTY,
             PropertyValues.newDate(searchFor));
         Iterator<? extends ResultRow> results = executeQuery(
             String.format(query, ORDERED_PROPERTY, ORDERED_PROPERTY), SQL2, filter).getRows()
             .iterator();
-        Iterator<ValuePathTuple> filtered = Iterables.filter(nodes,
-            new ValuePathTuple.LessThanPredicate(searchFor, false)).iterator();
-        // DONE fix plan
-        // DONE fix strategy.getEstimatedCount
-        // TODO fix OrderedIndex.query()
-        //      TODO fix Strategy.query()
         assertRightOrder(Lists.newArrayList(filtered), results);
         assertFalse("We should have looped throught all the results", results.hasNext());
 
