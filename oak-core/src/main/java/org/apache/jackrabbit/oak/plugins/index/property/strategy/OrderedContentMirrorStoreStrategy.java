@@ -30,6 +30,7 @@ import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.plugins.index.property.OrderDirectionEnumTest;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
@@ -403,17 +404,40 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 v.depthTotal = depthTotal;
                 v.count = (int) Math.min(count, Integer.MAX_VALUE);
                 count = v.getEstimatedCount();
-            } else if (lpr.last != null && !lpr.last.equals(lpr.first)
-                       && OrderDirection.DESC.equals(direction)) {
-                // > & >= in ascending index
-                Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(content);
-                CountingNodeVisitor v;
+            } else if (lpr.last != null && !lpr.last.equals(lpr.first)) {
+                // < & <= 
                 value = lpr.last.getValue(Type.STRING);
+                final String vv = value;
+                final boolean include = lpr.lastIncluding;
+                final OrderDirection dd = direction;
+                
+                Iterable<? extends ChildNodeEntry> children = getChildNodeEntries(content);
+                Predicate<String> predicate = new Predicate<String>() {
+                    private String v = vv;
+                    private boolean i = include;
+                    private OrderDirection d = dd;
+                    
+                    @Override
+                    public boolean apply(String input) {
+                        boolean b;
+                        
+                        if (d.equals(OrderDirection.ASC)) {
+                            b = v.compareTo(input) < 0;
+                        } else {
+                            b = v.compareTo(input) > 0;
+                        }
+                        
+                        return b;
+                    }
+                    
+                };
+                
+                CountingNodeVisitor v;
                 int depthTotal = 0;
                 // seeking the right starting point
                 for (ChildNodeEntry child : children) {
                     String converted = convert(child.getName());
-                    if (value.compareTo(converted) > 0
+                    if (predicate.apply(converted)
                         || (lpr.lastIncluding && value.equals(converted))) {
                         // here we are let's start counting
                         v = new CountingNodeVisitor(max);
