@@ -14,31 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.plugins.document;
-
-import java.util.SortedSet;
 
 /**
- * A merge commit containing multiple commit revisions. One for each branch
- * commit to merge.
+ * Implementations of {@link DocumentStore} and {@link BlobStore} for relational databases.
  */
-class MergeCommit extends Commit {
+package org.apache.jackrabbit.oak.plugins.document.rdb;
 
-    private final SortedSet<Revision> mergeRevs;
+import org.apache.jackrabbit.oak.plugins.document.DocumentStore;
+import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 
-    MergeCommit(DocumentNodeStore nodeStore,
-                Revision baseRevision,
-                SortedSet<Revision> revisions) {
-        super(nodeStore, baseRevision, revisions.last());
-        this.mergeRevs = revisions;
-    }
-
-    SortedSet<Revision> getMergeRevisions() {
-        return mergeRevs;
-    }
-
-    @Override
-    public void applyToCache(Revision before, boolean isBranchCommit) {
-        // do nothing for a merge commit
-    }
-}
