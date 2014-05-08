@@ -17,6 +17,7 @@
 package org.apache.jackrabbit.oak.benchmark;
 
 import static com.google.common.collect.Lists.newArrayList;
+import static com.google.common.collect.Lists.newArrayListWithCapacity;
 
 import java.util.Calendar;
 import java.util.List;
@@ -40,6 +41,7 @@ import javax.jcr.query.RowIterator;
 import javax.jcr.version.VersionException;
 
 import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
 import org.apache.commons.io.output.NullOutputStream;
@@ -97,6 +99,8 @@ public class LongevitySearchAssetsTest extends AbstractTest {
     private static final List<String> INCREMENTS = Splitter.on(",").splitToList(
             System.getProperty("increments", "1000,10000,50000,100000,500000"));
 
+    private static final String CUSTOM_PATH_PROP = "contentPath";
+    private static final String CUSTOM_REF_PROP = "references";
     public static enum SearchType {
         /**
          * Full text query on the file name.
@@ -112,7 +116,7 @@ public class LongevitySearchAssetsTest extends AbstractTest {
     protected static final String ROOT_NODE_NAME =
             "LongevitySearchAssets" + TEST_ID;
 
-    private final Random random = new Random();
+    private final Random random = new Random(29);
 
     private List<String> searchPaths;
 
@@ -144,10 +148,10 @@ public class LongevitySearchAssetsTest extends AbstractTest {
     public void beforeTest() throws RepositoryException {
         // recreate paths created in this run
         searchPaths = newArrayList();
-        readPaths = newArrayList();
+        readPaths = newArrayListWithCapacity(READERS);
 
         int totalAssets =
-                (currentIteration < 0 ? 5 : Integer.parseInt(INCREMENTS.get(currentIteration)));
+                (currentIteration < 0 ? 100 : Integer.parseInt(INCREMENTS.get(currentIteration)));
 
         // Creates assets for this run
         Writer writer = new Writer(currentIteration, totalAssets);
@@ -215,11 +219,20 @@ public class LongevitySearchAssetsTest extends AbstractTest {
     }
 
     private synchronized String getRandomReadPath() {
+        if (readPaths.size() > 0) {
         return readPaths.get(random.nextInt(readPaths.size()));
+        } else {
+            return "";
+        }
     }
 
     private synchronized void addReadPath(String file) {
+        int limit = 1000;
+        if (readPaths.size() < limit) {
         readPaths.add(file);
+        } else if (random.nextDouble() < 0.5) {
+            readPaths.set(random.nextInt(limit), file);
+        }
     }
 
     private synchronized String getRandomSearchPath() {
@@ -348,7 +361,11 @@ public class LongevitySearchAssetsTest extends AbstractTest {
                 content.setProperty(Property.JCR_LAST_MODIFIED, Calendar.getInstance());
                 content.setProperty(Property.JCR_DATA, binary);
 
-                file.setProperty("contentPath", file.getPath());
+                file.setProperty(CUSTOM_PATH_PROP, file.getPath());
+                String reference = getRandomReadPath();
+                if (!Strings.isNullOrEmpty(reference)) {
+                    file.setProperty(CUSTOM_REF_PROP, reference);
+                }
             } finally {
                 binary.dispose();
             }
