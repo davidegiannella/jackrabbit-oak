@@ -227,10 +227,7 @@ abstract class AbstractTest<T> extends Benchmark implements CSVResultGenerator {
         final SynchronizedDescriptiveStatistics statistics = new SynchronizedDescriptiveStatistics();
         if (concurrencyLevel == 1) {
             // Run test iterations, and capture the execution times
-            long runtimeEnd = System.currentTimeMillis() + RUNTIME;
-            while (System.currentTimeMillis() < runtimeEnd) {
-                statistics.addValue(execute());
-            }
+            runIterations(statistics);
 
         } else {
             List<Executor> threads = new LinkedList<Executor>();
@@ -264,6 +261,13 @@ abstract class AbstractTest<T> extends Benchmark implements CSVResultGenerator {
         return statistics;
     }
 
+    protected void runIterations(SynchronizedDescriptiveStatistics statistics)
+            throws Exception {
+        long runtimeEnd = System.currentTimeMillis() + RUNTIME;
+        while (System.currentTimeMillis() < runtimeEnd) {
+            statistics.addValue(execute());
+        }
+    }
 
     /**
      * Executes a single iteration of this test.
@@ -305,10 +309,7 @@ abstract class AbstractTest<T> extends Benchmark implements CSVResultGenerator {
      * @throws Exception if the benchmark can not be cleaned up
      */
     public void tearDown() throws Exception {
-        this.running = false;
-        for (Thread thread : threads) {
-            thread.join();
-        }
+        shutdownBackgroundJobs();
 
         if (profiler != null) {
             System.out.println(profiler.stopCollecting().getTop(5));
@@ -329,6 +330,12 @@ abstract class AbstractTest<T> extends Benchmark implements CSVResultGenerator {
         this.repository = null;
     }
 
+    protected void shutdownBackgroundJobs() throws InterruptedException {
+        this.running = false;
+        for (Thread thread : threads) {
+            thread.join();
+        }
+    }
     /**
      * Run before any iterations of this test get executed. Subclasses can
      * override this method to set up static test content.

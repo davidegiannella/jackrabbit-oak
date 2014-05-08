@@ -220,7 +220,8 @@ public class BenchmarkRunner {
             new FullTextSearchTest(
                     wikipedia.value(options),
                     flatStructure.value(options),
-                    report.value(options), withStorage.value(options))
+                    report.value(options), withStorage.value(options)),
+            new LongevitySearchAssetsTest(withStorage.value(options))
         };
 
         Set<String> argset = Sets.newHashSet(options.nonOptionArguments());
@@ -256,5 +257,4 @@ public class BenchmarkRunner {
             System.err.println("Unknown arguments: " + argset);
         }
     }
-
 }
