@@ -122,8 +122,7 @@ public class LongevitySearchAssetsTest extends AbstractTest {
 
     private final Random random = new Random(29);
 
-    final String METADATA = "metadata";
-    final String DC_FORMAT = "dc:format";
+    final String DC_FORMAT = "format";
     
     private List<String> searchPaths;
 
@@ -390,10 +389,8 @@ public class LongevitySearchAssetsTest extends AbstractTest {
                 content.setProperty(Property.JCR_MIMETYPE, "application/octet-stream");
                 content.setProperty(Property.JCR_LAST_MODIFIED, Calendar.getInstance());
                 content.setProperty(Property.JCR_DATA, binary);
-
-                // adding a random mime-type for later queries
-                content.addNode(METADATA).setProperty(DC_FORMAT,
-                    MimeType.randomMimeType().getValue());
+//                content.setProperty(DC_FORMAT, MimeType.randomMimeType().getValue());
+//                Node md = content.addNode("metadata", NodeTypeConstants.NT_UNSTRUCTURED);
 
                 file.setProperty(CUSTOM_PATH_PROP, file.getPath());
                 String reference = getRandomReadPath();
