@@ -54,6 +54,7 @@ import org.apache.jackrabbit.oak.jcr.Jcr;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelper;
+import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 
@@ -339,10 +340,10 @@ public class LongevitySearchAssetsTest extends AbstractTest {
         private Node putFile(String fileNamePrefix, String parentDir) throws RepositoryException,
                 UnsupportedRepositoryOperationException, ValueFormatException, VersionException,
                 LockException, ConstraintViolationException {
-            String type = "nt:unstructured";
+            String type = NodeTypeConstants.NT_UNSTRUCTURED;
             if (parent.getSession().getWorkspace().getNodeTypeManager().hasNodeType(
-                    "oak:Unstructured")) {
-                type = "oak:Unstructured";
+                    NodeTypeConstants.NT_OAK_UNSTRUCTURED)) {
+                type = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
             }
 
             Node filepath = JcrUtils.getOrAddNode(parent, parentDir, type);
