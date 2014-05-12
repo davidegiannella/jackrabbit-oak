@@ -49,6 +49,7 @@ import com.google.common.collect.Lists;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.math.stat.descriptive.SynchronizedDescriptiveStatistics;
 import org.apache.jackrabbit.commons.JcrUtils;
+import org.apache.jackrabbit.oak.benchmark.util.MimeType;
 import org.apache.jackrabbit.oak.fixture.JcrCustomizer;
 import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
@@ -121,6 +122,9 @@ public class LongevitySearchAssetsTest extends AbstractTest {
 
     private final Random random = new Random(29);
 
+    final String METADATA = "metadata";
+    final String DC_FORMAT = "dc:format";
+    
     private List<String> searchPaths;
 
     private List<String> readPaths;
@@ -386,6 +390,10 @@ public class LongevitySearchAssetsTest extends AbstractTest {
                 content.setProperty(Property.JCR_MIMETYPE, "application/octet-stream");
                 content.setProperty(Property.JCR_LAST_MODIFIED, Calendar.getInstance());
                 content.setProperty(Property.JCR_DATA, binary);
+
+                // adding a random mime-type for later queries
+                content.addNode(METADATA).setProperty(DC_FORMAT,
+                    MimeType.randomMimeType().getValue());
 
                 file.setProperty(CUSTOM_PATH_PROP, file.getPath());
                 String reference = getRandomReadPath();
