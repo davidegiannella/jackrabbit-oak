@@ -23,6 +23,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Random;
 
+import javax.annotation.Nonnull;
 import javax.jcr.Binary;
 import javax.jcr.Node;
 import javax.jcr.Property;
@@ -34,6 +35,7 @@ import javax.jcr.ValueFormatException;
 import javax.jcr.lock.LockException;
 import javax.jcr.nodetype.ConstraintViolationException;
 import javax.jcr.nodetype.NodeType;
+import javax.jcr.query.InvalidQueryException;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
@@ -130,6 +132,16 @@ public class LongevitySearchAssetsTest extends AbstractTest {
 
     public LongevitySearchAssetsTest(Boolean storageEnabled) {
         this.storageEnabled = storageEnabled;
+    }
+    
+    private String nodeType = NodeTypeConstants.NT_UNSTRUCTURED;
+
+    public String getNodeType() {
+        return nodeType;
+    }
+
+    private void setNodeType(String nodeType) {
+        this.nodeType = nodeType;
     }
 
     /**
@@ -261,13 +273,9 @@ public class LongevitySearchAssetsTest extends AbstractTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     protected void search(QueryManager qm) throws RepositoryException {
         // TODO:Get query based on the search type
-        Query q =
-                qm.createQuery("//*[jcr:contains(., '" + getRandomSearchPath() + "File"
-                        + "*"
-                        + "')] ", Query.XPATH);
+        Query q = getQuery(qm);
         QueryResult r = q.execute();
         RowIterator it = r.getRows();
         for (int rows = 0; it.hasNext() && rows < MAX_RESULTS; rows++) {
@@ -276,6 +284,21 @@ public class LongevitySearchAssetsTest extends AbstractTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
+    Query getQuery(@Nonnull final QueryManager qm) throws RepositoryException {
+        return qm.createQuery("//*[jcr:contains(., '" + getRandomSearchPath() + "File"
+            + "*"
+            + "')] ", Query.XPATH);
+    }
+    
+    /**
+     * loop through the results
+     * @param resultset
+     */
+    void loopResults(@Nonnull final QueryResult resultset) {
+        
+    }
+    
     private class Reader implements Runnable {
 
         private final Session session = loginWriter();
@@ -345,6 +368,8 @@ public class LongevitySearchAssetsTest extends AbstractTest {
                     NodeTypeConstants.NT_OAK_UNSTRUCTURED)) {
                 type = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
             }
+            
+            setNodeType(type);
 
             Node filepath = JcrUtils.getOrAddNode(parent, parentDir, type);
             Node file =
