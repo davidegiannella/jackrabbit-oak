@@ -221,9 +221,6 @@ public class BenchmarkRunner {
                     wikipedia.value(options),
                     flatStructure.value(options),
                     report.value(options), withStorage.value(options)),
-            new LongevitySearchAssetsTest(withStorage.value(options)),
-            new LongevitySearchNodeTypeTest(withStorage.value(options)),
-            new LongevitySearchMimeTypeTest(withStorage.value(options)),
         };
 
         Set<String> argset = Sets.newHashSet(options.nonOptionArguments());

@@ -342,10 +342,12 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
                 UnsupportedRepositoryOperationException, ValueFormatException, VersionException,
                 LockException, ConstraintViolationException {
             String type = NodeTypeConstants.NT_UNSTRUCTURED;
-            if (parent.getSession().getWorkspace().getNodeTypeManager().hasNodeType(
-                    NodeTypeConstants.NT_OAK_UNSTRUCTURED)) {
-                type = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
-            }
+//            TODO find a way to differentiate for the JR2 vs OAK cases.
+//              it will have to be matched then by the NodeTypeSearcher when building the query.
+//            if (parent.getSession().getWorkspace().getNodeTypeManager().hasNodeType(
+//                    NodeTypeConstants.NT_OAK_UNSTRUCTURED)) {
+//                type = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
+//            }
 
             Node filepath = JcrUtils.getOrAddNode(parent, parentDir, type);
             Node file =
