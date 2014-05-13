@@ -409,6 +409,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
                         out.format(format.toString(), statistics.getValues()[idx]);
                     }
                 }
+                System.out.format("%n");
             }
         }
     }

@@ -24,6 +24,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Random;
 
+import javax.annotation.Nonnull;
 import javax.jcr.Binary;
 import javax.jcr.Credentials;
 import javax.jcr.Node;
@@ -124,7 +125,7 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
 
     public ScalabilityBlobSearchSuite(Boolean storageEnabled) {
         this.storageEnabled = storageEnabled;
-        addBenchmarks(new FullTextSearcher());
+        addBenchmarks(new FullTextSearcher(), new NodeTypeSearcher());
     }
 
     @Override
@@ -225,7 +226,7 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
         }
     }
 
-    private class FullTextSearcher extends ScalabilityBenchmark implements Runnable {
+    class FullTextSearcher extends ScalabilityBenchmark implements Runnable {
 
         @Override
         public void run() {}
@@ -236,27 +237,41 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
             QueryManager qm;
             try {
                 qm = session.getWorkspace().getQueryManager();
-                search(qm);
+                search(qm, context);
             } catch (RepositoryException e) {
                 e.printStackTrace();
             }
         }
-    }
 
-    @SuppressWarnings("deprecation")
-    protected void search(QueryManager qm) throws RepositoryException {
-        // TODO:Get query based on the search type
-        Query q =
-                qm.createQuery("//*[jcr:contains(., '" + getRandomSearchPath() + "File"
-                        + "*"
-                        + "')] ", Query.XPATH);
-        QueryResult r = q.execute();
-        RowIterator it = r.getRows();
-        for (int rows = 0; it.hasNext() && rows < MAX_RESULTS; rows++) {
-            Node node = it.nextRow().getNode();
-            node.getPath();
+        protected void search(QueryManager qm, ExecutionContext context) throws RepositoryException {
+            // TODO:Get query based on the search type
+            Query q = getQuery(qm);
+            QueryResult r = q.execute();
+            RowIterator it = r.getRows();
+            for (int rows = 0; it.hasNext() && rows < MAX_RESULTS; rows++) {
+                Node node = it.nextRow().getNode();
+                node.getPath();
+            }
+        }
+
+        @SuppressWarnings("deprecation")
+        protected Query getQuery(@Nonnull final QueryManager qm) throws RepositoryException {
+            return qm.createQuery("//*[jcr:contains(., '" + getRandomSearchPath() + "File"
+                    + "*"
+                    + "')] ", Query.XPATH);
         }
     }
+
+    private class NodeTypeSearcher extends FullTextSearcher {
+        @SuppressWarnings("deprecation")
+        protected Query getQuery(@Nonnull final QueryManager qm) throws RepositoryException {
+            return qm.createQuery(
+                    "/jcr:root/" + ROOT_NODE_NAME + "//element(*, "
+                            + NodeTypeConstants.NT_UNSTRUCTURED + ")",
+                    Query.XPATH);
+        }
+    }
+
 
     private class Reader implements Runnable {
 
