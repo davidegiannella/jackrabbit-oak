@@ -14,17 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.benchmark;
+package org.apache.jackrabbit.oak.scalability;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.newArrayListWithCapacity;
 
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Random;
 
 import javax.annotation.Nonnull;
 import javax.jcr.Binary;
+import javax.jcr.Credentials;
 import javax.jcr.Node;
 import javax.jcr.Property;
 import javax.jcr.Repository;
@@ -35,21 +37,18 @@ import javax.jcr.ValueFormatException;
 import javax.jcr.lock.LockException;
 import javax.jcr.nodetype.ConstraintViolationException;
 import javax.jcr.nodetype.NodeType;
-import javax.jcr.query.InvalidQueryException;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
 import javax.jcr.query.RowIterator;
 import javax.jcr.version.VersionException;
 
-import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
 import org.apache.commons.io.output.NullOutputStream;
-import org.apache.commons.math.stat.descriptive.SynchronizedDescriptiveStatistics;
 import org.apache.jackrabbit.commons.JcrUtils;
-import org.apache.jackrabbit.oak.benchmark.util.MimeType;
+import org.apache.jackrabbit.oak.benchmark.TestInputStream;
 import org.apache.jackrabbit.oak.fixture.JcrCustomizer;
 import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
@@ -62,28 +61,27 @@ import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 
 /**
- * The full suite test will incrementally increase the load.
+ * The suite test will incrementally increase the load and execute searches.
  * Each test run thus adds blobs and executes different searches. This way we measure time taken for
  * search(es) execution.
  * 
  */
-@SuppressWarnings("rawtypes")
-public class LongevitySearchAssetsTest extends AbstractTest {
+public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
 
-    private static final int FILE_SIZE = Integer.getInteger("fileSize", 512);
+    private static final int FILE_SIZE = Integer.getInteger("fileSize", 1);
 
     /**
-     * Controls concurrent thread for writing blobs
+     * Controls the number of concurrent threads for writing blobs
      */
     private static final int WRITERS = Integer.getInteger("fileWriters", 0);
 
     /**
-     * Controls concurrent thread for reading blobs
+     * Controls the number of concurrent thread for reading blobs
      */
     private static final int READERS = Integer.getInteger("fileReaders", 0);
 
     /**
-     * Controls concurrent thread for searching
+     * Controls the number of concurrent thread for searching
      */
     private static final int SEARCHERS = Integer.getInteger("fileSearchers", 0);
 
@@ -97,13 +95,9 @@ public class LongevitySearchAssetsTest extends AbstractTest {
      */
     private int MAX_RESULTS = Integer.getInteger("maxResults", 100);
 
-    /**
-     * Controls the incremental load for each run
-     */
-    private static final List<String> INCREMENTS = Splitter.on(",").splitToList(
-            System.getProperty("increments", "1000,10000,50000,100000,500000"));
 
     private static final String CUSTOM_PATH_PROP = "contentPath";
+
     private static final String CUSTOM_REF_PROP = "references";
 
     public static enum SearchType {
@@ -123,36 +117,25 @@ public class LongevitySearchAssetsTest extends AbstractTest {
 
     private final Random random = new Random(29);
 
-    final String DC_FORMAT = "format";
-    
     private List<String> searchPaths;
 
     private List<String> readPaths;
 
-    /** To account for warmup, start with -1 */
-    private int currentIteration = -1;
-
     private Boolean storageEnabled;
 
-    public LongevitySearchAssetsTest(Boolean storageEnabled) {
+    public ScalabilityBlobSearchSuite(Boolean storageEnabled) {
         this.storageEnabled = storageEnabled;
-    }
-    
-    private String nodeType = NodeTypeConstants.NT_UNSTRUCTURED;
-
-    public String getNodeType() {
-        return nodeType;
+        addBenchmarks(new FullTextSearcher(), new NodeTypeSearcher());
     }
 
-    private void setNodeType(String nodeType) {
-        this.nodeType = nodeType;
-    }
-
-    /**
-     * Executes once for the whole test
-     */
     @Override
-    public void beforeSuite() throws RepositoryException {
+    protected ScalabilitySuite addBenchmarks(ScalabilityBenchmark... tests) {
+        benchmarks.addAll(Arrays.asList(tests));
+        return this;
+    }
+
+    @Override
+    protected void beforeSuite() throws Exception {
         Session session = loginWriter();
         session.getRootNode().addNode(ROOT_NODE_NAME);
         session.save();
@@ -162,16 +145,17 @@ public class LongevitySearchAssetsTest extends AbstractTest {
      * Executes before each test run
      */
     @Override
-    public void beforeTest() throws RepositoryException {
+    public void beforeIteration(ExecutionContext context) throws RepositoryException {
+        if (DEBUG) {
+            System.out.println("Started beforeIteration()");
+        }
+
         // recreate paths created in this run
         searchPaths = newArrayList();
         readPaths = newArrayListWithCapacity(READERS);
 
-        int totalAssets =
-                (currentIteration < 0 ? 100 : Integer.parseInt(INCREMENTS.get(currentIteration)));
-
         // Creates assets for this run
-        Writer writer = new Writer(currentIteration, totalAssets);
+        Writer writer = new Writer(context.getIncrement(), context.getIncrement());
         writer.run();
 
         // Add background jobs to simulate workload
@@ -182,39 +166,17 @@ public class LongevitySearchAssetsTest extends AbstractTest {
             addBackgroundJob(new Reader());
         }
         for (int i = 1; i < SEARCHERS; i++) {
-            addBackgroundJob(new Searcher());
+            addBackgroundJob(new FullTextSearcher());
         }
-        currentIteration++;
-    }
 
-    /**
-     * Executes before each test run
-     */
-    @Override
-    public void afterTest() throws Exception {
-        shutdownBackgroundJobs();
-    }
-
-
-    @Override
-    public void runTest() throws Exception {
-        Searcher searcher = new Searcher();
-        searcher.run();
-    }
-
-    /**
-     * Run execution multiple times without any time limit.
-     * 
-     * @param statistics the statistics object to record execution time
-     * @throws Exception the exception
-     */
-    @Override
-    protected void runIterations(SynchronizedDescriptiveStatistics statistics)
-            throws Exception {
-        int iterations = INCREMENTS.size();
-        for (int idx = 0; idx < iterations; idx++) {
-            statistics.addValue(execute());
+        if (DEBUG) {
+            System.out.println("Finish beforeIteration()");
         }
+    }
+
+    @Override
+    protected void executeBenchmark(ScalabilityBenchmark benchmark, ExecutionContext context) {
+        benchmark.execute(getRepository(), CREDENTIALS, context);
     }
 
     @Override
@@ -244,6 +206,8 @@ public class LongevitySearchAssetsTest extends AbstractTest {
     }
 
     private synchronized void addReadPath(String file) {
+        // Limit the number of paths added to be no more than the number of readers to limit the
+        // heap used.
         int limit = 1000;
         if (readPaths.size() < limit) {
             readPaths.add(file);
@@ -262,48 +226,53 @@ public class LongevitySearchAssetsTest extends AbstractTest {
         }
     }
 
-    private class Searcher implements Runnable {
-        private final Session session = loginWriter();
+    class FullTextSearcher extends ScalabilityBenchmark implements Runnable {
 
         @Override
-        public void run() {
+        public void run() {}
+
+        @Override
+        public void execute(Repository repository, Credentials credentials, ExecutionContext context) {
+            Session session = loginWriter();
             QueryManager qm;
             try {
                 qm = session.getWorkspace().getQueryManager();
-                search(qm);
+                search(qm, context);
             } catch (RepositoryException e) {
                 e.printStackTrace();
             }
         }
-    }
 
-    protected void search(QueryManager qm) throws RepositoryException {
-        // TODO:Get query based on the search type
-        Query q = getQuery(qm);
+        protected void search(QueryManager qm, ExecutionContext context) throws RepositoryException {
+            // TODO:Get query based on the search type
+            Query q = getQuery(qm);
+            QueryResult r = q.execute();
+            RowIterator it = r.getRows();
+            for (int rows = 0; it.hasNext() && rows < MAX_RESULTS; rows++) {
+                Node node = it.nextRow().getNode();
+                node.getPath();
+            }
+        }
 
-        QueryResult r = q.execute();
-        RowIterator it = r.getRows();
-        for (int rows = 0; it.hasNext() && rows < MAX_RESULTS; rows++) {
-            Node node = it.nextRow().getNode();
-            node.getPath();
+        @SuppressWarnings("deprecation")
+        protected Query getQuery(@Nonnull final QueryManager qm) throws RepositoryException {
+            return qm.createQuery("//*[jcr:contains(., '" + getRandomSearchPath() + "File"
+                    + "*"
+                    + "')] ", Query.XPATH);
         }
     }
 
-    @SuppressWarnings("deprecation")
-    Query getQuery(@Nonnull final QueryManager qm) throws RepositoryException {
-        return qm.createQuery("//*[jcr:contains(., '" + getRandomSearchPath() + "File"
-            + "*"
-            + "')] ", Query.XPATH);
+    private class NodeTypeSearcher extends FullTextSearcher {
+        @SuppressWarnings("deprecation")
+        protected Query getQuery(@Nonnull final QueryManager qm) throws RepositoryException {
+            return qm.createQuery(
+                    "/jcr:root/" + ROOT_NODE_NAME + "//element(*, "
+                            + NodeTypeConstants.NT_UNSTRUCTURED + ")",
+                    Query.XPATH);
+        }
     }
-    
-    /**
-     * loop through the results
-     * @param resultset
-     */
-    void loopResults(@Nonnull final QueryResult resultset) {
-        
-    }
-    
+
+
     private class Reader implements Runnable {
 
         private final Session session = loginWriter();
@@ -359,6 +328,10 @@ public class LongevitySearchAssetsTest extends AbstractTest {
                     // record for searching and reading
                     addReadPath(file.getPath());
                     addSearchPath(fileNamePrefix);
+
+                    if (DEBUG && counter % 1000 == 0) {
+                        System.out.println("Added assets : " + counter);
+                    }
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -373,8 +346,6 @@ public class LongevitySearchAssetsTest extends AbstractTest {
                     NodeTypeConstants.NT_OAK_UNSTRUCTURED)) {
                 type = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
             }
-            
-            setNodeType(type);
 
             Node filepath = JcrUtils.getOrAddNode(parent, parentDir, type);
             Node file =
@@ -391,8 +362,6 @@ public class LongevitySearchAssetsTest extends AbstractTest {
                 content.setProperty(Property.JCR_MIMETYPE, "application/octet-stream");
                 content.setProperty(Property.JCR_LAST_MODIFIED, Calendar.getInstance());
                 content.setProperty(Property.JCR_DATA, binary);
-//                content.setProperty(DC_FORMAT, MimeType.randomMimeType().getValue());
-//                Node md = content.addNode("metadata", NodeTypeConstants.NT_UNSTRUCTURED);
 
                 file.setProperty(CUSTOM_PATH_PROP, file.getPath());
                 String reference = getRandomReadPath();
