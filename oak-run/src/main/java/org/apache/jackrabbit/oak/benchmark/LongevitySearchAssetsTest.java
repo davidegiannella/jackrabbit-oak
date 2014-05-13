@@ -23,6 +23,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Random;
 
+import javax.annotation.Nonnull;
 import javax.jcr.Binary;
 import javax.jcr.Node;
 import javax.jcr.Property;
@@ -54,6 +55,7 @@ import org.apache.jackrabbit.oak.jcr.Jcr;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelper;
+import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 
@@ -101,6 +103,7 @@ public class LongevitySearchAssetsTest extends AbstractTest {
 
     private static final String CUSTOM_PATH_PROP = "contentPath";
     private static final String CUSTOM_REF_PROP = "references";
+
     public static enum SearchType {
         /**
          * Full text query on the file name.
@@ -129,6 +132,16 @@ public class LongevitySearchAssetsTest extends AbstractTest {
 
     public LongevitySearchAssetsTest(Boolean storageEnabled) {
         this.storageEnabled = storageEnabled;
+    }
+
+    private String nodeType = NodeTypeConstants.NT_UNSTRUCTURED;
+
+    public String getNodeType() {
+        return nodeType;
+    }
+
+    private void setNodeType(String nodeType) {
+        this.nodeType = nodeType;
     }
 
     /**
@@ -220,7 +233,7 @@ public class LongevitySearchAssetsTest extends AbstractTest {
 
     private synchronized String getRandomReadPath() {
         if (readPaths.size() > 0) {
-        return readPaths.get(random.nextInt(readPaths.size()));
+            return readPaths.get(random.nextInt(readPaths.size()));
         } else {
             return "";
         }
@@ -229,7 +242,7 @@ public class LongevitySearchAssetsTest extends AbstractTest {
     private synchronized void addReadPath(String file) {
         int limit = 1000;
         if (readPaths.size() < limit) {
-        readPaths.add(file);
+            readPaths.add(file);
         } else if (random.nextDouble() < 0.5) {
             readPaths.set(random.nextInt(limit), file);
         }
@@ -260,19 +273,32 @@ public class LongevitySearchAssetsTest extends AbstractTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     protected void search(QueryManager qm) throws RepositoryException {
         // TODO:Get query based on the search type
-        Query q =
-                qm.createQuery("//*[jcr:contains(., '" + getRandomSearchPath() + "File"
-                        + "*"
-                        + "')] ", Query.XPATH);
+        Query q = getQuery(qm);
+
         QueryResult r = q.execute();
         RowIterator it = r.getRows();
         for (int rows = 0; it.hasNext() && rows < MAX_RESULTS; rows++) {
             Node node = it.nextRow().getNode();
             node.getPath();
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    Query getQuery(@Nonnull final QueryManager qm) throws RepositoryException {
+        return qm.createQuery("//*[jcr:contains(., '" + getRandomSearchPath() + "File"
+                + "*"
+                + "')] ", Query.XPATH);
+    }
+
+    /**
+     * loop through the results
+     * 
+     * @param resultset
+     */
+    void loopResults(@Nonnull final QueryResult resultset) {
+
     }
 
     private class Reader implements Runnable {
@@ -339,10 +365,10 @@ public class LongevitySearchAssetsTest extends AbstractTest {
         private Node putFile(String fileNamePrefix, String parentDir) throws RepositoryException,
                 UnsupportedRepositoryOperationException, ValueFormatException, VersionException,
                 LockException, ConstraintViolationException {
-            String type = "nt:unstructured";
+            String type = NodeTypeConstants.NT_UNSTRUCTURED;
             if (parent.getSession().getWorkspace().getNodeTypeManager().hasNodeType(
-                    "oak:Unstructured")) {
-                type = "oak:Unstructured";
+                    NodeTypeConstants.NT_OAK_UNSTRUCTURED)) {
+                type = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
             }
 
             Node filepath = JcrUtils.getOrAddNode(parent, parentDir, type);
