@@ -19,7 +19,6 @@ package org.apache.jackrabbit.oak.scalability;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.newArrayListWithCapacity;
 
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Random;
@@ -115,8 +114,10 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
     }
 
     @Override
-    protected ScalabilitySuite addBenchmarks(ScalabilityBenchmark... tests) {
-        benchmarks.addAll(Arrays.asList(tests));
+    public ScalabilitySuite addBenchmarks(ScalabilityBenchmark... tests) {
+        for (ScalabilityBenchmark test : tests) {
+            benchmarks.put(test.toString(), test);
+        }
         return this;
     }
 

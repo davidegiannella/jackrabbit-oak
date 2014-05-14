@@ -19,20 +19,23 @@ package org.apache.jackrabbit.oak.scalability;
 import java.io.File;
 import java.io.PrintStream;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.jackrabbit.oak.benchmark.CSVResultGenerator;
 import org.apache.jackrabbit.oak.fixture.JackrabbitRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
+
+import com.google.common.base.Splitter;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 /**
  * Main class for running scalability/longevity tests.
@@ -105,7 +108,7 @@ public class ScalabilityRunner {
                 OakRepositoryFixture.getTarWithBlobStore(
                         base.value(options), 256, cacheSize, mmap.value(options))
         };
-        ScalabilitySuite[] allBenchmarks = new ScalabilitySuite[] {
+        ScalabilitySuite[] allSuites = new ScalabilitySuite[] {
                 new ScalabilityBlobSearchSuite(withStorage.value(options))
                     .addBenchmarks(new FullTextSearcher(), 
                                     new NodeTypeSearcher(),
@@ -119,24 +122,46 @@ public class ScalabilityRunner {
                 fixtures.add(fixture);
             }
         }
-
-        List<ScalabilitySuite> benchmarks = Lists.newArrayList();
-        for (ScalabilitySuite benchmark : allBenchmarks) {
-            if (argset.remove(benchmark.toString())) {
-                benchmarks.add(benchmark);
+        
+        Map<String, List<String>> argmap = Maps.newHashMap();
+        // Split the args to get suites and benchmarks (i.e. suite:benchmark1,benchmark2)
+        for(String arg : argset) {
+            String tokens[] = arg.split(":");
+            if (tokens.length > 1) {
+                argmap.put(tokens[0], Splitter.on(",").trimResults().splitToList(tokens[1]));
+            } else {
+                argmap.put(tokens[0], null);
+            }
+            argset.remove(arg);
+        }
+        
+        List<ScalabilitySuite> suites = Lists.newArrayList();
+        for (ScalabilitySuite suite : allSuites) {
+            if (argmap.containsKey(suite.toString())) {
+                List<String> benchmarks = argmap.get(suite.toString());
+                // Only keep requested benchmarks
+                if (benchmarks != null) {
+                    for (ScalabilityBenchmark availableBenchmark : suite.getBenchmarks().values()) {
+                        if (!benchmarks.contains(availableBenchmark.toString())) {
+                            suite.removeBenchmark(availableBenchmark.toString());
+                        }
+                    }
+                }
+                suites.add(suite);
+                argmap.remove(suite.toString());
             }
         }
 
-        if (argset.isEmpty()) {
+        if (argmap.isEmpty()) {
             PrintStream out = null;
             if (options.has(csvFile)) {
                 out = new PrintStream(FileUtils.openOutputStream(csvFile.value(options), true));
             }
-            for (ScalabilitySuite benchmark : benchmarks) {
-                if (benchmark instanceof CSVResultGenerator) {
-                    ((CSVResultGenerator) benchmark).setPrintStream(out);
+            for (ScalabilitySuite suite : suites) {
+                if (suite instanceof CSVResultGenerator) {
+                    ((CSVResultGenerator) suite).setPrintStream(out);
                 }
-                benchmark.run(fixtures);
+                suite.run(fixtures);
             }
             if (out != null) {
                 out.close();

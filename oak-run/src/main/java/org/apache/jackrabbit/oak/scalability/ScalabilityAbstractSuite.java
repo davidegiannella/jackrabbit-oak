@@ -74,7 +74,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
 
     private PrintStream out;
 
-    protected List<ScalabilityBenchmark> benchmarks;
+    protected Map<String, ScalabilityBenchmark> benchmarks;
 
     /**
      * Variables per suite run
@@ -96,7 +96,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
     private RepositoryFixture fixture;
 
     public ScalabilityAbstractSuite() {
-        this.benchmarks = newArrayList();
+        this.benchmarks = newHashMap();
     }
 
     @Override
@@ -150,7 +150,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
     }
 
     private void warmup() throws Exception {
-        for (ScalabilityBenchmark benchmark : benchmarks) {
+        for (ScalabilityBenchmark benchmark : benchmarks.values()) {
             executeBenchmark(benchmark, context);
         }
     }
@@ -228,8 +228,20 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
      * @param benchmarks
      * @return
      */
-    protected abstract ScalabilitySuite addBenchmarks(ScalabilityBenchmark... benchmarks);
-
+    public abstract ScalabilitySuite addBenchmarks(ScalabilityBenchmark... benchmarks);
+    
+    /**
+     * Removes the benchmark.
+     */
+    @Override
+    public boolean removeBenchmark(String benchmark) {
+        return benchmarks.remove(benchmark) != null;
+    }
+    
+    @Override
+    public Map<String, ScalabilityBenchmark> getBenchmarks() {
+        return benchmarks;
+    }
     /**
      * Runs the benchmark.
      * 
@@ -249,7 +261,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
         Preconditions.checkArgument(benchmarks != null && !benchmarks.isEmpty(),
                 "No Benchmarks configured");
 
-        for (ScalabilityBenchmark benchmark : benchmarks) {
+        for (ScalabilityBenchmark benchmark : benchmarks.values()) {
             if (result.getBenchmarkStatistics(benchmark) == null) {
                 result.addBenchmarkStatistics(benchmark, new SynchronizedDescriptiveStatistics());
             }

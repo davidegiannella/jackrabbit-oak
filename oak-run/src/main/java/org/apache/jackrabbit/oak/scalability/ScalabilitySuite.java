@@ -16,11 +16,19 @@
  */
 package org.apache.jackrabbit.oak.scalability;
 
+import java.util.Map;
+
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
 
 /**
  * Interface for longevity suite for load testing.
  */
 public interface ScalabilitySuite {
+    ScalabilitySuite addBenchmarks(ScalabilityBenchmark... benchmarks);
+
+    boolean removeBenchmark(String benchmark);
+    
     void run(Iterable<RepositoryFixture> fixtures);
+
+    Map<String, ScalabilityBenchmark> getBenchmarks();
 }
