@@ -66,8 +66,8 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
     /**
      * Controls the incremental load for each iteration
      */
-    protected static final List<String> INCREMENTS = Splitter.on(",").splitToList(
-            System.getProperty("increments", "1,5,7,10"));
+    protected static final List<String> INCREMENTS = Splitter.on(",").trimResults()
+                    .omitEmptyStrings().splitToList(System.getProperty("increments", "1,5,7,10"));
 
     protected static final Credentials CREDENTIALS = new SimpleCredentials("admin", "admin"
             .toCharArray());
@@ -272,6 +272,11 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
 
             watch.stop();
             result.getBenchmarkStatistics(benchmark).addValue(watch.elapsed(TimeUnit.MILLISECONDS));
+            
+            if (DEBUG) {
+                System.out.println("Execution time for " + benchmark + "-"
+                                            + watch.elapsed(TimeUnit.MILLISECONDS));
+            }
         }
     }
 
