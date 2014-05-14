@@ -34,7 +34,7 @@ public class NodeTypeSearcher extends SearchScalabilityBenchmark {
     @Override
     protected Query getQuery(@Nonnull final QueryManager qm, ExecutionContext context) throws RepositoryException {
         return qm.createQuery(
-                "/jcr:root/" + ((String) context.getMap().get("ROOT_NODE_NAME")) + "//element(*, "
+                "/jcr:root/" + ((String) context.getMap().get(ScalabilityBlobSearchSuite.CTX_ROOT_NODE_NAME_PROP)) + "//element(*, "
                         + NodeTypeConstants.NT_UNSTRUCTURED + ")",
                 Query.XPATH);
     }

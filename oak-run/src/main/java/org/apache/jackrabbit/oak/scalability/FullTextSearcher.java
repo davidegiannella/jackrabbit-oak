@@ -37,7 +37,7 @@ public class FullTextSearcher extends SearchScalabilityBenchmark {
     @Override
     protected Query getQuery(@Nonnull final QueryManager qm, ExecutionContext context) throws RepositoryException {
         @SuppressWarnings("unchecked")
-        List<String> paths = (List<String>) context.getMap().get("SEARCH_PATHS");
+        List<String> paths = (List<String>) context.getMap().get(ScalabilityBlobSearchSuite.CTX_SEARCH_PATHS_PROP);
         
         return qm.createQuery("//*[jcr:contains(., '" + paths.get(random.nextInt(paths.size()))  + "File"
                 + "*"
