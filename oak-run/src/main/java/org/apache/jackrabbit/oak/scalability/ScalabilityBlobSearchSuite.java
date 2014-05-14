@@ -49,6 +49,7 @@ import com.google.common.collect.Lists;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.jackrabbit.commons.JcrUtils;
 import org.apache.jackrabbit.oak.benchmark.TestInputStream;
+import org.apache.jackrabbit.oak.benchmark.util.Date;
 import org.apache.jackrabbit.oak.benchmark.util.MimeType;
 import org.apache.jackrabbit.oak.fixture.JcrCustomizer;
 import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
@@ -392,6 +393,8 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
             
             // adding a custom format/mime-type for later querying.
             file.setProperty(FORMAT_PROP, MimeType.randomMimeType().getValue());
+            // adding a last modified for later querying
+            file.setProperty(Property.JCR_LAST_MODIFIED, Date.randomDate().getCalendar());
             
             Binary binary =
                     parent.getSession().getValueFactory().createBinary(
