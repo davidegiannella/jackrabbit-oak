@@ -16,19 +16,26 @@
  */
 package org.apache.jackrabbit.oak.scalability;
 
-import java.util.Map;
+import javax.annotation.Nonnull;
+import javax.jcr.RepositoryException;
+import javax.jcr.query.Query;
+import javax.jcr.query.QueryManager;
 
-import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
+import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
+import org.apache.jackrabbit.oak.scalability.ScalabilityAbstractSuite.ExecutionContext;
 
 /**
- * Interface for longevity suite for load testing.
+ * Searches on the NodeType 
+ *
  */
-public interface ScalabilitySuite {
-    ScalabilitySuite addBenchmarks(ScalabilityBenchmark... benchmarks);
-
-    boolean removeBenchmark(String benchmark);
+public class NodeTypeSearcher extends SearchScalabilityBenchmark {
     
-    void run(Iterable<RepositoryFixture> fixtures);
-
-    Map<String, ScalabilityBenchmark> getBenchmarks();
+    @SuppressWarnings("deprecation")
+    @Override
+    protected Query getQuery(@Nonnull final QueryManager qm, ExecutionContext context) throws RepositoryException {
+        return qm.createQuery(
+                "/jcr:root/" + ((String) context.getMap().get(ScalabilityBlobSearchSuite.CTX_ROOT_NODE_NAME_PROP)) + "//element(*, "
+                        + NodeTypeConstants.NT_UNSTRUCTURED + ")",
+                Query.XPATH);
+    }
 }

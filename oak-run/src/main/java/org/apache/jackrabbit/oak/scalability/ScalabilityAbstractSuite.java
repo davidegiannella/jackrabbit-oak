@@ -66,15 +66,15 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
     /**
      * Controls the incremental load for each iteration
      */
-    protected static final List<String> INCREMENTS = Splitter.on(",").splitToList(
-            System.getProperty("increments", "1,5,7,10"));
+    protected static final List<String> INCREMENTS = Splitter.on(",").trimResults()
+                    .omitEmptyStrings().splitToList(System.getProperty("increments", "1,5,7,10"));
 
     protected static final Credentials CREDENTIALS = new SimpleCredentials("admin", "admin"
             .toCharArray());
 
     private PrintStream out;
 
-    protected List<ScalabilityBenchmark> benchmarks;
+    protected Map<String, ScalabilityBenchmark> benchmarks;
 
     /**
      * Variables per suite run
@@ -96,7 +96,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
     private RepositoryFixture fixture;
 
     public ScalabilityAbstractSuite() {
-        this.benchmarks = newArrayList();
+        this.benchmarks = newHashMap();
     }
 
     @Override
@@ -149,8 +149,8 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
         }
     }
 
-    private void warmup() {
-        for (ScalabilityBenchmark benchmark : benchmarks) {
+    private void warmup() throws Exception {
+        for (ScalabilityBenchmark benchmark : benchmarks.values()) {
             executeBenchmark(benchmark, context);
         }
     }
@@ -228,26 +228,40 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
      * @param benchmarks
      * @return
      */
-    protected abstract ScalabilitySuite addBenchmarks(ScalabilityBenchmark... benchmarks);
-
+    public abstract ScalabilitySuite addBenchmarks(ScalabilityBenchmark... benchmarks);
+    
+    /**
+     * Removes the benchmark.
+     */
+    @Override
+    public boolean removeBenchmark(String benchmark) {
+        return benchmarks.remove(benchmark) != null;
+    }
+    
+    @Override
+    public Map<String, ScalabilityBenchmark> getBenchmarks() {
+        return benchmarks;
+    }
     /**
      * Runs the benchmark.
      * 
      * @param benchmark
+     * @throws Exception 
      */
     protected abstract void executeBenchmark(ScalabilityBenchmark benchmark,
-            ExecutionContext context);
+            ExecutionContext context) throws Exception;
 
     /**
      * Runs the iteration of the benchmarks added.
      * 
      * @param context
+     * @throws Exception 
      */
-    private void runIteration(ExecutionContext context) {
+    private void runIteration(ExecutionContext context) throws Exception {
         Preconditions.checkArgument(benchmarks != null && !benchmarks.isEmpty(),
                 "No Benchmarks configured");
 
-        for (ScalabilityBenchmark benchmark : benchmarks) {
+        for (ScalabilityBenchmark benchmark : benchmarks.values()) {
             if (result.getBenchmarkStatistics(benchmark) == null) {
                 result.addBenchmarkStatistics(benchmark, new SynchronizedDescriptiveStatistics());
             }
@@ -258,6 +272,11 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
 
             watch.stop();
             result.getBenchmarkStatistics(benchmark).addValue(watch.elapsed(TimeUnit.MILLISECONDS));
+            
+            if (DEBUG) {
+                System.out.println("Execution time for " + benchmark + "-"
+                                            + watch.elapsed(TimeUnit.MILLISECONDS));
+            }
         }
     }
 
@@ -354,16 +373,16 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
 
                 System.out
                         .format(
-                                "# %-45.45s       min     10%%     50%%     90%%     max       N%n",
+                                "# %-26.26s       min     10%%     50%%     90%%     max       N%n",
                                 benchmark.toString());
                 if (out != null) {
                     out.format(
-                            "# %-45.45s       min     10%%     50%%     90%%     max       N%n",
+                            "# %-26.26s       min     10%%     50%%     90%%     max       N%n",
                             benchmark.toString());
                 }
 
                 System.out.format(
-                        "%-52.52s  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6d%n",
+                        "%-30.30s  %6.0f  %6.0f  %6.0f  %6.0f  %6.0f  %6d%n",
                         fixture.toString(),
                         statistics.getMin(),
                         statistics.getPercentile(10.0),
@@ -374,7 +393,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
 
                 if (out != null) {
                     out.format(
-                            "%-52.52s  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6d%n",
+                            "%-30.30s  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6d%n",
                             fixture.toString(),
                             statistics.getMin(),
                             statistics.getPercentile(10.0),
@@ -385,7 +404,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
                 }
 
                 StringBuffer header = new StringBuffer();
-                header.append("\t# %-45.45s");
+                header.append("\t# %-26.26s");
                 for (String increment : INCREMENTS) {
                     header.append("\t");
                     header.append(increment);
@@ -394,10 +413,10 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
                 System.out.format(header.toString(), "Iterations/Load");
 
                 StringBuffer format = new StringBuffer();
-                format.append("%-48.48s");
-                System.out.format(format.toString(), "\t" + fixture.toString());
+                format.append("%-30.30s");
+                System.out.format(format.toString(), "\t" + "Time (ms)");
                 if (out != null) {
-                    out.format(format.toString(), "\t" + fixture.toString());
+                    out.format(format.toString(), "\t" + "Time (ms)");
                 }
 
                 for (int idx = 0; idx < INCREMENTS.size(); idx++) {
