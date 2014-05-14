@@ -107,6 +107,9 @@ public class ScalabilityRunner {
         };
         ScalabilitySuite[] allBenchmarks = new ScalabilitySuite[] {
                 new ScalabilityBlobSearchSuite(withStorage.value(options))
+                    .addBenchmarks(new FullTextSearcher(), 
+                                    new NodeTypeSearcher(),
+                                    new FormatSearcher())
         };
 
         Set<String> argset = Sets.newHashSet(options.nonOptionArguments());

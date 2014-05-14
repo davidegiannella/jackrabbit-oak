@@ -16,30 +16,26 @@
  */
 package org.apache.jackrabbit.oak.scalability;
 
-import javax.jcr.Credentials;
-import javax.jcr.Repository;
+import javax.annotation.Nonnull;
+import javax.jcr.RepositoryException;
+import javax.jcr.query.Query;
+import javax.jcr.query.QueryManager;
 
+import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.apache.jackrabbit.oak.scalability.ScalabilityAbstractSuite.ExecutionContext;
 
-
 /**
- * Abstract class for all the Scalability/Longevity benchmarks.
- * 
+ * Searches on the NodeType 
+ *
  */
-public abstract class ScalabilityBenchmark {
-
-    /**
-     * Runs the benchmark against the given repository.
-     * 
-     * @param fixtures repository fixtures
-     * @throws Exception 
-     */
-    public abstract void execute(Repository repository, Credentials credentials,
-            ExecutionContext context) throws Exception;
-
+public class NodeTypeSearcher extends SearchScalabilityBenchmark {
+    
+    @SuppressWarnings("deprecation")
     @Override
-    public String toString() {
-        String name = getClass().getName();
-        return name.substring(name.lastIndexOf('.') + 1);
+    protected Query getQuery(@Nonnull final QueryManager qm, ExecutionContext context) throws RepositoryException {
+        return qm.createQuery(
+                "/jcr:root/" + ((String) context.getMap().get("ROOT_NODE_NAME")) + "//element(*, "
+                        + NodeTypeConstants.NT_UNSTRUCTURED + ")",
+                Query.XPATH);
     }
 }

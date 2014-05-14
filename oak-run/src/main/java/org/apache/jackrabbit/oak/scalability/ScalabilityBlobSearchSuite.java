@@ -24,9 +24,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Random;
 
-import javax.annotation.Nonnull;
 import javax.jcr.Binary;
-import javax.jcr.Credentials;
 import javax.jcr.Node;
 import javax.jcr.Property;
 import javax.jcr.Repository;
@@ -37,14 +35,7 @@ import javax.jcr.ValueFormatException;
 import javax.jcr.lock.LockException;
 import javax.jcr.nodetype.ConstraintViolationException;
 import javax.jcr.nodetype.NodeType;
-import javax.jcr.query.Query;
-import javax.jcr.query.QueryManager;
-import javax.jcr.query.QueryResult;
-import javax.jcr.query.RowIterator;
 import javax.jcr.version.VersionException;
-
-import com.google.common.base.Strings;
-import com.google.common.collect.Lists;
 
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.jackrabbit.commons.JcrUtils;
@@ -62,6 +53,9 @@ import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
 
 /**
  * The suite test will incrementally increase the load and execute searches.
@@ -95,29 +89,15 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
      */
     private static final int MAX_ASSETS_PER_LEVEL = Integer.getInteger("maxAssets", 500);
 
-    /**
-     * Controls the max results retrieved after search
-     */
-    private int MAX_RESULTS = Integer.getInteger("maxResults", 100);
-
-
+    public static final String CTX_SEARCH_PATHS_PROP = "searchPaths";
+    
+    public static final String CTX_ROOT_NODE_NAME_PROP = "rootNodeName";
+    
     private static final String CUSTOM_PATH_PROP = "contentPath";
 
     private static final String CUSTOM_REF_PROP = "references";
 
     public static final String FORMAT_PROP = "format";
-    
-    public static enum SearchType {
-        /**
-         * Full text query on the file name.
-         */
-        SEARCH_FILE,
-
-        /**
-         * List the files in a folder and their references.
-         */
-        LIST_ASSET_REFERENCES
-    }
 
     protected static final String ROOT_NODE_NAME =
             "LongevitySearchAssets" + TEST_ID;
@@ -132,7 +112,6 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
 
     public ScalabilityBlobSearchSuite(Boolean storageEnabled) {
         this.storageEnabled = storageEnabled;
-        addBenchmarks(new FullTextSearcher(), new NodeTypeSearcher(), new FormatSearcher());
     }
 
     @Override
@@ -179,10 +158,13 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
         if (DEBUG) {
             System.out.println("Finish beforeIteration()");
         }
+        
+        context.getMap().put(CTX_ROOT_NODE_NAME_PROP, ROOT_NODE_NAME);
+        context.getMap().put(CTX_SEARCH_PATHS_PROP, searchPaths);
     }
 
     @Override
-    protected void executeBenchmark(ScalabilityBenchmark benchmark, ExecutionContext context) {
+    protected void executeBenchmark(ScalabilityBenchmark benchmark, ExecutionContext context) throws Exception {
         benchmark.execute(getRepository(), CREDENTIALS, context);
     }
 
@@ -223,88 +205,10 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
         }
     }
 
-    private synchronized String getRandomSearchPath() {
-        return searchPaths.get(random.nextInt(searchPaths.size()));
-    }
-
     private synchronized void addSearchPath(String path) {
         if (!searchPaths.contains(path)) {
             searchPaths.add(path);
         }
-    }
-
-    class FullTextSearcher extends ScalabilityBenchmark implements Runnable {
-
-        @Override
-        public void run() {}
-
-        @Override
-        public void execute(Repository repository, Credentials credentials, ExecutionContext context) {
-            Session session = loginWriter();
-            QueryManager qm;
-            try {
-                qm = session.getWorkspace().getQueryManager();
-                search(qm, context);
-            } catch (RepositoryException e) {
-                e.printStackTrace();
-            }
-        }
-
-        protected void search(QueryManager qm, ExecutionContext context) throws RepositoryException {
-            // TODO:Get query based on the search type
-            Query q = getQuery(qm);
-            QueryResult r = q.execute();
-            RowIterator it = r.getRows();
-            for (int rows = 0; it.hasNext() && rows < MAX_RESULTS; rows++) {
-                Node node = it.nextRow().getNode();
-                node.getPath();
-            }
-        }
-
-        @SuppressWarnings("deprecation")
-        protected Query getQuery(@Nonnull final QueryManager qm) throws RepositoryException {
-            return qm.createQuery("//*[jcr:contains(., '" + getRandomSearchPath() + "File"
-                    + "*"
-                    + "')] ", Query.XPATH);
-        }
-    }
-
-    private class NodeTypeSearcher extends FullTextSearcher {
-        @SuppressWarnings("deprecation")
-        protected Query getQuery(@Nonnull final QueryManager qm) throws RepositoryException {
-            return qm.createQuery(
-                    "/jcr:root/" + ROOT_NODE_NAME + "//element(*, "
-                            + NodeTypeConstants.NT_UNSTRUCTURED + ")",
-                    Query.XPATH);
-        }
-    }
-
-    private class FormatSearcher extends FullTextSearcher {
-        @SuppressWarnings("deprecation")
-        @Override
-        protected Query getQuery(QueryManager qm) throws RepositoryException {
-            StringBuilder statement = new StringBuilder("/jcr:content/");
-            
-            statement.append(ROOT_NODE_NAME).append("//element(*, ")
-                .append(NodeTypeConstants.NT_UNSTRUCTURED).append(")");
-            statement.append("[((");
-            
-            // adding all the possible mime-types in an OR fashion
-            for (MimeType mt : MimeType.values()) {
-                statement.append("@").append(FORMAT_PROP).append(" = '")
-                    .append(mt.getValue()).append("' or ");
-            }
-
-            // removing latest ' or '
-            statement.delete(statement.lastIndexOf(" or "), statement.length());
-            
-            statement.append("))]");
-            
-            LOG.debug("{}", statement);
-            
-            return qm.createQuery(statement.toString(), Query.XPATH);
-        }
-        
     }
     
     private class Reader implements Runnable {

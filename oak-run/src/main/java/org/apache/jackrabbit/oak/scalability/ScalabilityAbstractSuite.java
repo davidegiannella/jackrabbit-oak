@@ -149,7 +149,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
         }
     }
 
-    private void warmup() {
+    private void warmup() throws Exception {
         for (ScalabilityBenchmark benchmark : benchmarks) {
             executeBenchmark(benchmark, context);
         }
@@ -234,16 +234,18 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
      * Runs the benchmark.
      * 
      * @param benchmark
+     * @throws Exception 
      */
     protected abstract void executeBenchmark(ScalabilityBenchmark benchmark,
-            ExecutionContext context);
+            ExecutionContext context) throws Exception;
 
     /**
      * Runs the iteration of the benchmarks added.
      * 
      * @param context
+     * @throws Exception 
      */
-    private void runIteration(ExecutionContext context) {
+    private void runIteration(ExecutionContext context) throws Exception {
         Preconditions.checkArgument(benchmarks != null && !benchmarks.isEmpty(),
                 "No Benchmarks configured");
 

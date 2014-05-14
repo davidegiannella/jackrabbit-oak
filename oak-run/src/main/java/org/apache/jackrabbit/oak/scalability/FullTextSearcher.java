@@ -16,30 +16,31 @@
  */
 package org.apache.jackrabbit.oak.scalability;
 
-import javax.jcr.Credentials;
-import javax.jcr.Repository;
+import java.util.List;
+import java.util.Random;
+
+import javax.annotation.Nonnull;
+import javax.jcr.RepositoryException;
+import javax.jcr.query.Query;
+import javax.jcr.query.QueryManager;
 
 import org.apache.jackrabbit.oak.scalability.ScalabilityAbstractSuite.ExecutionContext;
 
-
 /**
- * Abstract class for all the Scalability/Longevity benchmarks.
- * 
+ * Full text query search
+ *
  */
-public abstract class ScalabilityBenchmark {
+public class FullTextSearcher extends SearchScalabilityBenchmark {
+    private final Random random = new Random(93);
 
-    /**
-     * Runs the benchmark against the given repository.
-     * 
-     * @param fixtures repository fixtures
-     * @throws Exception 
-     */
-    public abstract void execute(Repository repository, Credentials credentials,
-            ExecutionContext context) throws Exception;
-
+    @SuppressWarnings("deprecation")
     @Override
-    public String toString() {
-        String name = getClass().getName();
-        return name.substring(name.lastIndexOf('.') + 1);
+    protected Query getQuery(@Nonnull final QueryManager qm, ExecutionContext context) throws RepositoryException {
+        @SuppressWarnings("unchecked")
+        List<String> paths = (List<String>) context.getMap().get("SEARCH_PATHS");
+        
+        return qm.createQuery("//*[jcr:contains(., '" + paths.get(random.nextInt(paths.size()))  + "File"
+                + "*"
+                + "')] ", Query.XPATH);
     }
 }
