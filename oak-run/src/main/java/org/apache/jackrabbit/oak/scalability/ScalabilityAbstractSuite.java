@@ -356,16 +356,16 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
 
                 System.out
                         .format(
-                                "# %-45.45s       min     10%%     50%%     90%%     max       N%n",
+                                "# %-26.26s       min     10%%     50%%     90%%     max       N%n",
                                 benchmark.toString());
                 if (out != null) {
                     out.format(
-                            "# %-45.45s       min     10%%     50%%     90%%     max       N%n",
+                            "# %-26.26s       min     10%%     50%%     90%%     max       N%n",
                             benchmark.toString());
                 }
 
                 System.out.format(
-                        "%-52.52s  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6d%n",
+                        "%-30.30s  %6.0f  %6.0f  %6.0f  %6.0f  %6.0f  %6d%n",
                         fixture.toString(),
                         statistics.getMin(),
                         statistics.getPercentile(10.0),
@@ -376,7 +376,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
 
                 if (out != null) {
                     out.format(
-                            "%-52.52s  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6d%n",
+                            "%-30.30s  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6.0f  %-6d%n",
                             fixture.toString(),
                             statistics.getMin(),
                             statistics.getPercentile(10.0),
@@ -387,7 +387,7 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
                 }
 
                 StringBuffer header = new StringBuffer();
-                header.append("\t# %-45.45s");
+                header.append("\t# %-26.26s");
                 for (String increment : INCREMENTS) {
                     header.append("\t");
                     header.append(increment);
@@ -396,10 +396,10 @@ public abstract class ScalabilityAbstractSuite implements ScalabilitySuite, CSVR
                 System.out.format(header.toString(), "Iterations/Load");
 
                 StringBuffer format = new StringBuffer();
-                format.append("%-48.48s");
-                System.out.format(format.toString(), "\t" + fixture.toString());
+                format.append("%-30.30s");
+                System.out.format(format.toString(), "\t" + "Time (ms)");
                 if (out != null) {
-                    out.format(format.toString(), "\t" + fixture.toString());
+                    out.format(format.toString(), "\t" + "Time (ms)");
                 }
 
                 for (int idx = 0; idx < INCREMENTS.size(); idx++) {
