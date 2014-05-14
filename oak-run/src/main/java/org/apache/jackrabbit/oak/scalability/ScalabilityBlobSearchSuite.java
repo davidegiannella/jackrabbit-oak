@@ -49,6 +49,7 @@ import com.google.common.collect.Lists;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.jackrabbit.commons.JcrUtils;
 import org.apache.jackrabbit.oak.benchmark.TestInputStream;
+import org.apache.jackrabbit.oak.benchmark.util.MimeType;
 import org.apache.jackrabbit.oak.fixture.JcrCustomizer;
 import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
@@ -59,6 +60,8 @@ import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelp
 import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The suite test will incrementally increase the load and execute searches.
@@ -67,6 +70,8 @@ import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
  * 
  */
 public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
+    
+    private static final Logger LOG = LoggerFactory.getLogger(ScalabilityBlobSearchSuite.class);    
 
     private static final int FILE_SIZE = Integer.getInteger("fileSize", 1);
 
@@ -100,6 +105,8 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
 
     private static final String CUSTOM_REF_PROP = "references";
 
+    public static final String FORMAT_PROP = "format";
+    
     public static enum SearchType {
         /**
          * Full text query on the file name.
@@ -125,7 +132,7 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
 
     public ScalabilityBlobSearchSuite(Boolean storageEnabled) {
         this.storageEnabled = storageEnabled;
-        addBenchmarks(new FullTextSearcher(), new NodeTypeSearcher());
+        addBenchmarks(new FullTextSearcher(), new NodeTypeSearcher(), new FormatSearcher());
     }
 
     @Override
@@ -272,7 +279,34 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
         }
     }
 
+    private class FormatSearcher extends FullTextSearcher {
+        @SuppressWarnings("deprecation")
+        @Override
+        protected Query getQuery(QueryManager qm) throws RepositoryException {
+            StringBuilder statement = new StringBuilder("/jcr:content/");
+            
+            statement.append(ROOT_NODE_NAME).append("//element(*, ")
+                .append(NodeTypeConstants.NT_UNSTRUCTURED).append(")");
+            statement.append("[((");
+            
+            // adding all the possible mime-types in an OR fashion
+            for (MimeType mt : MimeType.values()) {
+                statement.append("@").append(FORMAT_PROP).append(" = '")
+                    .append(mt.getValue()).append("' or ");
+            }
 
+            // removing latest ' or '
+            statement.delete(statement.lastIndexOf(" or "), statement.length());
+            
+            statement.append("))]");
+            
+            LOG.debug("{}", statement);
+            
+            return qm.createQuery(statement.toString(), Query.XPATH);
+        }
+        
+    }
+    
     private class Reader implements Runnable {
 
         private final Session session = loginWriter();
@@ -354,6 +388,10 @@ public class ScalabilityBlobSearchSuite extends ScalabilityAbstractSuite {
                     JcrUtils.getOrAddNode(filepath,
                             (fileNamePrefix + "File" + counter++),
                             type);
+            
+            // adding a custom format/mime-type for later querying.
+            file.setProperty(FORMAT_PROP, MimeType.randomMimeType().getValue());
+                        
             Binary binary =
                     parent.getSession().getValueFactory().createBinary(
                             new TestInputStream(FILE_SIZE * 1024));
