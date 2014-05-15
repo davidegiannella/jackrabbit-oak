@@ -13,6 +13,11 @@
  */
 package org.apache.jackrabbit.oak.query.index;
 
+import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.Tree;
@@ -204,4 +209,144 @@ public class TraversingIndexQueryTest extends AbstractQueryTest {
                         .of("/home/users/testing/socialgraph_test_user_4/social/relationships/friend/socialgraph_test_group"));
 
     }
+
+    @Test
+    public void testRelativeProperties() throws Exception {
+        root.getTree("/").addChild("content").addChild("node1")
+                .setProperty("prop", 128);
+        root.commit();
+
+        assertQuery("//*[(@prop > 1)]", "xpath",
+                ImmutableList.of("/content/node1"));
+        assertQuery("//*[(@prop > 2)]", "xpath",
+                ImmutableList.of("/content/node1"));
+        assertQuery("//*[(@prop > 20)]", "xpath",
+                ImmutableList.of("/content/node1"));
+        assertQuery("//*[(@prop > 100)]", "xpath",
+                ImmutableList.of("/content/node1"));
+        assertQuery("//*[(@prop > 200)]", "xpath", new ArrayList<String>());
+        assertQuery("//*[(@prop > 1000)]", "xpath", new ArrayList<String>());
+
+        assertQuery("//*[(*/@prop > 1)]", "xpath", ImmutableList.of("/content"));
+        assertQuery("//*[(*/@prop > 2)]", "xpath", ImmutableList.of("/content"));
+        assertQuery("//*[(*/@prop > 20)]", "xpath",
+                ImmutableList.of("/content"));
+        assertQuery("//*[(*/@prop > 100)]", "xpath",
+                ImmutableList.of("/content"));
+        assertQuery("//*[(*/@prop > 200)]", "xpath", new ArrayList<String>());
+        assertQuery("//*[(*/@prop > 1000)]", "xpath", new ArrayList<String>());
+    }
+
+    @Test
+    public void testRelativeProperties2() throws Exception {
+        Tree t = root.getTree("/").addChild("content").addChild("nodes");
+        Tree a = t.addChild("a");
+        a.setProperty(JCR_PRIMARYTYPE, "nt:unstructured", Type.NAME);
+        Tree b = a.addChild("b");
+        b.setProperty(JCR_PRIMARYTYPE, "nt:unstructured", Type.NAME);
+        Tree c = b.addChild("c");
+        c.setProperty(JCR_PRIMARYTYPE, "nt:unstructured", Type.NAME);
+
+        Tree d1 = c.addChild("d1");
+        d1.setProperty("prop", 10);
+        d1.setProperty(JCR_PRIMARYTYPE, "nt:unstructured", Type.NAME);
+        Tree d2 = c.addChild("d2");
+        d2.setProperty("prop", 20);
+        d2.setProperty(JCR_PRIMARYTYPE, "nt:unstructured", Type.NAME);
+        Tree d3 = c.addChild("d3");
+        d3.setProperty("prop", 30);
+        d3.setProperty(JCR_PRIMARYTYPE, "nt:unstructured", Type.NAME);
+        root.commit();
+
+        assertQuery("/jcr:root/content/nodes//*[(*/*/*/@prop >= 9)]", "xpath",
+                ImmutableList.of("/content/nodes/a", "/content/nodes/a/b",
+                        "/content/nodes/a/b/c"));
+
+        assertQuery(
+                "/jcr:root/content/nodes//element(*, nt:unstructured)[(*/*/*/@prop >= 9)]",
+                "xpath", ImmutableList.of("/content/nodes/a",
+                        "/content/nodes/a/b", "/content/nodes/a/b/c"));
+
+        assertQuery("/jcr:root/content/nodes//*[(*/*/*/@prop >= 10)]", "xpath",
+                ImmutableList.of("/content/nodes/a", "/content/nodes/a/b",
+                        "/content/nodes/a/b/c"));
+        assertQuery(
+                "/jcr:root/content/nodes//element(*, nt:unstructured)[(*/*/*/@prop >= 10)]",
+                "xpath", ImmutableList.of("/content/nodes/a",
+                        "/content/nodes/a/b", "/content/nodes/a/b/c"));
+
+        assertQuery("/jcr:root/content/nodes//*[(*/*/*/@prop >= 15)]", "xpath",
+                ImmutableList.of("/content/nodes/a", "/content/nodes/a/b",
+                        "/content/nodes/a/b/c"));
+        assertQuery(
+                "/jcr:root/content/nodes//element(*, nt:unstructured)[(*/*/*/@prop >= 15)]",
+                "xpath", ImmutableList.of("/content/nodes/a",
+                        "/content/nodes/a/b", "/content/nodes/a/b/c"));
+
+        assertQuery("/jcr:root/content/nodes//*[(*/*/*/@prop >= 20)]", "xpath",
+                ImmutableList.of("/content/nodes/a", "/content/nodes/a/b",
+                        "/content/nodes/a/b/c"));
+        assertQuery(
+                "/jcr:root/content/nodes//element(*, nt:unstructured)[(*/*/*/@prop >= 20)]",
+                "xpath", ImmutableList.of("/content/nodes/a",
+                        "/content/nodes/a/b", "/content/nodes/a/b/c"));
+
+        assertQuery("/jcr:root/content/nodes//*[(*/*/*/@prop >= 30)]", "xpath",
+                ImmutableList.of("/content/nodes/a", "/content/nodes/a/b",
+                        "/content/nodes/a/b/c"));
+        assertQuery(
+                "/jcr:root/content/nodes//element(*, nt:unstructured)[(*/*/*/@prop >= 30)]",
+                "xpath", ImmutableList.of("/content/nodes/a",
+                        "/content/nodes/a/b", "/content/nodes/a/b/c"));
+    }
+
+    @Test
+    public void testMultipleRelativeProperties() throws Exception {
+        Tree content = root.getTree("/").addChild("content");
+
+        content.addChild("node1").setProperty("a", 128);
+        content.addChild("node2").setProperty("a", "abc");
+        content.addChild("node3").setProperty("a", "1280");
+
+        content.addChild("node1").setProperty("b", 128);
+        content.addChild("node2").setProperty("b", 1024);
+        content.addChild("node3").setProperty("b", 2048);
+
+        content.addChild("node1").setProperty("c", 10.3);
+        content.addChild("node2").setProperty("c", -10.3);
+        content.addChild("node3").setProperty("c", 9.8);
+
+        content.addChild("node1").setProperty("d", Arrays.asList("x", "y"), Type.STRINGS);
+        content.addChild("node2").setProperty("d", 10);
+        content.addChild("node3").setProperty("d", Arrays.asList(1L, 2L), Type.LONGS);
+
+        root.commit();
+
+        assertQuery("//*[*/@a > 2]", "xpath", Arrays.asList("/content"));
+        assertQuery("//*[*/@a > '1']", "xpath", Arrays.asList("/content"));
+        assertQuery("//*[*/@a > 'abd']", "xpath", Arrays.<String>asList());
+        assertQuery("//*[*/@a = 'abc']", "xpath", Arrays.asList("/content"));
+        // this may be unexpected: it is evaluated as
+        // ['128', 'abc', '1280'] >= 'abc'
+        assertQuery("//*[*/@a >= 'abc']", "xpath", Arrays.asList("/content"));
+
+        assertQuery("//*[*/@b > 2]", "xpath", Arrays.asList("/content"));
+        assertQuery("//*[*/@b > 2048]", "xpath", Arrays.<String>asList());
+        assertQuery("//*[*/@b > '1']", "xpath", Arrays.asList("/content"));
+        assertQuery("//*[*/@b = 128]", "xpath", Arrays.asList("/content"));
+
+        assertQuery("//*[*/@c > 10]", "xpath", Arrays.asList("/content"));
+        assertQuery("//*[*/@c > 11]", "xpath", Arrays.<String>asList());
+        assertQuery("//*[*/@c > '1']", "xpath", Arrays.asList("/content"));
+        assertQuery("//*[*/@c = 9.8]", "xpath", Arrays.asList("/content"));
+
+        assertQuery("//*[*/@d > 10]", "xpath", Arrays.asList("/content"));
+        assertQuery("//*[*/@d > 11]", "xpath", Arrays.asList("/content"));
+        assertQuery("//*[*/@d > '1']", "xpath", Arrays.asList("/content"));
+        assertQuery("//*[*/@d = 10]", "xpath", Arrays.asList("/content"));
+        // this may be unexpected: it is evaluated as
+        // ['x', 'y', '10', '1', '2'] < '3'
+        assertQuery("//*[*/@d < 3]", "xpath", Arrays.asList("/content"));
+    }
+
 }

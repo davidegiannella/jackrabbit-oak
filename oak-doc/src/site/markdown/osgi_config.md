@@ -37,9 +37,9 @@ Dynamic Configuration
 Each OSGi configuration is referred via a PID i.e. persistent identifier. Sections below
 provide details around various PID used in Oak
 
-## NodeStore
+### NodeStore
 
-### SegmentNodeStore
+#### SegmentNodeStore
 
 _PID `org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStoreService`_
 
@@ -51,7 +51,8 @@ tarmk.size
 : Default - 256 (in MB)
 : Maximum file size (in MB)
 
-### DocumentNodeStore
+<a name="document-node-store"></a>
+#### DocumentNodeStore
 
 _PID `org.apache.jackrabbit.oak.plugins.document.DocumentNodeStoreService`_
 
@@ -128,9 +129,45 @@ minRecordLength
 : Size in bytes. Binary content less than `minRecordLength` would be inlined i.e. the data store id is
 the data itself).
 
+maxCachedBinarySize
+: Default - 17408 (17 KB)
+: Size in bytes. Binaries with size less than or equal to this size would be stored in in memory cache
+
+cacheSizeInMB
+: Default - 16
+: Size in MB. In memory cache for storing small files whose size is less than `maxCachedBinarySize`. This
+  helps in better performance when lots of small binaries are accessed frequently.
+
 #### Jackrabbit 2 - S3DataStore
 
 _PID `org.apache.jackrabbit.oak.plugins.blob.datastore.S3DataStore`_
+
+maxCachedBinarySize
+: Default - 17408 (17 KB)
+: Size in bytes. Binaries with size less than or equal to this size would be stored in in memory cache
+
+cacheSizeInMB
+: Default - 16
+: Size in MB. In memory cache for storing small files whose size is less than `maxCachedBinarySize`. This
+  helps in better performance when lots of small binaries are accessed frequently.
+
+### System properties and Framework properties
+
+Following properties are supported by Oak. They are grouped in two parts _Stable_ and
+_Experimental_. The stable properties would be supported in future version but the experimental properties
+would _might_ not be supported in future versions
+
+#### Stable 
+
+oak.mongo.uri
+: Type - System property and Framework Property
+: Specifies the [MongoURI][1] required to connect to Mongo Database
+
+oak.mongo.db
+: Type - System property and Framework Property
+: Name of the database in Mongo
+
+#### Experimental
 
 ### Configuration Steps for Apache Sling
 
@@ -160,6 +197,9 @@ _${sling.home}/install_ folder with content
 
         #path to the DataStore
         path=./sling/repository/datastore
+
+        #cache for storing small binaries in-memory
+        cacheSizeInMB=128
 
 #### Framework Properties vs OSGi Configuration
 OSGi components can read config data from two sources.

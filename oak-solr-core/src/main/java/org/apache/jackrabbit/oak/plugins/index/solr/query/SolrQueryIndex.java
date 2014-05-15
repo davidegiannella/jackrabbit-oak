@@ -38,6 +38,7 @@ import org.apache.jackrabbit.oak.spi.query.QueryIndex.FulltextQueryIndex;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
@@ -106,6 +107,16 @@ public class SolrQueryIndex implements FulltextQueryIndex {
 
         StringBuilder queryBuilder = new StringBuilder();
 
+        if (filter.getFullTextConstraint() != null) {
+            queryBuilder.append(getFullTextQuery(filter.getFullTextConstraint()));
+            queryBuilder.append(' ');
+        } else if (filter.getFulltextConditions() != null) {
+            Collection<String> fulltextConditions = filter.getFulltextConditions();
+            for (String fulltextCondition : fulltextConditions) {
+                queryBuilder.append(fulltextCondition).append(" ");
+            }
+        }
+
         Collection<Filter.PropertyRestriction> propertyRestrictions = filter.getPropertyRestrictions();
         if (propertyRestrictions != null && !propertyRestrictions.isEmpty()) {
             for (Filter.PropertyRestriction pr : propertyRestrictions) {
@@ -133,15 +144,14 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                                     int mltFlIndex = parameterString.indexOf(mltFlString);
                                     if (mltFlIndex > -1) {
                                         int beginIndex = mltFlIndex + mltFlString.length();
-                                        int endIndex = parameterString.indexOf('&',beginIndex);
+                                        int endIndex = parameterString.indexOf('&', beginIndex);
                                         String fields;
                                         if (endIndex > beginIndex) {
                                             fields = parameterString.substring(beginIndex, endIndex);
-                                        }
-                                        else {
+                                        } else {
                                             fields = parameterString.substring(beginIndex);
                                         }
-                                        kv[1] = "_query_:\"{!dismax qf="+fields+" q.op=OR}"+kv[1]+"\"";
+                                        kv[1] = "_query_:\"{!dismax qf=" + fields + " q.op=OR}" + kv[1] + "\"";
                                     }
                                 }
                                 solrQuery.setParam(kv[0], kv[1]);
@@ -156,6 +166,11 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                         // cannot handle child-level property restrictions
                         continue;
                     }
+
+                    if ("rep:excerpt".equals(pr.propertyName)) {
+                        continue;
+                    }
+
                     String first = null;
                     if (pr.first != null) {
                         first = partialEscape(String.valueOf(pr.first.getValue(pr.first.getType()))).toString();
@@ -173,16 +188,21 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                         queryBuilder.append(':');
                         queryBuilder.append(first);
                     } else {
-                        queryBuilder.append(fieldName).append(':');
                         if (pr.first != null && pr.last != null && pr.first.equals(pr.last)) {
+                            queryBuilder.append(fieldName).append(':');
                             queryBuilder.append(first);
                         } else if (pr.first == null && pr.last == null) {
-                            queryBuilder.append('*');
+                            if (!queryBuilder.toString().contains(fieldName + ":")) {
+                                queryBuilder.append(fieldName).append(':');
+                                queryBuilder.append('*');
+                            }
                         } else if ((pr.first != null && pr.last == null) || (pr.last != null && pr.first == null) || (!pr.first.equals(pr.last))) {
                             // TODO : need to check if this works for all field types (most likely not!)
+                            queryBuilder.append(fieldName).append(':');
                             queryBuilder.append(createRangeQuery(first, last, pr.firstIncluding, pr.lastIncluding));
                         } else if (pr.isLike) {
                             // TODO : the current parameter substitution is not expected to work well
+                            queryBuilder.append(fieldName).append(':');
                             queryBuilder.append(partialEscape(String.valueOf(pr.first.getValue(pr.first.getType())).replace('%', '*').replace('_', '?')));
                         } else {
                             throw new RuntimeException("[unexpected!] not handled case");
@@ -209,16 +229,6 @@ public class SolrQueryIndex implements FulltextQueryIndex {
             }
         }
 
-        if (filter.getFullTextConstraint() != null) {
-            queryBuilder.append(getFullTextQuery(filter.getFullTextConstraint()));
-            queryBuilder.append(' ');
-        } else if (filter.getFulltextConditions() != null) {
-            Collection<String> fulltextConditions = filter.getFulltextConditions();
-            for (String fulltextCondition : fulltextConditions) {
-                queryBuilder.append(fulltextCondition).append(" ");
-            }
-        }
-
         Filter.PathRestriction pathRestriction = filter.getPathRestriction();
         if (pathRestriction != null) {
             String path = purgePath(filter);
@@ -227,7 +237,6 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                 queryBuilder.append(fieldName);
                 queryBuilder.append(':');
                 queryBuilder.append(path);
-                queryBuilder.append(' ');
             }
         }
 
@@ -258,9 +267,7 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                     }
                     FullTextExpression e = or.list.get(i);
                     String orTerm = getFullTextQuery(e);
-                    fullTextString.append('(');
                     fullTextString.append(orTerm);
-                    fullTextString.append(')');
                 }
                 fullTextString.append(')');
                 fullTextString.append(' ');
@@ -276,9 +283,7 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                     }
                     FullTextExpression e = and.list.get(i);
                     String andTerm = getFullTextQuery(e);
-                    fullTextString.append('(');
                     fullTextString.append(andTerm);
-                    fullTextString.append(')');
                 }
                 fullTextString.append(')');
                 fullTextString.append(' ');
@@ -294,12 +299,19 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                 if (p != null && p.indexOf('/') >= 0) {
                     p = getName(p);
                 }
-                if (p == null) {
+                if (p == null || "*".equals(p)) {
                     p = configuration.getCatchAllField();
                 }
-                fullTextString.append(p);
+                fullTextString.append(partialEscape(p));
                 fullTextString.append(':');
-                fullTextString.append(partialEscape(term.getText()));
+                String termText = term.getText();
+                if (termText.indexOf(' ') > 0) {
+                    fullTextString.append('"');
+                }
+                fullTextString.append(termText.replace("/", "\\/").replace(":", "\\:"));
+                if (termText.indexOf(' ') > 0) {
+                    fullTextString.append('"');
+                }
                 String boost = term.getBoost();
                 if (boost != null) {
                     fullTextString.append('^');
@@ -325,8 +337,7 @@ public class SolrQueryIndex implements FulltextQueryIndex {
             solrQuery.setParam("df", catchAllField);
         }
 
-        // TODO : can we handle this better? e.g. with deep paging support?
-        solrQuery.setParam("rows", "100000");
+        solrQuery.setParam("rows", String.valueOf(configuration.getRows()));
     }
 
     private static String createRangeQuery(String first, String last, boolean firstIncluding, boolean lastIncluding) {
@@ -370,7 +381,7 @@ public class SolrQueryIndex implements FulltextQueryIndex {
             if (log.isDebugEnabled()) {
                 log.debug("getting response {}", queryResponse);
             }
-            cursor = new SolrCursor(queryResponse);
+            cursor = new SolrCursor(queryResponse, query);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -380,29 +391,34 @@ public class SolrQueryIndex implements FulltextQueryIndex {
 
     private class SolrCursor implements Cursor {
 
-        private final SolrDocumentList results;
+        private SolrDocumentList results;
 
-        private int i;
+        private SolrQuery query;
 
-        public SolrCursor(QueryResponse queryResponse) {
+        private int counter;
+        private int offset;
+
+        public SolrCursor(QueryResponse queryResponse, SolrQuery query) {
             this.results = queryResponse.getResults();
-            i = 0;
+            this.counter = 0;
+            this.offset = 0;
+            this.query = query;
         }
 
         @Override
         public boolean hasNext() {
-            return results != null && i < results.size();
+            return results != null && offset + counter < results.getNumFound();
         }
 
         @Override
         public void remove() {
-            results.remove(i);
+            results.remove(counter);
         }
 
         public IndexRow next() {
-            if (i < results.size()) {
-                final SolrDocument doc = results.get(i);
-                i++;
+            if (counter < results.size() || updateResults()) {
+                final SolrDocument doc = results.get(counter);
+                counter++;
                 return new IndexRow() {
                     @Override
                     public String getPath() {
@@ -427,6 +443,26 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                 };
             } else {
                 return null;
+            }
+        }
+
+        private boolean updateResults() {
+            int newOffset = offset + results.size();
+            query.setParam("start", String.valueOf(newOffset));
+            try {
+                QueryResponse queryResponse = solrServer.query(query);
+                SolrDocumentList localResults = queryResponse.getResults();
+                boolean hasMoreResults = localResults.size() > 0;
+                if (hasMoreResults) {
+                    counter = 0;
+                    offset = newOffset;
+                    results = localResults;
+                } else {
+                    query.setParam("start", String.valueOf(offset));
+                }
+                return hasMoreResults;
+            } catch (SolrServerException e) {
+                throw new RuntimeException("error retrieving paged results", e);
             }
         }
     }

@@ -16,65 +16,15 @@
  */
 package org.apache.jackrabbit.oak.upgrade;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import javax.jcr.NamespaceException;
-import javax.jcr.RepositoryException;
-import javax.jcr.security.Privilege;
-import javax.jcr.version.OnParentVersionAction;
-
-import org.apache.jackrabbit.core.RepositoryContext;
-import org.apache.jackrabbit.core.config.RepositoryConfig;
-import org.apache.jackrabbit.core.config.UserManagerConfig;
-import org.apache.jackrabbit.core.fs.FileSystem;
-import org.apache.jackrabbit.core.fs.FileSystemException;
-import org.apache.jackrabbit.core.nodetype.NodeTypeRegistry;
-import org.apache.jackrabbit.core.persistence.PersistenceManager;
-import org.apache.jackrabbit.core.security.authorization.PrivilegeRegistry;
-import org.apache.jackrabbit.core.security.user.UserManagerImpl;
-import org.apache.jackrabbit.oak.api.PropertyState;
-import org.apache.jackrabbit.oak.api.Type;
-import org.apache.jackrabbit.oak.plugins.index.CompositeIndexEditorProvider;
-import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
-import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
-import org.apache.jackrabbit.oak.plugins.index.reference.ReferenceEditorProvider;
-import org.apache.jackrabbit.oak.plugins.name.NamespaceConstants;
-import org.apache.jackrabbit.oak.plugins.name.Namespaces;
-import org.apache.jackrabbit.oak.plugins.nodetype.TypeEditorProvider;
-import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
-import org.apache.jackrabbit.oak.spi.commit.CommitHook;
-import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
-import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
-import org.apache.jackrabbit.oak.spi.commit.CompositeHook;
-import org.apache.jackrabbit.oak.spi.commit.EditorHook;
-import org.apache.jackrabbit.oak.spi.security.privilege.PrivilegeBits;
-import org.apache.jackrabbit.oak.spi.security.user.UserConstants;
-import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
-import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
-import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.apache.jackrabbit.oak.spi.state.NodeStore;
-import org.apache.jackrabbit.oak.upgrade.security.GroupEditorProvider;
-import org.apache.jackrabbit.spi.Name;
-import org.apache.jackrabbit.spi.QItemDefinition;
-import org.apache.jackrabbit.spi.QNodeDefinition;
-import org.apache.jackrabbit.spi.QNodeTypeDefinition;
-import org.apache.jackrabbit.spi.QPropertyDefinition;
-import org.apache.jackrabbit.spi.QValue;
-import org.apache.jackrabbit.spi.QValueConstraint;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.newArrayListWithCapacity;
 import static com.google.common.collect.Maps.newHashMap;
 import static java.util.Arrays.asList;
 import static org.apache.jackrabbit.JcrConstants.JCR_AUTOCREATED;
 import static org.apache.jackrabbit.JcrConstants.JCR_CHILDNODEDEFINITION;
 import static org.apache.jackrabbit.JcrConstants.JCR_DEFAULTPRIMARYTYPE;
+import static org.apache.jackrabbit.JcrConstants.JCR_DEFAULTVALUES;
 import static org.apache.jackrabbit.JcrConstants.JCR_HASORDERABLECHILDNODES;
 import static org.apache.jackrabbit.JcrConstants.JCR_ISMIXIN;
 import static org.apache.jackrabbit.JcrConstants.JCR_MANDATORY;
@@ -99,9 +49,15 @@ import static org.apache.jackrabbit.JcrConstants.NT_PROPERTYDEFINITION;
 import static org.apache.jackrabbit.core.RepositoryImpl.ACTIVITIES_NODE_ID;
 import static org.apache.jackrabbit.core.RepositoryImpl.ROOT_NODE_ID;
 import static org.apache.jackrabbit.core.RepositoryImpl.VERSION_STORAGE_NODE_ID;
+import static org.apache.jackrabbit.oak.api.Type.BOOLEANS;
+import static org.apache.jackrabbit.oak.api.Type.DECIMALS;
+import static org.apache.jackrabbit.oak.api.Type.DOUBLES;
+import static org.apache.jackrabbit.oak.api.Type.LONGS;
 import static org.apache.jackrabbit.oak.api.Type.NAME;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
+import static org.apache.jackrabbit.oak.api.Type.PATHS;
 import static org.apache.jackrabbit.oak.api.Type.STRINGS;
+import static org.apache.jackrabbit.oak.plugins.memory.PropertyStates.createProperty;
 import static org.apache.jackrabbit.oak.plugins.name.Namespaces.addCustomMapping;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_AVAILABLE_QUERY_OPERATORS;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_IS_ABSTRACT;
@@ -117,6 +73,85 @@ import static org.apache.jackrabbit.oak.spi.security.privilege.PrivilegeConstant
 import static org.apache.jackrabbit.oak.spi.security.privilege.PrivilegeConstants.REP_NEXT;
 import static org.apache.jackrabbit.oak.spi.security.privilege.PrivilegeConstants.REP_PRIVILEGES;
 import static org.apache.jackrabbit.spi.commons.name.NameConstants.ANY_NAME;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+import javax.jcr.NamespaceException;
+import javax.jcr.PropertyType;
+import javax.jcr.RepositoryException;
+import javax.jcr.UnsupportedRepositoryOperationException;
+import javax.jcr.security.Privilege;
+import javax.jcr.version.OnParentVersionAction;
+
+import com.google.common.base.Charsets;
+import com.google.common.collect.HashBiMap;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import org.apache.jackrabbit.core.RepositoryContext;
+import org.apache.jackrabbit.core.config.BeanConfig;
+import org.apache.jackrabbit.core.config.LoginModuleConfig;
+import org.apache.jackrabbit.core.config.RepositoryConfig;
+import org.apache.jackrabbit.core.config.SecurityConfig;
+import org.apache.jackrabbit.core.fs.FileSystem;
+import org.apache.jackrabbit.core.fs.FileSystemException;
+import org.apache.jackrabbit.core.nodetype.NodeTypeRegistry;
+import org.apache.jackrabbit.core.persistence.PersistenceManager;
+import org.apache.jackrabbit.core.security.authorization.PrivilegeRegistry;
+import org.apache.jackrabbit.core.security.user.UserManagerImpl;
+import org.apache.jackrabbit.oak.api.CommitFailedException;
+import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.namepath.GlobalNameMapper;
+import org.apache.jackrabbit.oak.namepath.NameMapper;
+import org.apache.jackrabbit.oak.plugins.index.CompositeIndexEditorProvider;
+import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
+import org.apache.jackrabbit.oak.plugins.index.IndexUpdate;
+import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
+import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
+import org.apache.jackrabbit.oak.plugins.index.reference.ReferenceEditorProvider;
+import org.apache.jackrabbit.oak.plugins.name.NamespaceConstants;
+import org.apache.jackrabbit.oak.plugins.name.Namespaces;
+import org.apache.jackrabbit.oak.plugins.nodetype.TypeEditorProvider;
+import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
+import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeBuilder;
+import org.apache.jackrabbit.oak.security.SecurityProviderImpl;
+import org.apache.jackrabbit.oak.spi.commit.CommitHook;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
+import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
+import org.apache.jackrabbit.oak.spi.commit.CompositeHook;
+import org.apache.jackrabbit.oak.spi.commit.Editor;
+import org.apache.jackrabbit.oak.spi.commit.EditorHook;
+import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
+import org.apache.jackrabbit.oak.spi.lifecycle.RepositoryInitializer;
+import org.apache.jackrabbit.oak.spi.security.ConfigurationParameters;
+import org.apache.jackrabbit.oak.spi.security.SecurityConfiguration;
+import org.apache.jackrabbit.oak.spi.security.privilege.PrivilegeBits;
+import org.apache.jackrabbit.oak.spi.security.user.UserConfiguration;
+import org.apache.jackrabbit.oak.spi.security.user.UserConstants;
+import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
+import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.apache.jackrabbit.oak.upgrade.security.GroupEditorProvider;
+import org.apache.jackrabbit.oak.upgrade.security.RestrictionEditorProvider;
+import org.apache.jackrabbit.spi.Name;
+import org.apache.jackrabbit.spi.Path;
+import org.apache.jackrabbit.spi.Path.Element;
+import org.apache.jackrabbit.spi.QItemDefinition;
+import org.apache.jackrabbit.spi.QNodeDefinition;
+import org.apache.jackrabbit.spi.QNodeTypeDefinition;
+import org.apache.jackrabbit.spi.QPropertyDefinition;
+import org.apache.jackrabbit.spi.QValue;
+import org.apache.jackrabbit.spi.QValueConstraint;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class RepositoryUpgrade {
 
@@ -163,7 +198,7 @@ public class RepositoryUpgrade {
             throws RepositoryException {
         RepositoryContext context = RepositoryContext.create(source);
         try {
-            new RepositoryUpgrade(context, target).copy();
+            new RepositoryUpgrade(context, target).copy(null);
         } finally {
             context.getRepository().shutdown();
         }
@@ -196,54 +231,150 @@ public class RepositoryUpgrade {
      * The source repository <strong>must not be modified</strong> while
      * the copy operation is running to avoid an inconsistent copy.
      * <p>
-     * This method leaves the search indexes of the target repository in
-     * an 
      * Note that both the source and the target repository must be closed
      * during the copy operation as this method requires exclusive access
      * to the repositories.
      *
+     * @param initializer optional extra repository initializer to use
      * @throws RepositoryException if the copy operation fails
      */
-    public void copy() throws RepositoryException {
+    public void copy(RepositoryInitializer initializer) throws RepositoryException {
         RepositoryConfig config = source.getRepositoryConfig();
         logger.info(
                 "Copying repository content from {} to Oak", config.getHomeDir());
         try {
-            NodeBuilder builder = target.getRoot().builder();
+            NodeState base = target.getRoot();
+            NodeBuilder builder = base.builder();
+
+            String workspaceName =
+                    source.getRepositoryConfig().getDefaultWorkspaceName();
+            SecurityProviderImpl security = new SecurityProviderImpl(
+                    mapSecurityConfig(config.getSecurityConfig()));
 
             // init target repository first
             new InitialContent().initialize(builder);
+            if (initializer != null) {
+                initializer.initialize(builder);
+            }
+            for (SecurityConfiguration sc : security.getConfigurations()) {
+                sc.getWorkspaceInitializer().initialize(builder, workspaceName);
+            }
 
-            Map<String, String> uriToPrefix = newHashMap();
+            HashBiMap<String, String> uriToPrefix = HashBiMap.create();
             Map<Integer, String> idxToPrefix = newHashMap();
             copyNamespaces(builder, uriToPrefix, idxToPrefix);
-            copyNodeTypes(builder);
+            copyNodeTypes(builder, uriToPrefix.inverse());
             copyPrivileges(builder);
 
+            // Triggers compilation of type information, which we need for
+            // the type predicates used by the bulk  copy operations below.
+            new TypeEditorProvider(false).getRootEditor(
+                    base, builder.getNodeState(), builder, null);
+
+            Map<String, String> versionablePaths = newHashMap();
             NodeState root = builder.getNodeState();
-            copyVersionStore(builder, root, uriToPrefix, idxToPrefix);
-            copyWorkspaces(builder, root, uriToPrefix, idxToPrefix);
+            copyWorkspace(builder, root, workspaceName, uriToPrefix, idxToPrefix, versionablePaths);
+            copyVersionStore(builder, root, workspaceName, uriToPrefix, idxToPrefix, versionablePaths);
 
             logger.info("Applying default commit hooks");
-            String groupsPath;
-            UserManagerConfig userConfig = config.getSecurityConfig().getSecurityManagerConfig().getUserManagerConfig();
-            if (userConfig != null) {
-                groupsPath = userConfig.getParameters().getProperty(UserManagerImpl.PARAM_GROUPS_PATH, UserConstants.DEFAULT_GROUP_PATH);
-            } else {
-                groupsPath = UserConstants.DEFAULT_GROUP_PATH;
-            }
             // TODO: default hooks?
-            CommitHook hook = new CompositeHook(
-                    new EditorHook(new GroupEditorProvider(groupsPath)),
-                    new EditorHook(new CompositeEditorProvider(
-                            new TypeEditorProvider(false),
-                            new IndexUpdateProvider(new CompositeIndexEditorProvider(
-                                    new ReferenceEditorProvider(),
-                                    new PropertyIndexEditorProvider())))));
-            target.merge(builder, hook, CommitInfo.EMPTY);
+            List<CommitHook> hooks = newArrayList();
+
+            UserConfiguration userConf =
+                    security.getConfiguration(UserConfiguration.class);
+            String groupsPath = userConf.getParameters().getConfigValue(
+                    UserConstants.PARAM_GROUP_PATH,
+                    UserConstants.DEFAULT_GROUP_PATH);
+
+            // hooks specific to the upgrade, need to run first
+            hooks.add(new EditorHook(new CompositeEditorProvider(
+                    new RestrictionEditorProvider(),
+                    new GroupEditorProvider(groupsPath))));
+
+            // security-related hooks
+            for (SecurityConfiguration sc : security.getConfigurations()) {
+                hooks.addAll(sc.getCommitHooks(workspaceName));
+            }
+
+            // type validation, reference and indexing hooks
+            hooks.add(new EditorHook(new CompositeEditorProvider(
+                createTypeEditorProvider(),
+                createIndexEditorProvider()
+            )));
+
+            target.merge(builder, CompositeHook.compose(hooks), CommitInfo.EMPTY);
         } catch (Exception e) {
             throw new RepositoryException("Failed to copy content", e);
         }
+    }
+
+    private static EditorProvider createTypeEditorProvider() {
+        return new EditorProvider() {
+            @Override
+            public Editor getRootEditor(NodeState before, NodeState after, NodeBuilder builder, CommitInfo info)
+                    throws CommitFailedException {
+                Editor rootEditor = new TypeEditorProvider(false)
+                        .getRootEditor(before, after, builder, info);
+                return ProgressNotificationEditor.wrap(rootEditor, logger, "Checking node types:");
+            }
+        };
+    }
+
+    private static EditorProvider createIndexEditorProvider() {
+        final ProgressTicker ticker = new AsciiArtTicker();
+        return new EditorProvider() {
+            @Override
+            public Editor getRootEditor(NodeState before, NodeState after, NodeBuilder builder, CommitInfo info) {
+                IndexEditorProvider editorProviders = new CompositeIndexEditorProvider(
+                        new ReferenceEditorProvider(),
+                        new PropertyIndexEditorProvider());
+
+                return new IndexUpdate(editorProviders, null, after, builder, new IndexUpdateCallback() {
+                    String progress = "Updating indexes ";
+                    long t0;
+                    @Override
+                    public void indexUpdate() {
+                        long t = System.currentTimeMillis();
+                        if (t - t0 > 2000) {
+                            logger.info("{} {}", progress, ticker.tick());
+                            t0 = t ;
+                        }
+                    }
+                });
+            }
+        };
+    }
+
+    protected ConfigurationParameters mapSecurityConfig(SecurityConfig config) {
+        ConfigurationParameters loginConfig = mapConfigurationParameters(
+                config.getLoginModuleConfig(),
+                LoginModuleConfig.PARAM_ADMIN_ID, UserConstants.PARAM_ADMIN_ID,
+                LoginModuleConfig.PARAM_ANONYMOUS_ID, UserConstants.PARAM_ANONYMOUS_ID);
+        ConfigurationParameters userConfig = mapConfigurationParameters(
+                config.getSecurityManagerConfig().getUserManagerConfig(),
+                UserManagerImpl.PARAM_USERS_PATH, UserConstants.PARAM_USER_PATH,
+                UserManagerImpl.PARAM_GROUPS_PATH, UserConstants.PARAM_GROUP_PATH,
+                UserManagerImpl.PARAM_DEFAULT_DEPTH, UserConstants.PARAM_DEFAULT_DEPTH,
+                UserManagerImpl.PARAM_PASSWORD_HASH_ALGORITHM, UserConstants.PARAM_PASSWORD_HASH_ALGORITHM,
+                UserManagerImpl.PARAM_PASSWORD_HASH_ITERATIONS, UserConstants.PARAM_PASSWORD_HASH_ITERATIONS);
+        return ConfigurationParameters.of(ImmutableMap.of(
+                UserConfiguration.NAME,
+                ConfigurationParameters.of(loginConfig, userConfig)));
+    }
+
+    protected ConfigurationParameters mapConfigurationParameters(
+            BeanConfig config, String... mapping) {
+        Map<String, String> map = newHashMap();
+        if (config != null) {
+            Properties properties = config.getParameters();
+            for (int i = 0; i + 1 < mapping.length; i += 2) {
+                String value = properties.getProperty(mapping[i]);
+                if (value != null) {
+                    map.put(mapping[i + 1], value);
+                }
+            }
+        }
+        return ConfigurationParameters.of(map);
     }
 
     private String getOakName(Name name) throws NamespaceException {
@@ -393,7 +524,8 @@ public class RepositoryUpgrade {
         return bits;
     }
 
-    private void copyNodeTypes(NodeBuilder root) throws RepositoryException {
+    private void copyNodeTypes(NodeBuilder root, Map<String, String> prefixToUri)
+            throws RepositoryException {
         NodeTypeRegistry sourceRegistry = source.getNodeTypeRegistry();
         NodeBuilder system = root.child(JCR_SYSTEM);
         NodeBuilder types = system.child(JCR_NODE_TYPES);
@@ -405,13 +537,14 @@ public class RepositoryUpgrade {
             if (!types.hasChildNode(oakName)) {
                 QNodeTypeDefinition def = sourceRegistry.getNodeTypeDef(name);
                 NodeBuilder type = types.child(oakName);
-                copyNodeType(def, type);
+                copyNodeType(def, type, prefixToUri);
             }
         }
     }
 
-    private void copyNodeType(QNodeTypeDefinition def, NodeBuilder builder)
-            throws NamespaceException {
+    private void copyNodeType(
+            QNodeTypeDefinition def, NodeBuilder builder, Map<String, String> prefixToUri)
+            throws RepositoryException {
         builder.setProperty(JCR_PRIMARYTYPE, NT_NODETYPE, NAME);
 
         // - jcr:nodeTypeName (NAME) protected mandatory
@@ -445,7 +578,7 @@ public class RepositoryUpgrade {
         QPropertyDefinition[] properties = def.getPropertyDefs();
         for (int i = 0; i < properties.length; i++) {
             String name = JCR_PROPERTYDEFINITION + '[' + (i + 1) + ']';
-            copyPropertyDefinition(properties[i], builder.child(name));
+            copyPropertyDefinition(properties[i], builder.child(name), prefixToUri);
         }
 
         // + jcr:childNodeDefinition (nt:childNodeDefinition) = nt:childNodeDefinition protected sns
@@ -457,8 +590,8 @@ public class RepositoryUpgrade {
     }
 
     private void copyPropertyDefinition(
-            QPropertyDefinition def, NodeBuilder builder)
-            throws NamespaceException {
+            QPropertyDefinition def, NodeBuilder builder, Map<String, String> prefixToUri)
+            throws RepositoryException {
         builder.setProperty(JCR_PRIMARYTYPE, NT_PROPERTYDEFINITION, NAME);
 
         copyItemDefinition(def, builder);
@@ -480,9 +613,9 @@ public class RepositoryUpgrade {
             builder.setProperty(JCR_VALUECONSTRAINTS, strings, STRINGS);
         }
         // - jcr:defaultValues (UNDEFINED) protected multiple
-        QValue[] values = def.getDefaultValues();
-        if (values != null) {
-            // TODO
+        QValue[] qValues = def.getDefaultValues();
+        if (qValues != null) {
+            copyDefaultValues(qValues, builder, new GlobalNameMapper(prefixToUri));
         }
         // - jcr:multiple (BOOLEAN) protected mandatory
         builder.setProperty(JCR_MULTIPLE, def.isMultiple());
@@ -494,6 +627,99 @@ public class RepositoryUpgrade {
                 JCR_IS_FULLTEXT_SEARCHABLE, def.isFullTextSearchable());
         // - jcr:isQueryOrderable (BOOLEAN) protected mandatory
         builder.setProperty(JCR_IS_QUERY_ORDERABLE, def.isQueryOrderable());
+    }
+
+    private static void copyDefaultValues(QValue[] qValues, NodeBuilder builder,
+            NameMapper nameMapper) throws RepositoryException {
+        if (qValues.length == 0) {
+            builder.setProperty(JCR_DEFAULTVALUES, Collections.<String>emptyList(), STRINGS);
+        } else {
+            int type = qValues[0].getType();
+            switch (type) {
+                case PropertyType.STRING:
+                    List<String> strings = newArrayListWithCapacity(qValues.length);
+                    for (QValue qValue : qValues) {
+                        strings.add(qValue.getString());
+                    }
+                    builder.setProperty(createProperty(JCR_DEFAULTVALUES, strings, STRINGS));
+                    return;
+                case PropertyType.LONG:
+                    List<Long> longs = newArrayListWithCapacity(qValues.length);
+                    for (QValue qValue : qValues) {
+                        longs.add(qValue.getLong());
+                    }
+                    builder.setProperty(createProperty(JCR_DEFAULTVALUES, longs, LONGS));
+                    return;
+                case PropertyType.DOUBLE:
+                    List<Double> doubles = newArrayListWithCapacity(qValues.length);
+                    for (QValue qValue : qValues) {
+                        doubles.add(qValue.getDouble());
+                    }
+                    builder.setProperty(createProperty(JCR_DEFAULTVALUES, doubles, DOUBLES));
+                    return;
+                case PropertyType.BOOLEAN:
+                    List<Boolean> booleans = Lists.newArrayListWithCapacity(qValues.length);
+                    for (QValue qValue : qValues) {
+                        booleans.add(qValue.getBoolean());
+                    }
+                    builder.setProperty(createProperty(JCR_DEFAULTVALUES, booleans, BOOLEANS));
+                    return;
+                case PropertyType.NAME:
+                    List<String> names = Lists.newArrayListWithCapacity(qValues.length);
+                    for (QValue qValue : qValues) {
+                        names.add(nameMapper.getOakName(qValue.getName().toString()));
+                    }
+                    builder.setProperty(createProperty(JCR_DEFAULTVALUES, names, NAMES));
+                    return;
+                case PropertyType.PATH:
+                    List<String> paths = Lists.newArrayListWithCapacity(qValues.length);
+                    for (QValue qValue : qValues) {
+                        paths.add(getOakPath(qValue.getPath(), nameMapper));
+                    }
+                    builder.setProperty(createProperty(JCR_DEFAULTVALUES, paths, PATHS));
+                    return;
+                case PropertyType.DECIMAL:
+                    List<BigDecimal> decimals = Lists.newArrayListWithCapacity(qValues.length);
+                    for (QValue qValue : qValues) {
+                        decimals.add(qValue.getDecimal());
+                    }
+                    builder.setProperty(createProperty(JCR_DEFAULTVALUES, decimals, DECIMALS));
+                    return;
+                case PropertyType.DATE:
+                case PropertyType.URI:
+                    List<String> values = newArrayListWithCapacity(qValues.length);
+                    for (QValue qValue : qValues) {
+                        values.add(qValue.getString());
+                    }
+                    builder.setProperty(createProperty(JCR_DEFAULTVALUES, values, Type.fromTag(type, true)));
+                    return;
+                default:
+                    throw new UnsupportedRepositoryOperationException(
+                            "Cannot copy default value of type " + Type.fromTag(type, true));
+            }
+        }
+    }
+
+    private static String getOakPath(Path path, NameMapper nameMapper)
+            throws RepositoryException {
+        StringBuilder oakPath = new StringBuilder();
+        String sep = "";
+        for (Element element: path.getElements()) {
+            if (element.denotesRoot()) {
+                oakPath.append('/');
+                continue;
+            } else if (element.denotesName()) {
+                oakPath.append(sep).append(nameMapper.getOakName(element.getString()));
+            } else if (element.denotesCurrent()) {
+                oakPath.append(sep).append('.');
+            } else if (element.denotesParent()) {
+                oakPath.append(sep).append("..");
+            } else {
+                throw new UnsupportedRepositoryOperationException("Cannot copy default value " + path);
+            }
+            sep = "/";
+        }
+        return oakPath.toString();
     }
 
     private void copyChildNodeDefinition(
@@ -540,50 +766,81 @@ public class RepositoryUpgrade {
     }
 
     private void copyVersionStore(
-            NodeBuilder builder, NodeState root,
-            Map<String, String> uriToPrefix, Map<Integer, String> idxToPrefix)
+            NodeBuilder builder, NodeState root, String workspaceName,
+            Map<String, String> uriToPrefix, Map<Integer, String> idxToPrefix,
+            Map<String, String> versionablePaths)
             throws RepositoryException, IOException {
-        logger.info("Copying version histories");
-
         PersistenceManager pm =
                 source.getInternalVersionManager().getPersistenceManager();
-
         NodeBuilder system = builder.child(JCR_SYSTEM);
-        system.setChildNode(JCR_VERSIONSTORAGE, new JackrabbitNodeState(
+
+        logger.info("Copying version histories");
+        copyState(system, JCR_VERSIONSTORAGE, new JackrabbitNodeState(
                 pm, root, uriToPrefix, VERSION_STORAGE_NODE_ID,
-                "/jcr:system/jcr:versionStorage", copyBinariesByReference));
-        system.setChildNode("jcr:activities", new JackrabbitNodeState(
+                "/jcr:system/jcr:versionStorage",
+                workspaceName, versionablePaths, copyBinariesByReference));
+
+        logger.info("Copying activities");
+        copyState(system, "jcr:activities", new JackrabbitNodeState(
                 pm, root, uriToPrefix, ACTIVITIES_NODE_ID,
-                "/jcr:system/jcr:activities", copyBinariesByReference));
-    }   
+                "/jcr:system/jcr:activities",
+                workspaceName, versionablePaths, copyBinariesByReference));
+    }
 
-    private void copyWorkspaces(
-            NodeBuilder builder, NodeState root,
-            Map<String, String> uriToPrefix, Map<Integer, String> idxToPrefix)
+    private String copyWorkspace(
+            NodeBuilder builder, NodeState root, String workspaceName,
+            Map<String, String> uriToPrefix, Map<Integer, String> idxToPrefix,
+            Map<String, String> versionablePaths)
             throws RepositoryException, IOException {
-        logger.info("Copying default workspace");
-
-        // Copy all the default workspace content
-        RepositoryConfig config = source.getRepositoryConfig();
-        String name = config.getDefaultWorkspaceName();
+        logger.info("Copying workspace {}", workspaceName);
 
         PersistenceManager pm =
-                source.getWorkspaceInfo(name).getPersistenceManager();
+                source.getWorkspaceInfo(workspaceName).getPersistenceManager();
 
         NodeState state = new JackrabbitNodeState(
-                pm, root, uriToPrefix, ROOT_NODE_ID, "/", copyBinariesByReference);
+                pm, root, uriToPrefix, ROOT_NODE_ID, "/",
+                workspaceName, versionablePaths, copyBinariesByReference);
+
         for (PropertyState property : state.getProperties()) {
             builder.setProperty(property);
         }
         for (ChildNodeEntry child : state.getChildNodeEntries()) {
             String childName = child.getName();
             if (!JCR_SYSTEM.equals(childName)) {
-                builder.setChildNode(childName, child.getNodeState());
+                logger.info("Copying subtree /{}", childName);
+                copyState(builder, childName, child.getNodeState());
             }
         }
 
-        // TODO: Copy all the active open-scoped locks
+        return workspaceName;
     }
 
+    private void copyState(NodeBuilder parent, String name, NodeState state) {
+        if (parent instanceof SegmentNodeBuilder) {
+            parent.setChildNode(name, state);
+        } else {
+            setChildNode(parent, name, state);
+        }
+    }
+
+    /**
+     * NodeState are copied by value by recursing down the complete tree
+     * This is a temporary approach for OAK-1760 for 1.0 branch.
+     */
+    private void setChildNode(NodeBuilder parent, String name, NodeState state) {
+        // OAK-1589: maximum supported length of name for DocumentNodeStore
+        // is 150 bytes. Skip the sub tree if the the name is too long
+        if (name.length() > 37 && name.getBytes(Charsets.UTF_8).length > 150) {
+            logger.warn("Node name too long. Skipping {}", state);
+            return;
+        }
+        NodeBuilder builder = parent.setChildNode(name);
+        for (PropertyState property : state.getProperties()) {
+            builder.setProperty(property);
+        }
+        for (ChildNodeEntry child : state.getChildNodeEntries()) {
+            setChildNode(builder, child.getName(), child.getNodeState());
+        }
+    }
 
 }

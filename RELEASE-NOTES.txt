@@ -1,4 +1,4 @@
-Release Notes -- Apache Jackrabbit Oak -- Version 0.20.0
+Release Notes -- Apache Jackrabbit Oak -- Version 1.1.0
 
 Introduction
 ------------
@@ -9,8 +9,6 @@ world-class web sites and  other demanding content applications.
 
 The Oak effort is a part of the Apache Jackrabbit project.
 Apache Jackrabbit is a project of the Apache Software Foundation.
-
-Jackrabbit Oak 0.20.0 is to alpha-level software. Use at your own risk.
 
 Changes in Oak 0.20.0
 ---------------------
@@ -148,9 +146,9 @@ https://svn.apache.org/repos/asf/jackrabbit/dist/KEYS.
 About Apache Jackrabbit Oak
 ---------------------------
 
-Oak is an effort implement a scalable and performant hierarchical content 
-repository for use as the foundation of modern world-class web sites and 
-other demanding content applications. 
+Jackrabbit Oak is a scalable, high-performance hierarchical content
+repository designed for use as the foundation of modern world-class
+web sites and other demanding content applications.
 
 The Oak effort is a part of the Apache Jackrabbit project. 
 Apache Jackrabbit is a project of the Apache Software Foundation.

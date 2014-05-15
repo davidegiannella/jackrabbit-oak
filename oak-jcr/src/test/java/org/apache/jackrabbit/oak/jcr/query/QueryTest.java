@@ -27,13 +27,16 @@ import static org.junit.Assert.fail;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.sql.Timestamp;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.HashSet;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
+import javax.jcr.PropertyType;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.ValueFactory;
@@ -59,6 +62,92 @@ public class QueryTest extends AbstractRepositoryTest {
 
     public QueryTest(NodeStoreFixture fixture) {
         super(fixture);
+    }
+    
+    @Test
+    public void orderBy() throws Exception {
+        Session session = getAdminSession();
+        Node root = session.getRootNode();
+        
+        // add an ordered index on "lastMod"
+        Node index = root.getNode("oak:index").
+                addNode("lastMod", "oak:QueryIndexDefinition");
+        index.setProperty("reindex", true);
+        // index.setProperty("async", "async");
+        index.setProperty("type", "ordered");
+        index.setProperty("propertyNames", new String[] { "lastMod" },
+                PropertyType.NAME);
+        
+        // disable the nodetype index
+        Node nodeTypeIndex = root.getNode("oak:index").getNode("nodetype");
+        nodeTypeIndex.setProperty("declaringNodeTypes", new String[] {
+            }, PropertyType.NAME);
+
+        // add 10 nodes
+        Node test = root.addNode("test");
+        for (int i = 0; i < 10; i++) {
+            Node n = test.addNode("test" + i, "oak:Unstructured");
+            Calendar cal = Calendar.getInstance();
+            cal.setTimeInMillis(Timestamp.valueOf("2000-01-01 10:00:00")
+                    .getTime() + 1000 * i);
+            n.addNode("content").setProperty("lastMod", cal);
+        }
+        
+        session.save();
+
+        // run the query
+        String query = "/jcr:root/test//*[@jcr:primaryType='oak:Unstructured'] " + 
+                "order by content/@lastMod descending";
+        QueryResult r = session.getWorkspace().getQueryManager()
+                .createQuery(query, "xpath").execute();
+        NodeIterator it = r.getNodes();
+        StringBuilder buff = new StringBuilder();
+        while (it.hasNext()) {
+            if (buff.length() > 0) {
+                buff.append(", ");
+            }
+            buff.append(it.nextNode().getPath());
+        }
+        assertEquals("/test/test9, /test/test8, /test/test7, /test/test6, /test/test5, /test/test4, /test/test3, /test/test2, /test/test1, /test/test0", 
+                buff.toString());
+        
+        RowIterator rit;
+        
+        r = session.getWorkspace().getQueryManager()
+                .createQuery("explain " + query, "xpath").execute();
+        rit = r.getRows();
+        assertEquals("[nt:base] as [a] /* ordered order by lastMod ancestor 1 " + 
+                "where ([a].[jcr:primaryType] = cast('oak:Unstructured' as string)) " + 
+                "and (isdescendantnode([a], [/test])) */", rit.nextRow().getValue("plan").getString());
+
+        query = "/jcr:root/test//*[@jcr:primaryType='oak:Unstructured' " + 
+                "and  content/@lastMod > '2001-02-01']";
+        r = session.getWorkspace().getQueryManager()
+                .createQuery("explain " + query, "xpath").execute();
+        rit = r.getRows();
+        assertEquals("[nt:base] as [a] /* ordered lastMod > 2001-02-01 " + 
+                "where (([a].[jcr:primaryType] = cast('oak:Unstructured' as string)) " + 
+                "and ([a].[content/lastMod] > cast('2001-02-01' as string))) " + 
+                "and (isdescendantnode([a], [/test])) */", 
+                rit.nextRow().getValue("plan").getString());
+        
+    }
+    
+    @Test
+    public void date() throws Exception {
+        Session session = getAdminSession();
+        Node t1 = session.getRootNode().addNode("t1");
+        t1.setProperty("x", "22.06.07");
+        Node t2 = session.getRootNode().addNode("t2");
+        t2.setProperty("x", "2007-06-22T01:02:03.000Z", PropertyType.DATE);
+        session.save();
+        
+        String query = "//*[x='a' or x='b']";
+        QueryResult r = session.getWorkspace().
+                getQueryManager().createQuery(
+                query, "xpath").execute();
+        NodeIterator it = r.getNodes();
+        assertFalse(it.hasNext());
     }
     
     @Test

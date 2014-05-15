@@ -21,6 +21,7 @@ import static org.apache.jackrabbit.JcrConstants.JCR_CONTENT;
 import static org.apache.jackrabbit.JcrConstants.NT_FILE;
 
 import java.util.Properties;
+import java.util.Set;
 
 import javax.jcr.RepositoryException;
 
@@ -29,7 +30,9 @@ import org.apache.jackrabbit.oak.plugins.index.aggregate.NodeAggregator;
 import org.apache.jackrabbit.oak.plugins.index.aggregate.SimpleNodeAggregator;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LowCostLuceneIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
+import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelper;
+import org.apache.jackrabbit.oak.spi.commit.Observer;
 
 public class LuceneOakRepositoryStub extends OakTarMKRepositoryStub {
 
@@ -40,10 +43,11 @@ public class LuceneOakRepositoryStub extends OakTarMKRepositoryStub {
 
     @Override
     protected void preCreateRepository(Jcr jcr) {
-        jcr.with(new LuceneInitializerHelper("luceneGlobal", null))
-                .with(AggregateIndexProvider
-                        .wrap(new LowCostLuceneIndexProvider()
-                                .with(getNodeAggregator())))
+        LuceneIndexProvider provider = new LowCostLuceneIndexProvider();
+        jcr.with(
+                new LuceneInitializerHelper("luceneGlobal", (Set<String>) null))
+                .with(AggregateIndexProvider.wrap(provider.with(getNodeAggregator())))
+                .with((Observer) provider)
                 .with(new LuceneIndexEditorProvider());
     }
 

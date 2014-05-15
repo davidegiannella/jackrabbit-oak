@@ -62,6 +62,8 @@ import org.apache.jackrabbit.oak.plugins.index.AsyncIndexUpdate;
 import org.apache.jackrabbit.oak.plugins.index.CompositeIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
+import org.apache.jackrabbit.oak.plugins.index.property.jmx.PropertyIndexAsyncReindex;
+import org.apache.jackrabbit.oak.plugins.index.property.jmx.PropertyIndexAsyncReindexMBean;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.query.QueryEngineSettings;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
@@ -127,9 +129,9 @@ public class Oak {
 
     private SecurityProvider securityProvider;
 
-    private ScheduledExecutorService scheduledExecutor = defaultScheduledExecutor();
+    private ScheduledExecutorService scheduledExecutor;
 
-    private Executor executor = defaultExecutorService();
+    private Executor executor;
 
     /**
      * Default {@code ScheduledExecutorService} used for scheduling background tasks.
@@ -185,6 +187,20 @@ public class Oak {
         return executor;
     }
 
+    private synchronized ScheduledExecutorService getScheduledExecutor() {
+        if (scheduledExecutor == null) {
+            scheduledExecutor = defaultScheduledExecutor();
+        }
+        return scheduledExecutor;
+    }
+
+    private synchronized Executor getExecutor() {
+        if (executor == null) {
+            executor = defaultExecutorService();
+        }
+        return executor;
+    }
+
     private MBeanServer mbeanServer;
 
     private String defaultWorkspaceName = DEFAULT_WORKSPACE_NAME;
@@ -214,7 +230,7 @@ public class Oak {
 
             final Closer observerSubscription = Closer.create();
             Future<?> future = null;
-            if (scheduledExecutor != null && type == Runnable.class) {
+            if (type == Runnable.class) {
                 Runnable runnable = (Runnable) service;
                 Long period = getValue(properties, "scheduler.period", Long.class);
                 if (period != null) {
@@ -222,10 +238,10 @@ public class Oak {
                             properties, "scheduler.concurrent",
                             Boolean.class, Boolean.FALSE);
                     if (concurrent) {
-                        future = scheduledExecutor.scheduleAtFixedRate(
+                        future = getScheduledExecutor().scheduleAtFixedRate(
                                 runnable, period, period, TimeUnit.SECONDS);
                     } else {
-                        future = scheduledExecutor.scheduleWithFixedDelay(
+                        future = getScheduledExecutor().scheduleWithFixedDelay(
                                 runnable, period, period, TimeUnit.SECONDS);
                     }
                 }
@@ -490,7 +506,7 @@ public class Oak {
     }
 
     public ContentRepository createContentRepository() {
-        whiteboard.register(Executor.class, executor, Collections.emptyMap());
+        whiteboard.register(Executor.class, getExecutor(), Collections.emptyMap());
 
         IndexEditorProvider indexEditors = CompositeIndexEditorProvider.compose(indexEditorProviders);
         OakInitializer.initialize(store, new CompositeInitializer(initializers), indexEditors);
@@ -509,11 +525,12 @@ public class Oak {
             registerMBean(whiteboard, IndexStatsMBean.class,
                     task.getIndexStats(), IndexStatsMBean.TYPE, name);
 
-            name = "async-reindex";
-            task = new AsyncIndexUpdate(name, store, indexEditors, true);
-            scheduleWithFixedDelay(whiteboard, task, 5, true);
-            registerMBean(whiteboard, IndexStatsMBean.class,
-            task.getIndexStats(), IndexStatsMBean.TYPE, name);
+            PropertyIndexAsyncReindex asyncPI = new PropertyIndexAsyncReindex(
+                    new AsyncIndexUpdate("async-reindex", store, indexEditors,
+                            true), getExecutor()
+            );
+            registerMBean(whiteboard, PropertyIndexAsyncReindexMBean.class,
+                    asyncPI, PropertyIndexAsyncReindexMBean.TYPE, name);
         }
 
         registerMBean(whiteboard, QueryEngineSettingsMBean.class,
@@ -529,9 +546,8 @@ public class Oak {
                                 return sc.getWorkspaceInitializer();
                             }
                         });
-        OakInitializer.initialize(workspaceInitializers, store,
-                defaultWorkspaceName, indexEditors, queryEngineSettings, indexProvider,
-                CompositeHook.compose(initHooks));
+        OakInitializer.initialize(
+                workspaceInitializers, store, defaultWorkspaceName, indexEditors);
 
         // add index hooks later to prevent the OakInitializer to do excessive indexing
         with(new IndexUpdateProvider(indexEditors));

@@ -42,6 +42,7 @@ import org.apache.jackrabbit.oak.plugins.memory.ModifiedNodeState;
 import org.apache.jackrabbit.oak.spi.state.AbstractChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.AbstractNodeState;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
+import org.apache.jackrabbit.oak.spi.state.EqualsDiff;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStateDiff;
@@ -110,7 +111,7 @@ class DocumentNodeState extends AbstractNodeState implements CacheValue {
         } else if (that instanceof ModifiedNodeState) {
             ModifiedNodeState modified = (ModifiedNodeState) that;
             if (modified.getBaseState() == this) {
-                return false;
+                return EqualsDiff.equals(this, modified);
             }
         }
         if (that instanceof NodeState) {
@@ -208,9 +209,18 @@ class DocumentNodeState extends AbstractNodeState implements CacheValue {
                 // check if this node state is head of a branch
                 Branch b = store.getBranches().getBranch(rev);
                 if (b == null) {
-                    throw new IllegalStateException("No branch for revision: " + rev);
+                    if (store.isDisableBranches()) {
+                        if (DocumentNodeStoreBranch.getCurrentBranch() != null) {
+                            return new DocumentRootBuilder(this, store);
+                        } else {
+                            return new MemoryNodeBuilder(this);
+                        }
+                    } else {
+                        throw new IllegalStateException("No branch for revision: " + rev);
+                    }
                 }
-                if (b.isHead(rev)) {
+                if (b.isHead(rev)
+                        && DocumentNodeStoreBranch.getCurrentBranch() != null) {
                     return new DocumentRootBuilder(this, store);
                 } else {
                     return new MemoryNodeBuilder(this);

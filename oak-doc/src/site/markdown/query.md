@@ -97,6 +97,17 @@ feature. An example query is:
 
 If no full-text implementation is available, those queries will fail.
 
+### Similarity Queries
+
+Oak supports similarity queries when using the Lucene full-text index. 
+For example, the following query will return nodes that have similar content than
+the node /test/a:
+
+    //element(*, nt:base)[rep:similar(., '/test/a')]
+    
+Compared to Jackrabbit 2.x, support for rep:similar has the following limitations:
+Full-text aggregation is not currently supported.
+
 ### XPath to SQL2 Transformation
 
 To support the XPath query language, such queries are internally converted to SQL2. 
@@ -177,6 +188,50 @@ or to simplify you can use one of the existing `IndexUtils#createIndexDefinition
       NodeBuilder index = IndexUtils.getOrCreateOakIndex(root);
       IndexUtils.createIndexDefinition(index, "myProp", true, false, ImmutableList.of("myProp"), null);
     }
+
+### The Ordered Index
+
+Extension of the Property index will keep the order of the indexed
+property persisted in the repository.
+
+Used to speed-up queries with `ORDER BY` clause, _equality_ and
+_range_ ones.
+
+    SELECT * FROM [nt:base] ORDER BY jcr:lastModified
+    
+    SELECT * FROM [nt:base] WHERE jcr:lastModified > $date
+    
+    SELECT * FROM [nt:base] WHERE jcr:lastModified < $date
+    
+    SELECT * FROM [nt:base]
+    WHERE jcr:lastModified > $date1 AND jcr:lastModified < $date2
+
+    SELECT * FROM [nt:base] WHERE [jcr:uuid] = $id
+
+To define a property index on a subtree you have to add an index
+definition node that:
+
+* must be of type `oak:QueryIndexDefinition`
+* must have the `type` property set to __`ordered`__
+* contains the `propertyNames` property that indicates what properties
+  will be stored in the index.  `propertyNames` has to be a single
+  value list of type `Name[]`
+
+_Optionally_ you can specify
+
+* the `reindex` flag which when set to `true`, triggers a full content
+  re-index.
+* The direction of the sorting by specifying a `direction` property of
+  type `String` of value `ascending` or `descending`. If not provided
+  `ascending` is the default.
+* The index can be defined as asynchronous by providing the property
+  `async=async`
+
+_Caveats_
+
+* In case deploying on the index on a clustered mongodb you have to
+  define it as asynchronous by providing `async=async` in the index
+  definition. This is to avoid cluster merges.
 
 ### The Lucene Full-Text Index
 

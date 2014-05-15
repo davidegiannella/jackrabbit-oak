@@ -49,7 +49,7 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
     }
 
     @Override
-    PropertyIndexLookup getLookup(NodeState root) {
+    OrderedPropertyIndexLookup getLookup(NodeState root) {
         return new OrderedPropertyIndexLookup(root);
     }
 
@@ -101,7 +101,7 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
                     if (lookup.isIndexed(propertyName, "/", filter)) {
                         IndexPlan.Builder b = getIndexPlanBuilder(filter);
                         b.setSortOrder(ImmutableList.of(new OrderEntry(
-                            propertyName,
+                                oe.getPropertyName(),
                                 Type.UNDEFINED,
                                 lookup.isAscending(root, propertyName, filter) ? OrderEntry.Order.ASCENDING
                                         : OrderEntry.Order.DESCENDING)));
@@ -172,10 +172,70 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
     }
 
     @Override
-    public String getPlanDescription(IndexPlan plan) {
-        LOG.debug("getPlanDescription() - plan: {}", plan);
-        LOG.error("Not implemented yet");
-        throw new UnsupportedOperationException("Not implemented yet.");
+    public String getPlanDescription(IndexPlan plan, NodeState root) {
+        LOG.debug("getPlanDescription({}, {})", plan, root);
+        StringBuilder buff = new StringBuilder("ordered");
+        OrderedPropertyIndexLookup lookup = getLookup(root);
+        Filter filter = plan.getFilter();
+        int depth = 1;
+        boolean found = false;
+        for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
+            String propertyName = PathUtils.getName(pr.propertyName);
+            if (!lookup.isIndexed(propertyName, "/", filter)) {
+                continue;
+            }
+            String operation = null;
+            PropertyValue value = null;       
+            // TODO support pr.list
+            if (pr.first == null && pr.last == null) {
+                // open query: [property] is not null
+                operation = "is not null";
+            } else if (pr.first != null && pr.first.equals(pr.last) && pr.firstIncluding
+                       && pr.lastIncluding) {
+                // [property]=[value]
+                operation = "=";
+                value = pr.first;
+            } else if (pr.first != null && !pr.first.equals(pr.last)) {
+                // '>' & '>=' use cases
+                if (lookup.isAscending(root, propertyName, filter)) {
+                    value = pr.first;
+                    operation = pr.firstIncluding ? ">=" : ">";
+                }
+            } else if (pr.last != null && !pr.last.equals(pr.first)) {
+                // '<' & '<='
+                if (!lookup.isAscending(root, propertyName, filter)) {
+                    value = pr.last;
+                    operation = pr.lastIncluding ? "<=" : "<";
+                }
+            }
+            if (operation != null) {
+                buff.append(' ').append(propertyName).append(' ').
+                        append(operation).append(' ').append(value);
+            } else {
+                continue;
+            }
+            // stop with the first property that is indexed
+            found = true;
+            break;
+        }
+        List<OrderEntry> sortOrder = plan.getSortOrder();
+        if (!found && sortOrder != null && !sortOrder.isEmpty()) {
+            // we could be here if we have a query where the ORDER BY makes us play it.
+            for (OrderEntry oe : sortOrder) {
+                String propertyName = PathUtils.getName(oe.getPropertyName());
+                if (!lookup.isIndexed(propertyName, "/", null)) {
+                    continue;
+                }
+                depth = PathUtils.getDepth(oe.getPropertyName());
+                buff.append(" order by ").append(propertyName);
+                // stop with the first property that is indexed
+                break;
+            }
+        }        
+        if (depth > 1) {
+            buff.append(" ancestor ").append(depth - 1);
+        }       
+        return buff.toString();
     }
 
     @Override
@@ -204,6 +264,7 @@ public class OrderedPropertyIndex extends PropertyIndex implements AdvancedQuery
                 // we could be here if we have a query where the ORDER BY makes us play it.
                 for (OrderEntry oe : sortOrder) {
                     String propertyName = PathUtils.getName(oe.getPropertyName());
+                    depth = PathUtils.getDepth(oe.getPropertyName());
                     if (lookup.isIndexed(propertyName, "/", null)) {
                         paths = lookup.query(filter, propertyName, new PropertyRestriction());
                     }

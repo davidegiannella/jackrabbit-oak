@@ -13,77 +13,36 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
-  -->
-### Permission Evaluation : Differences wrt Jackrabbit 2.x
+-->
 
-#### 1. Characteristics of the Default Implementation
+Permission Evaluation in Detail
+--------------------------------------------------------------------------------
 
-##### General
-In general the permission evaluation related code in Oak is intended to be
-more clearly separated from the access control management such as defined by the
-JCR and Jackrabbit API. While permission evaluation is considered to be an
-internal feature of the Oak core module, the package
-`org.apache.jackrabbit.oak.spi.security.authorization.permission` provides some
-extensions points that allow to plug custom extensions or implementations of
-the permission evaluation.
+### General Remarks
 
-##### JCR API
-###### `Session#hasPermission` and `Session#checkPermission`
+_todo_
 
-Since Oak the permission related API calls not only allow to pass the action strings defined by JCR specification (see constants defined in `Session.java`) but also handles the names of the permission defined by Oak (see `Permissions#getString(long permissions)`).
+### Overview on Permission Evaluation
 
-##### Mapping of JCR Actions to Permissions
+_todo_
 
-`ACTION_READ':
 
-- access control content: `Permissions.READ_ACCESS_CONTROL`
-- regular nodes: `Permissions.READ_NODE`
-- regular properties: `Permissions.READ_PROPERTY`
-- non-existing items: `Permissions.READ`
+### Administrative Access
 
-`ACTION_ADD_NODE`:
+_todo_
 
-- access control content: `Permissions.MODIFY_ACCESS_CONTROL`
-- regular nodes: `Permissions.ADD_NODE`
 
-`ACTION_REMOVE`:
+### Individual Permissions in Detail
 
-- access control content: `Permissions.MODIFY_ACCESS_CONTROL`
-- regular nodes: `Permissions.REMOVE_NODE`
-- regular properties: `Permissions.REMOVE_PROPERTY`
-- non-existing nodes: `Permissions.REMOVE`
-
-`ACTION_SET_PROPERTY`:
-
-- access control content: `Permissions.MODIFY_ACCESS_CONTROL`
-- regular properties: `Permissions.MODIFY_PROPERTY`
-- non-existing properties: `Permissions.ADD_PROPERTY`
-
-##### Permissions
-The set of permissions supported by Oak are listed in [Permissions]. The following changes have been compared compared to Jackrabbit 2.x:
-
-- `READ_NODE`: permission to read a node
-- `READ_PROPERTY`: permission to read a property
-- `ADD_PROPERTY`: permission to create a new property
-- `MODIFY_PROPERTY`: permission to change an existing property
-- `REMOVE`: aggregation of `REMOVE_NODE` and `REMOVE_PROPERTY`
-- `USER_MANAGEMENT`: permission to execute user management related tasks such as e.g. creating or removing user/group, changing user password and editing group membership.
-- `INDEX_DEFINITION_MANAGEMENT`: permission to create, modify and remove the oak:index node and it's subtree which is expected to contain the index definitions.
-
-The following permissions are now an aggregation of new permissions:
-
-- `READ`: aggregates `READ_NODE` and `READ_PROPERTY`
-- `SET_PROPERTY`: aggregates `ADD_PROPERTY`, `MODIFY_PROPERTY` and `REMOVE_PROPERTY`
-
-#### 2. Permission Evaluation
 
 ##### Reading
 Due to the fine grained read permissions Oak read access can be separately granted/denied
-for nodes and properties. See also the section about extended restriction management
-in [OAK-792]. Granting the `jcr:read` privilege will result in a backwards compatible
+for nodes and properties. See also the section about extended [Restriction Management](../accesscontrol/restriction.html).
+Granting the `jcr:read` privilege will result in a backwards compatible
 read access for nodes and their properties, while specifying `rep:readNodes` or
 `rep:readProperties` privileges allows separately granting or denying access to
-nodes and properties (see also [OAK-910] for changes in the privilege definitions).
+nodes and properties (see also [Privilege Management](../privilege.html) for changes
+in the privilege definitions).
 Together with the restrictions this new behavior now allows to individually grant/deny
 access to properties that match a given name/path/nodetype (and as a possible extension even property value).
 
@@ -148,55 +107,7 @@ Note that the corresponding items are not protected in the JCR sense. Consequent
 any other modification in these subtrees like e.g. changing the primary type
 or adding mixin types is governed by the corresponding privileges.
 
-#### 3. Administrative Principals
-The following principals always have full access to the whole content repository irrespective of the access control content:
-
-- `SystemPrincipal`
-- All instances of `AdminPrincipal`
-- All principals whose name matches the configured administrative principal names (see Configuration section below). This configuration only applies to the permission evaluation and is currently not reflected in other security models nor methods that deal with the administrator (i.e. `User#isAdmin`).
-
-#### 4. Node Types
-
-    [rep:PermissionStore]
-      - rep:accessControlledPath (STRING) protected IGNORE
-      - rep:numPermissions (LONG) protected IGNORE
-      - rep:modCount (LONG) protected IGNORE
-      + * (rep:PermissionStore) = rep:PermissionStore protected IGNORE
-      + * (rep:Permissions) = rep:Permissions protected IGNORE
-
-    [rep:Permissions]
-      - * (UNDEFINED) protected IGNORE
-      - * (UNDEFINED) protected multiple IGNORE
-      + * (rep:Permissions) = rep:Permissions protected IGNORE
-
-    [rep:VersionablePaths]
-      mixin
-      - * (PATH) protected ABORT
-
-#### 5. API Extensions
-
-org.apache.jackrabbit.oak.spi.security.authorization.permission
-
-- `PermissionProvider`: Main entry point for Oak internal permission evaluation.
-- `Permissions`: The permissions defined, respected and evaluated by the repository.
-- `PermissionConstants`: Constants used throughout the permission evaluation.
-
-#### 6. Configuration
-
-Configuration Parameters supported by the default implementation
-
-- `PARAM_PERMISSIONS_JR2`: Enables backwards compatible behavior for the permissions listed in the parameter value. Currently the following values are allowed: `USER_MANAGEMENT` and `REMOVE_NODE`. The parameter value must contain the permission names separated by ','.
-- `PARAM_READ_PATHS`: default set of paths that are always readable to all principals irrespective of other permissions defined at that path or inherited from other nodes.
-- `PARAM_ADMINISTRATIVE_PRINCIPALS`: The names of the additional principals that have full permission and for which the permission evaluation can be skipped altogether.
-
-Differences to Jackrabbit 2.x
-The `omit-default-permission` configuration option present with the Jackrabbit's AccessControlProvider implementations is no longer supported with Oak.
-Since there are no permissions installed by default this flag has become superfluous.
 
 <!-- hidden references -->
-[Permissions]: http://svn.apache.org/repos/asf/jackrabbit/oak/trunk/oak-core/src/main/java/org/apache/jackrabbit/oak/spi/security/authorization/permission/Permissions.java
 [OAK-444]: https://issues.apache.org/jira/browse/OAK-444
-[OAK-792]: https://issues.apache.org/jira/browse/OAK-792
-[OAK-910]: https://issues.apache.org/jira/browse/OAK-910
-[OAK-710]: https://issues.apache.org/jira/browse/OAK-710
 [JCR-2963]: https://issues.apache.org/jira/browse/JCR-2963

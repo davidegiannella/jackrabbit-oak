@@ -15,21 +15,14 @@
    limitations under the License.
   -->
 
-TODO: Document core concepts and architecture:
+# The big picture
 
-* MVCC
-* Microkernel
-* JSOP
-* NodeStateDiff
-* NodeStore
-* Tree
-* Plugins
-* APIs (MK, oak-core, oak-jcr)
-* SPIs (...)
-* Clustering
-* Search and indexing
-* Security
-    * [Permission Evaluation](security/permission_eval.html)
-    * [Authentication / Login Modules](security/external_login_module.html)
-* [Oak Core](https://github.com/apache/jackrabbit-oak/blob/trunk/oak-core/README.md)
-* ...
+![The big picture](big-picture.png?raw=true)
+
+TODO: Explain concepts: MVCC, Oak modules and plugins, key APIs, ...
+
+## Readmes
+
+* [Oak](https://github.com/apache/jackrabbit-oak/blob/trunk/README.md)
+* [Oak core](https://github.com/apache/jackrabbit-oak/blob/trunk/oak-core/README.md)
+* [Oak run](https://github.com/apache/jackrabbit-oak/blob/trunk/oak-run/README.md)

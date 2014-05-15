@@ -15,13 +15,6 @@
    limitations under the License.
   -->
 
-TODO Document patterns and anti patterns:
-
-* Observation
-* Session live time, explicit refresh
-* Use admin session
-* ...
-
 ## Session refresh behavior
 
 Oak is based on the MVCC model where each session starts with a snapshot
@@ -42,3 +35,19 @@ session always up to date with latest changes from the repository.
 One of the key patterns targeted by Oak is a web application that serves
 HTTP requests. The recommended way to handle such cases is to use a
 separate session for each HTTP request, and never to refresh that session.
+
+### Anti pattern: concurrent session access
+
+Oak is designed to be virtually lock free as long as sessions are not shared
+across threads. Don't access the same session instance concurrently from
+multiple threads. When doing so Oak will protect its internal data structures
+from becoming corrupted but will not make any guarantees beyond that. In
+particular violating clients might suffer from lock contentions or deadlocks.
+
+### Large number of direct child node
+
+Oak scales to large number of direct child nodes of a node as long as those
+are *not* orderable. For orderable child nodes Oak keeps the order in an
+internal property, which will lead to a performance degradation when the list
+grows too large. For such scenarios Oak provides the ``oak:Unstructured`` node
+type, which is equivalent to ``nt:unstructured`` except that it is not orderable.

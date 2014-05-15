@@ -81,6 +81,7 @@ public class Revision {
     static void resetClockToDefault(){
         clock = Clock.SIMPLE;
         lastTimestamp = clock.getTime();
+        lastRevisionTimestamp = clock.getTime();
 
     }
     public Revision(long timestamp, int counter, int clusterId) {
@@ -156,6 +157,12 @@ public class Revision {
         long timestamp = getCurrentTimestamp();
         int c;
         synchronized (Revision.class) {
+            // need to check again, because threads
+            // could arrive inside the synchronized block
+            // out of order
+            if (timestamp < lastRevisionTimestamp) {
+                timestamp = lastRevisionTimestamp;
+            }
             if (timestamp == lastRevisionTimestamp) {
                 c = ++lastRevisionCount;
             } else {
@@ -521,8 +528,13 @@ public class Revision {
             if (range1 == FUTURE && range2 == FUTURE) {
                 return o1.compareRevisionTimeThenClusterId(o2);
             }
-            if (range1 == null || range2 == null) {
+            if (range1 == null && range2 == null) {
                 return o1.compareRevisionTimeThenClusterId(o2);
+            }
+            if (range1 == null) {
+                return -1;
+            } else if (range2 == null) {
+                return 1;
             }
             int comp = range1.compareRevisionTimeThenClusterId(range2);
             if (comp != 0) {
@@ -560,6 +572,10 @@ public class Revision {
         Revision getRevisionSeen(Revision r) {
             List<RevisionRange> list = map.get(r.getClusterId());
             if (list == null) {
+                if (r.getTimestamp() <= oldestTimestamp) {
+                    // old revision with already purged range
+                    return null;
+                }
                 if (r.getClusterId() != currentClusterNodeId) {
                     // this is from a cluster node we did not see yet
                     // see also OAK-1170

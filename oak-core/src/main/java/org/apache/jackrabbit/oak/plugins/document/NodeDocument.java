@@ -17,7 +17,6 @@
 package org.apache.jackrabbit.oak.plugins.document;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -38,6 +37,7 @@ import javax.annotation.Nullable;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.AbstractIterator;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Queues;
@@ -51,10 +51,12 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Iterables.filter;
 import static com.google.common.collect.Iterables.transform;
+import static java.util.Collections.disjoint;
 import static org.apache.jackrabbit.oak.plugins.document.UpdateOp.Key;
 import static org.apache.jackrabbit.oak.plugins.document.UpdateOp.Operation;
 
@@ -126,6 +128,11 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
      * The modified time in seconds (5 second resolution).
      */
     public static final String MODIFIED_IN_SECS = "_modified";
+
+    /**
+     * The resolution of the modified time.
+     */
+    static final int MODIFIED_IN_SECS_RESOLUTION = 5;
 
     private static final NavigableMap<Revision, Range> EMPTY_RANGE_MAP =
             Maps.unmodifiableNavigableMap(new TreeMap<Revision, Range>());
@@ -215,6 +222,18 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
      * in the document
      */
     public static final String SD_MAX_REV_TIME_IN_SECS = "_sdMaxRevTime";
+
+    /**
+     * Return time in seconds with 5 second resolution
+     *
+     * @param timestamp time in millis to convert
+     * @return the time in seconds with the given resolution.
+     */
+    public static long getModifiedInSecs(long timestamp) {
+        // 5 second resolution
+        long timeInSec = TimeUnit.MILLISECONDS.toSeconds(timestamp);
+        return timeInSec - timeInSec % MODIFIED_IN_SECS_RESOLUTION;
+    }
 
     /**
      * A document which is created from splitting a main document can be classified
@@ -604,16 +623,14 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
         SortedMap<Revision, String> revisions = getLocalRevisions();
         SortedMap<Revision, String> commitRoots = getLocalCommitRoot();
         Iterator<Revision> it = filter(Iterables.mergeSorted(
-                Arrays.asList(revisions.keySet(), commitRoots.keySet()),
+                ImmutableList.of(revisions.keySet(), commitRoots.keySet()),
                 revisions.comparator()), predicate).iterator();
         if (it.hasNext()) {
             newestRev = it.next();
         } else {
             // check full history (only needed in rare cases)
             it = filter(Iterables.mergeSorted(
-                    Arrays.asList(
-                            getValueMap(REVISIONS).keySet(),
-                            getValueMap(COMMIT_ROOT).keySet()),
+                    ImmutableList.of(getValueMap(REVISIONS).keySet(), getValueMap(COMMIT_ROOT).keySet()),
                     revisions.comparator()), predicate).iterator();
             if (it.hasNext()) {
                 newestRev = it.next();
@@ -812,17 +829,22 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
      *
      * @param op the update operation.
      * @param baseRevision the base revision for the update operation.
+     * @param commitRevision the commit revision of the update operation.
      * @param context the revision context.
      * @return <code>true</code> if conflicting, <code>false</code> otherwise.
      */
-    public boolean isConflicting(@Nonnull UpdateOp op,
+    boolean isConflicting(@Nonnull UpdateOp op,
                                  @Nonnull Revision baseRevision,
+                                 @Nonnull Revision commitRevision,
                                  @Nonnull RevisionContext context) {
         // did existence of node change after baseRevision?
         // only check local deleted map, which contains the most
         // recent values
         Map<Revision, String> deleted = getLocalDeleted();
         for (Map.Entry<Revision, String> entry : deleted.entrySet()) {
+            if (entry.getKey().equals(commitRevision)) {
+                continue;
+            }
             if (isRevisionNewer(context, entry.getKey(), baseRevision)) {
                 return true;
             }
@@ -843,6 +865,9 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
             }
             // was this property touched after baseRevision?
             for (Revision rev : getValueMap(name).keySet()) {
+                if (rev.equals(commitRevision)) {
+                    continue;
+                }
                 if (isRevisionNewer(context, rev, baseRevision)) {
                     return true;
                 }
@@ -958,9 +983,12 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
             NodeDocument oldDoc = new NodeDocument(store);
             UpdateUtils.applyChanges(oldDoc, old, context.getRevisionComparator());
             setSplitDocProps(this, oldDoc, old, high);
-            // only split if half of the data can be moved to old document
-            if (oldDoc.getMemory() > getMemory() * SPLIT_RATIO) {
+            // only split if enough of the data can be moved to old document
+            if (oldDoc.getMemory() > getMemory() * SPLIT_RATIO
+                    || numValues >= NUM_REVS_THRESHOLD) {
                 splitOps.add(old);
+            } else {
+                main = null;
             }
         }
 
@@ -1052,7 +1080,7 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
             return Collections.emptyList();
         }
         if (revision == null) {
-            return new PropertyHistory(store, this, property);
+            return new PropertyHistory(this, property);
         } else {
             final String mainPath = getMainPath();
             // first try to lookup revision directly
@@ -1061,7 +1089,7 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
                 Revision r = entry.getKey();
                 int h = entry.getValue().height;
                 String prevId = Utils.getPreviousIdFor(mainPath, r, h);
-                NodeDocument prev = store.find(Collection.NODES, prevId);
+                NodeDocument prev = getPreviousDocument(prevId);
                 if (prev != null) {
                     if (prev.getValueMap(property).containsKey(revision)) {
                         return Collections.singleton(prev);
@@ -1088,6 +1116,12 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
                 }
             });
         }
+    }
+
+    NodeDocument getPreviousDocument(String prevId){
+        //Use the maxAge variant such that in case of Mongo call for
+        //previous doc are directed towards replicas first
+        return store.find(Collection.NODES, prevId, Integer.MAX_VALUE);
     }
 
     @Nonnull
@@ -1119,9 +1153,7 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
     private NodeDocument getPreviousDoc(Revision rev, Range range){
         int h = range.height;
         String prevId = Utils.getPreviousIdFor(getMainPath(), rev, h);
-        //TODO Use the maxAge variant such that in case of Mongo call for
-        //previous doc are directed towards replicas first
-        NodeDocument prev = store.find(Collection.NODES, prevId);
+        NodeDocument prev = getPreviousDocument(prevId);
         if (prev != null) {
             return prev;
         } else {
@@ -1173,7 +1205,7 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
 
     public static void setModified(@Nonnull UpdateOp op,
                                    @Nonnull Revision revision) {
-        checkNotNull(op).set(MODIFIED_IN_SECS, Commit.getModifiedInSecs(checkNotNull(revision).getTimestamp()));
+        checkNotNull(op).set(MODIFIED_IN_SECS, getModifiedInSecs(checkNotNull(revision).getTimestamp()));
     }
 
     public static void setRevision(@Nonnull UpdateOp op,
@@ -1272,7 +1304,7 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
 
     private static void setSplitDocMaxRev(@Nonnull UpdateOp op,
                                           @Nonnull Revision maxRev) {
-        checkNotNull(op).set(SD_MAX_REV_TIME_IN_SECS, Commit.getModifiedInSecs(maxRev.getTimestamp()));
+        checkNotNull(op).set(SD_MAX_REV_TIME_IN_SECS, getModifiedInSecs(maxRev.getTimestamp()));
     }
 
     //----------------------------< internal >----------------------------------
@@ -1337,7 +1369,7 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
         setSplitDocMaxRev(old, maxRev);
 
         SplitDocType type = SplitDocType.DEFAULT;
-        if(!mainDoc.hasChildren()){
+        if(!mainDoc.hasChildren() && !referencesOldDocAfterSplit(mainDoc, oldDoc)){
             type = SplitDocType.DEFAULT_NO_CHILD;
         } else if (oldDoc.getLocalRevisions().isEmpty()){
             type = SplitDocType.PROP_COMMIT_ONLY;
@@ -1349,6 +1381,31 @@ public final class NodeDocument extends Document implements CachedNodeDocument{
         }
 
         setSplitDocType(old,type);
+    }
+
+    /**
+     * Checks if the main document has changes referencing {@code oldDoc} after
+     * the split.
+     *
+     * @param mainDoc the main document before the split.
+     * @param oldDoc  the old document created by the split.
+     * @return {@code true} if the main document contains references to the
+     *         old document after the split; {@code false} otherwise.
+     */
+    private static boolean referencesOldDocAfterSplit(NodeDocument mainDoc,
+                                                      NodeDocument oldDoc) {
+        Set<Revision> revs = oldDoc.getLocalRevisions().keySet();
+        for (String property : mainDoc.data.keySet()) {
+            if (IGNORE_ON_SPLIT.contains(property)) {
+                continue;
+            }
+            Set<Revision> changes = Sets.newHashSet(mainDoc.getLocalMap(property).keySet());
+            changes.removeAll(oldDoc.getLocalMap(property).keySet());
+            if (!disjoint(changes, revs)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
