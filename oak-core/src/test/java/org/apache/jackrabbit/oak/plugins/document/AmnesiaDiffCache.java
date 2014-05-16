@@ -14,34 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.benchmark;
+package org.apache.jackrabbit.oak.plugins.document;
 
-import javax.jcr.Credentials;
-import javax.jcr.Repository;
-import javax.jcr.RepositoryException;
-import javax.jcr.Session;
-import javax.jcr.SimpleCredentials;
+import javax.annotation.Nonnull;
 
-public class LoginLogoutTest extends AbstractTest {
+/**
+ * A diff cache implementation, which immediately forgets the diff.
+ */
+class AmnesiaDiffCache implements DiffCache {
 
-    @Override
-    public void setUp(Repository repository, Credentials credentials)
-            throws Exception {
-        super.setUp(repository,
-                new SimpleCredentials("admin", "admin".toCharArray()));
+    static final DiffCache INSTANCE = new AmnesiaDiffCache();
+
+    private AmnesiaDiffCache() {
+        super();
     }
-    
+
     @Override
-    public void runTest() throws RepositoryException {
-        Repository repository = getRepository();
-        for (int i = 0; i < LoginUserTest.COUNT; i++) {
-            Session session = repository.login(getCredentials());
-            try {
-                session.getRootNode();
-            } finally {
-                session.logout();
+    public String getChanges(@Nonnull Revision from,
+                             @Nonnull Revision to,
+                             @Nonnull String path) {
+        return null;
+    }
+
+    @Nonnull
+    @Override
+    public Entry newEntry(@Nonnull Revision from, @Nonnull Revision to) {
+        return new Entry() {
+            @Override
+            public void append(@Nonnull String path, @Nonnull String changes) {
             }
-        }
-    }
 
+            @Override
+            public void done() {
+            }
+        };
+    }
 }
