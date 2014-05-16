@@ -205,7 +205,7 @@ public class OrderedIndexConcurrentClusterIT {
     //@Ignore("OAK-1717")
     @Test
     public void deleteConcurrently() throws Exception {
-        final int loop = 120;
+        final int loop = 240;
         final int count = COUNT;
         final int clusters = NUM_CLUSTER_NODES;
 
