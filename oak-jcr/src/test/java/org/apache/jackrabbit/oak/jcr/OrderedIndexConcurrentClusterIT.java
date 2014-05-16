@@ -44,7 +44,6 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +52,7 @@ public class OrderedIndexConcurrentClusterIT {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedIndexConcurrentClusterIT.class);
     
     private static final int NUM_CLUSTER_NODES = 5;
+    private static final int LOOP = 2800;
     private static final int COUNT = 5;
     private static final Credentials ADMIN = new SimpleCredentials("admin", "admin".toCharArray());
     private static final String INDEX_NODE_NAME = "lastModified";
@@ -210,10 +210,9 @@ public class OrderedIndexConcurrentClusterIT {
         }
     }
 
-    //@Ignore("OAK-1717")
     @Test
     public void deleteConcurrently() throws Exception {
-        final int loop = 240;
+        final int loop = LOOP;
         final int count = COUNT;
         final int clusters = NUM_CLUSTER_NODES;
 
