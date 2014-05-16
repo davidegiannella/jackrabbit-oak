@@ -29,6 +29,7 @@ import java.util.Map;
 import javax.jcr.Credentials;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
+import javax.jcr.PathNotFoundException;
 import javax.jcr.PropertyType;
 import javax.jcr.Repository;
 import javax.jcr.RepositoryException;
@@ -174,7 +175,14 @@ public class OrderedIndexConcurrentClusterIT {
                              Map<String, Exception> exceptions)
             throws RepositoryException {
 
-        Node root = session.getRootNode().getNode(nodeName);
+        Node root;
+        try {
+            root = session.getRootNode().getNode(nodeName);
+        } catch (PathNotFoundException e) {
+            LOG.error("Not found. {}", nodeName);
+            throw e;
+        }
+        
         NodeIterator children = root.getNodes();
         
         while (children.hasNext()) {
@@ -183,7 +191,7 @@ public class OrderedIndexConcurrentClusterIT {
             while (children2.hasNext()) {
                 children2.nextNode().remove();
             }
-            LOG.debug("deleting {}", node.getName());
+            LOG.debug("deleting /{}/{}", nodeName, node.getName());
             node.remove();
             session.save();
         }
@@ -251,6 +259,10 @@ public class OrderedIndexConcurrentClusterIT {
         session.save();
         
         if (exceptions.isEmpty()) {
+            // temporary sleep for allowing the cluster to synch otherwise we could get a
+            // PathNotFoundException
+            // TODO can we find something better than a sleep?
+            Thread.sleep(2000);
             for (Thread t : workers) {
                 t.start();
             }
