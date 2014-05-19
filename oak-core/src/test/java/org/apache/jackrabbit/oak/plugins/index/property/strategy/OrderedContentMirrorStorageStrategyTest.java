@@ -1328,7 +1328,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         // don't care about the actual results as long as we have something. We're reusing existing
         // code
         assertTrue(store.count(ascendingMeta, pr, maxNodeCount) > 0);
-        assertEquals(0, descendingStore.count(descendingMeta, pr, maxNodeCount));
+        assertTrue(descendingStore.count(ascendingMeta, pr, maxNodeCount) > 0);
 
         // '>='
         pr = new Filter.PropertyRestriction();
@@ -1339,7 +1339,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         // don't care about the actual results as long as we have something. We're reusing existing
         // code
         assertTrue(store.count(ascendingMeta, pr, maxNodeCount) > 0);
-        assertEquals(0, descendingStore.count(descendingMeta, pr, maxNodeCount));
+        assertTrue(descendingStore.count(ascendingMeta, pr, maxNodeCount) > 0);
 
         // '<'
         pr = new Filter.PropertyRestriction();
@@ -1350,7 +1350,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         // don't care about the actual results as long as we have something. We're reusing existing
         // code
         assertTrue(descendingStore.count(descendingMeta, pr, maxNodeCount) > 0);
-        assertEquals(0, store.count(ascendingMeta, pr, maxNodeCount));
+        assertTrue(store.count(ascendingMeta, pr, maxNodeCount) > 0);
 
         // when no conditions has been asked but just an ORDER BY
         pr = null;
