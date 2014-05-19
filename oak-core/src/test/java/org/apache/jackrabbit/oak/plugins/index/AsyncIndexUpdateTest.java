@@ -20,22 +20,36 @@ import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ASYNC_PROPE
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexUtils.createIndexDefinition;
+import static org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider.TYPE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
+
+import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexLookup;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
+import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
+import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
+import org.apache.jackrabbit.oak.spi.state.ConflictAnnotatingRebaseDiff;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -138,10 +152,10 @@ public class AsyncIndexUpdateTest {
 
         PropertyIndexLookup lookup = new PropertyIndexLookup(root);
         assertEquals(ImmutableSet.of("testRoot"), find(lookup, "foo", "abc"));
-        assertEquals(ImmutableSet.of(), find(lookup, "foo", "def"));
-        assertEquals(ImmutableSet.of(), find(lookup, "foo", "ghi"));
+        assertEquals(ImmutableSet.<String>of(), find(lookup, "foo", "def"));
+        assertEquals(ImmutableSet.<String>of(), find(lookup, "foo", "ghi"));
 
-        assertEquals(ImmutableSet.of(), find(lookup, "bar", "abc"));
+        assertEquals(ImmutableSet.<String>of(), find(lookup, "bar", "abc"));
         assertEquals(ImmutableSet.of("testRoot"), find(lookup, "bar", "def"));
         assertEquals(ImmutableSet.of("testSecond"), find(lookup, "bar", "ghi"));
 
@@ -195,7 +209,148 @@ public class AsyncIndexUpdateTest {
                 .getChildNode("newchild").getChildNode("other"));
         assertEquals(ImmutableSet.of("testChild"),
                 find(lookupChild, "foo", "xyz"));
-        assertEquals(ImmutableSet.of(), find(lookupChild, "foo", "abc"));
+        assertEquals(ImmutableSet.<String>of(), find(lookupChild, "foo", "abc"));
     }
 
+    // OAK-1749
+    @Test
+    public void branchBaseOnCheckpoint() throws Exception {
+        final Semaphore retrieve = new Semaphore(1);
+        final Semaphore checkpoint = new Semaphore(0);
+        NodeStore store = new MemoryNodeStore() {
+            @CheckForNull
+            @Override
+            public NodeState retrieve(@Nonnull String checkpoint) {
+                retrieve.acquireUninterruptibly();
+                try {
+                    return super.retrieve(checkpoint);
+                } finally {
+                    retrieve.release();
+                }
+            }
+
+            @Nonnull
+            @Override
+            public String checkpoint(long lifetime) {
+                try {
+                    return super.checkpoint(lifetime);
+                } finally {
+                    checkpoint.release();
+                }
+            }
+        };
+        IndexEditorProvider provider = new PropertyIndexEditorProvider();
+
+        NodeBuilder builder = store.getRoot().builder();
+        createIndexDefinition(builder.child(INDEX_DEFINITIONS_NAME), "foo", false, ImmutableSet.of("foo"), null, TYPE, Collections.singletonMap(ASYNC_PROPERTY_NAME, "async"));
+
+        builder.child("test").setProperty("foo", "a");
+        builder.child("child");
+
+        store.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        final AsyncIndexUpdate async = new AsyncIndexUpdate("async", store, provider);
+        async.run();
+
+        builder = store.getRoot().builder();
+        builder.child("test").setProperty("foo", "b");
+        builder.child("child").setProperty("prop", "value");
+        store.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                async.run();
+            }
+        });
+        // drain checkpoint permits
+        checkpoint.acquireUninterruptibly(checkpoint.availablePermits());
+        // block NodeStore.retrieve()
+        retrieve.acquireUninterruptibly();
+        t.start();
+
+        // wait until async update called checkpoint
+        checkpoint.acquireUninterruptibly();
+        builder = store.getRoot().builder();
+        builder.child("child").remove();
+        store.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        // allow async update to proceed with NodeStore.retrieve()
+        retrieve.release();
+        t.join();
+
+        assertFalse(store.getRoot().hasChildNode("child"));
+    }
+
+    // OAK-1784
+    @Test
+    public void failOnConflict() throws Exception {
+        final Map<Thread, Semaphore> locks = Maps.newIdentityHashMap();
+        NodeStore store = new MemoryNodeStore() {
+            @Nonnull
+            @Override
+            public NodeState merge(@Nonnull NodeBuilder builder,
+                                                @Nonnull CommitHook commitHook,
+                                                @Nullable CommitInfo info)
+                    throws CommitFailedException {
+                Semaphore s = locks.get(Thread.currentThread());
+                if (s != null) {
+                    s.acquireUninterruptibly();
+                }
+                return super.merge(builder, commitHook, info);
+            }
+        };
+        IndexEditorProvider provider = new PropertyIndexEditorProvider();
+
+        NodeBuilder builder = store.getRoot().builder();
+        createIndexDefinition(builder.child(INDEX_DEFINITIONS_NAME), "foo",
+                false, ImmutableSet.of("foo"), null, TYPE,
+                Collections.singletonMap(ASYNC_PROPERTY_NAME, "async"));
+
+        builder.child("test").setProperty("foo", "a");
+
+        store.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        final AsyncIndexUpdate async = new AsyncIndexUpdate("async", store, provider);
+        async.run();
+
+        builder = store.getRoot().builder();
+        builder.child("test").setProperty("foo", "b");
+        store.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                async.run();
+            }
+        });
+        Semaphore s = new Semaphore(0);
+        locks.put(t, s);
+        t.start();
+
+        while (!s.hasQueuedThreads()) {
+            // busy wait
+        }
+
+        // introduce a conflict
+        builder = store.getRoot().builder();
+        builder.getChildNode(INDEX_DEFINITIONS_NAME).getChildNode("foo")
+                .getChildNode(":index").child("a").remove();
+        store.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        s.release(100);
+        t.join();
+
+        builder = store.getRoot().builder();
+        assertNoConflictMarker(builder);
+    }
+
+    private void assertNoConflictMarker(NodeBuilder builder) {
+        for (String name : builder.getChildNodeNames()) {
+            if (name.equals(ConflictAnnotatingRebaseDiff.CONFLICT)) {
+                fail("conflict marker detected");
+            }
+            assertNoConflictMarker(builder.getChildNode(name));
+        }
+    }
 }

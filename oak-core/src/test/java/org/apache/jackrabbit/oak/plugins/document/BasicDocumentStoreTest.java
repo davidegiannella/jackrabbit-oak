@@ -17,8 +17,10 @@
 package org.apache.jackrabbit.oak.plugins.document;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -123,7 +125,7 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
     public void testDeleteNonExistingMultiple() {
         String id = this.getClass().getName() + ".testDeleteNonExistingMultiple-" + UUID.randomUUID();
         // create a test node
-        UpdateOp up = new UpdateOp(id, true);
+        UpdateOp up = new UpdateOp(id + "-2", true);
         up.set("_id", id + "-2");
         boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
         assertTrue(success);
@@ -163,6 +165,80 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
     }
 
     @Test
+    public void testQuery() {
+        // create ten documents
+        String base = this.getClass().getName() + ".testQuery-";
+        for (int i = 0; i < 10; i++) {
+            String id = base + i;
+            UpdateOp up = new UpdateOp(id, true);
+            up.set("_id", id);
+            boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
+            assertTrue("document with " + id + " not created", success);
+            removeMe.add(id);
+        }
+
+        List<String> result = getKeys(ds.query(Collection.NODES, base, base + "A", 5));
+        assertEquals(5, result.size());
+        assertTrue(result.contains(base + "4"));
+        assertFalse(result.contains(base + "5"));
+
+        result = getKeys(ds.query(Collection.NODES, base, base + "A", 20));
+        assertEquals(10, result.size());
+        assertTrue(result.contains(base + "0"));
+        assertTrue(result.contains(base + "9"));
+    }
+
+    @Test
+    public void testQueryCollation() {
+        // create ten documents
+        String base = this.getClass().getName() + ".testQueryCollation";
+        List<UpdateOp> creates = new ArrayList<UpdateOp>();
+
+        List<String>expected = new ArrayList<String>();
+        // test US-ASCII except control characters
+        for (char c : "!\"#$%&'()*+,-./0123456789:;<=>?@AZ[\\]^_`az{|}~".toCharArray()) {
+            String id = base + c;
+            UpdateOp up = new UpdateOp(id, true);
+            up.set("_id", id);
+            creates.add(up);
+            removeMe.add(id);
+            id = base + "/" + c;
+            up = new UpdateOp(id, true);
+            up.set("_id", id);
+            creates.add(up);
+            expected.add(id);
+            removeMe.add(id);
+        }
+        boolean success = super.ds.create(Collection.NODES, creates);
+        assertTrue("documents not created", success);
+
+        List<String> result = getKeys(ds.query(Collection.NODES, base + "/", base + "0", 1000));
+
+        List<String> diff = new ArrayList<String>();
+        diff.addAll(result);
+        diff.removeAll(expected);
+        if (! diff.isEmpty()) {
+            fail("unexpected query results (broken collation handling in persistence?): " + diff);
+        }
+
+        diff = new ArrayList<String>();
+        diff.addAll(expected);
+        diff.removeAll(result);
+        if (! diff.isEmpty()) {
+            fail("missing query results (broken collation handling in persistence?): " + diff);
+        }
+        assertEquals("incorrect result ordering in query result (broken collation handling in persistence?)", expected, result);
+    }
+
+    private List<String> getKeys(List<NodeDocument> docs) {
+        List<String> result = new ArrayList<String>();
+        for (NodeDocument doc : docs) {
+            result.add(doc.getId());
+        }
+        return result;
+    }
+
+    @Test
     public void testCreatePerfSmall() {
         createPerf(16);
     }
@@ -184,7 +260,7 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
             up.set("_id", id);
             up.set("foo", pval);
             boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
-            assertTrue("document with " + id + " nit created", success);
+            assertTrue("document with " + id + " not created", success);
             removeMe.add(id);
             cnt += 1;
         }

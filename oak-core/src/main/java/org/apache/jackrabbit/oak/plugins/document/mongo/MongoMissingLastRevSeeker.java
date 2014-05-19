@@ -33,7 +33,6 @@ import com.mongodb.ReadPreference;
 
 import org.apache.jackrabbit.oak.plugins.document.ClusterNodeInfo;
 import org.apache.jackrabbit.oak.plugins.document.Collection;
-import org.apache.jackrabbit.oak.plugins.document.Commit;
 import org.apache.jackrabbit.oak.plugins.document.Document;
 import org.apache.jackrabbit.oak.plugins.document.MissingLastRevSeeker;
 import org.apache.jackrabbit.oak.plugins.document.NodeDocument;
@@ -58,17 +57,16 @@ public class MongoMissingLastRevSeeker extends MissingLastRevSeeker {
             final long endTime) {
         DBObject query =
                 start(NodeDocument.MODIFIED_IN_SECS).lessThanEquals(
-                                Commit.getModifiedInSecs(endTime))
+                                NodeDocument.getModifiedInSecs(endTime))
                         .put(NodeDocument.MODIFIED_IN_SECS).greaterThanEquals(
-                                Commit.getModifiedInSecs(startTime))
+                                NodeDocument.getModifiedInSecs(startTime))
                         .get();
         DBObject sortFields = new BasicDBObject(NodeDocument.MODIFIED_IN_SECS, -1);
 
         DBCursor cursor =
                 getNodeCollection().find(query)
                         .sort(sortFields)
-                        .setReadPreference(
-                                ReadPreference.secondaryPreferred());
+                        .setReadPreference(ReadPreference.primary());
         return CloseableIterable.wrap(transform(cursor, new Function<DBObject, NodeDocument>() {
             @Override
             public NodeDocument apply(DBObject input) {

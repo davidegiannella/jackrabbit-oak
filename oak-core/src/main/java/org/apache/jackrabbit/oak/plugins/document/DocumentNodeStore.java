@@ -119,7 +119,7 @@ public final class DocumentNodeStore
      * How long to remember the relative order of old revision of all cluster
      * nodes, in milliseconds. The default is one hour.
      */
-    private static final int REMEMBER_REVISION_ORDER_MILLIS = 60 * 60 * 1000;
+    static final int REMEMBER_REVISION_ORDER_MILLIS = 60 * 60 * 1000;
 
     /**
      * The document store (might be used by multiple node stores).
@@ -280,7 +280,17 @@ public final class DocumentNodeStore
             if (blob instanceof BlobStoreBlob) {
                 return ((BlobStoreBlob) blob).getBlobId();
             }
+
             String id;
+
+            String reference = blob.getReference();
+            if(reference != null){
+                id = blobStore.getBlobId(reference);
+                if(id != null){
+                    return id;
+                }
+            }
+
             try {
                 id = createBlob(blob.getNewStream()).getBlobId();
             } catch (IOException e) {
@@ -299,6 +309,8 @@ public final class DocumentNodeStore
     private final Executor executor;
 
     private final LastRevRecoveryAgent lastRevRecoveryAgent;
+
+    private final boolean disableBranches;
 
     public DocumentNodeStore(DocumentMK.Builder builder) {
         this.blobStore = builder.getBlobStore();
@@ -332,6 +344,7 @@ public final class DocumentNodeStore
         this.asyncDelay = builder.getAsyncDelay();
         this.versionGarbageCollector = new VersionGarbageCollector(this);
         this.lastRevRecoveryAgent = new LastRevRecoveryAgent(this);
+        this.disableBranches = builder.isDisableBranches();
         this.missing = new DocumentNodeState(this, "MISSING", new Revision(0, 0, 0)) {
             @Override
             public int getMemory() {
@@ -398,6 +411,7 @@ public final class DocumentNodeStore
             leaseUpdateThread = new Thread(
                     new BackgroundLeaseUpdate(this, isDisposed),
                     "DocumentNodeStore lease update thread");
+            leaseUpdateThread.setDaemon(true);
             leaseUpdateThread.start();
         }
 
@@ -576,8 +590,16 @@ public final class DocumentNodeStore
         return docChildrenCacheStats;
     }
 
+    void invalidateDocChildrenCache() {
+        docChildrenCache.invalidateAll();
+    }
+
     public int getPendingWriteCount() {
         return unsavedLastRevisions.getPaths().size();
+    }
+
+    public boolean isDisableBranches() {
+        return disableBranches;
     }
 
     /**
@@ -796,6 +818,7 @@ public final class DocumentNodeStore
                 String p = PathUtils.concat(path, name);
                 NodeDocument doc = store.find(Collection.NODES, Utils.getIdFromPath(p));
                 if (doc == null) {
+                    docChildrenCache.invalidateAll();
                     throw new NullPointerException("Document " + p + " not found");
                 }
                 return doc;
@@ -834,7 +857,12 @@ public final class DocumentNodeStore
             @Override
             public DocumentNodeState apply(String input) {
                 String p = PathUtils.concat(parent.getPath(), input);
-                return getNode(p, readRevision);
+                DocumentNodeState result = getNode(p, readRevision);
+                if (result == null) {
+                    throw new MicroKernelException("DocumentNodeState is null for revision " + readRevision + " of " + p
+                            + " (aborting getChildNodes())");
+                }
+                return result;
             }
         });
     }
@@ -869,13 +897,19 @@ public final class DocumentNodeStore
                              List<String> removed, List<String> changed,
                              DiffCache.Entry cacheEntry) {
         UnsavedModifications unsaved = unsavedLastRevisions;
-        if (isBranchCommit) {
-            Revision branchRev = rev.asBranchRevision();
-            unsaved = branches.getBranch(branchRev).getModifications(branchRev);
-        }
-        if (isBranchCommit || pendingLastRev) {
-            // write back _lastRev with background thread
-            unsaved.put(path, rev);
+        if (disableBranches) {
+            if (pendingLastRev) {
+                unsaved.put(path, rev);
+            }
+        } else {
+            if (isBranchCommit) {
+                Revision branchRev = rev.asBranchRevision();
+                unsaved = branches.getBranch(branchRev).getModifications(branchRev);
+            }
+            if (isBranchCommit || pendingLastRev) {
+                // write back _lastRev with background thread
+                unsaved.put(path, rev);
+            }
         }
         if (isNew) {
             CacheValue key = childNodeCacheKey(path, rev, null);
@@ -1019,6 +1053,9 @@ public final class DocumentNodeStore
     Revision rebase(@Nonnull Revision branchHead, @Nonnull Revision base) {
         checkNotNull(branchHead);
         checkNotNull(base);
+        if (disableBranches) {
+            return branchHead;
+        }
         // TODO conflict handling
         Branch b = getBranches().getBranch(branchHead);
         if (b == null) {
@@ -1503,7 +1540,7 @@ public final class DocumentNodeStore
 
     private void diffManyChildren(JsopWriter w, String path, Revision fromRev, Revision toRev) {
         long minTimestamp = Math.min(fromRev.getTimestamp(), toRev.getTimestamp());
-        long minValue = Commit.getModifiedInSecs(minTimestamp);
+        long minValue = NodeDocument.getModifiedInSecs(minTimestamp);
         String fromKey = Utils.getKeyLowerLimit(path);
         String toKey = Utils.getKeyUpperLimit(path);
         Set<String> paths = Sets.newHashSet();

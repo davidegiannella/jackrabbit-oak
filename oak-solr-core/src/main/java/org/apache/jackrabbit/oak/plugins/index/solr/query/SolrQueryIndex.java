@@ -166,6 +166,11 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                         // cannot handle child-level property restrictions
                         continue;
                     }
+
+                    if ("rep:excerpt".equals(pr.propertyName)) {
+                        continue;
+                    }
+
                     String first = null;
                     if (pr.first != null) {
                         first = partialEscape(String.valueOf(pr.first.getValue(pr.first.getType()))).toString();
@@ -294,10 +299,10 @@ public class SolrQueryIndex implements FulltextQueryIndex {
                 if (p != null && p.indexOf('/') >= 0) {
                     p = getName(p);
                 }
-                if (p == null) {
+                if (p == null || "*".equals(p)) {
                     p = configuration.getCatchAllField();
                 }
-                fullTextString.append(p);
+                fullTextString.append(partialEscape(p));
                 fullTextString.append(':');
                 String termText = term.getText();
                 if (termText.indexOf(' ') > 0) {
@@ -332,7 +337,7 @@ public class SolrQueryIndex implements FulltextQueryIndex {
             solrQuery.setParam("df", catchAllField);
         }
 
-        solrQuery.setParam("rows", "100000");
+        solrQuery.setParam("rows", String.valueOf(configuration.getRows()));
     }
 
     private static String createRangeQuery(String first, String last, boolean firstIncluding, boolean lastIncluding) {

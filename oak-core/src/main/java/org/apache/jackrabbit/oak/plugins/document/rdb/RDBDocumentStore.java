@@ -386,6 +386,9 @@ public class RDBDocumentStore implements CachingDocumentStore {
                 T doc = collection.newDocument(this);
                 update.increment(MODCOUNT, 1);
                 UpdateUtils.applyChanges(doc, update, comparator);
+                if (!update.getId().equals(doc.getId())) {
+                    throw new MicroKernelException("ID mismatch - UpdateOp: " + update.getId() + ", ID property: " + doc.getId());
+                }
                 insertDocument(collection, doc);
                 addToCache(collection, doc);
             }
@@ -468,8 +471,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
                 }
 
                 return oldDoc;
-            }
-            finally {
+            } finally {
                 l.unlock();
             }
         }
@@ -668,7 +670,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
 
     // low level operations
 
-    private static byte[] GZIPSIG = {31, -117};
+    private static byte[] GZIPSIG = { 31, -117 };
     private static boolean NOGZIP = Boolean.getBoolean("org.apache.jackrabbit.oak.plugins.document.rdb.RDBDocumentStore.NOGZIP");
 
     private String getData(ResultSet rs, int stringIndex, int blobIndex) throws SQLException {
@@ -748,14 +750,11 @@ public class RDBDocumentStore implements CachingDocumentStore {
 
     private List<String> dbQuery(Connection connection, String tableName, String minId, String maxId, String indexedProperty,
             long startValue, int limit) throws SQLException {
-        String t = "select DATA, BDATA from " + tableName + " where ID > ? and ID < ?";
+        String t = "select ID, DATA, BDATA from " + tableName + " where ID > ? and ID < ?";
         if (indexedProperty != null) {
             t += " and MODIFIED >= ?";
         }
         t += " order by ID";
-        if (limit != Integer.MAX_VALUE) {
-            t += " limit ?";
-        }
         PreparedStatement stmt = connection.prepareStatement(t);
         List<String> result = new ArrayList<String>();
         try {
@@ -766,11 +765,15 @@ public class RDBDocumentStore implements CachingDocumentStore {
                 stmt.setLong(si++, startValue);
             }
             if (limit != Integer.MAX_VALUE) {
-                stmt.setInt(si++, limit);
+                stmt.setFetchSize(limit);
             }
             ResultSet rs = stmt.executeQuery();
-            while (rs.next()) {
-                String data = getData(rs, 1, 2);
+            while (rs.next() && result.size() < limit) {
+                String id = rs.getString(1);
+                if (id.compareTo(minId) < 0 || id.compareTo(maxId) > 0) {
+                    throw new MicroKernelException("unexpected query result: '" + minId + "' < '" + id + "' < '" + maxId + "' - broken DB collation?");
+                }
+                String data = getData(rs, 2, 3);
                 result.add(data);
             }
         } finally {

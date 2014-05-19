@@ -90,6 +90,7 @@ import javax.jcr.UnsupportedRepositoryOperationException;
 import javax.jcr.security.Privilege;
 import javax.jcr.version.OnParentVersionAction;
 
+import com.google.common.base.Charsets;
 import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -104,24 +105,30 @@ import org.apache.jackrabbit.core.nodetype.NodeTypeRegistry;
 import org.apache.jackrabbit.core.persistence.PersistenceManager;
 import org.apache.jackrabbit.core.security.authorization.PrivilegeRegistry;
 import org.apache.jackrabbit.core.security.user.UserManagerImpl;
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.namepath.GlobalNameMapper;
 import org.apache.jackrabbit.oak.namepath.NameMapper;
 import org.apache.jackrabbit.oak.plugins.index.CompositeIndexEditorProvider;
-import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
+import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
+import org.apache.jackrabbit.oak.plugins.index.IndexUpdate;
+import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.reference.ReferenceEditorProvider;
 import org.apache.jackrabbit.oak.plugins.name.NamespaceConstants;
 import org.apache.jackrabbit.oak.plugins.name.Namespaces;
 import org.apache.jackrabbit.oak.plugins.nodetype.TypeEditorProvider;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
+import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeBuilder;
 import org.apache.jackrabbit.oak.security.SecurityProviderImpl;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.CompositeHook;
+import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
+import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
 import org.apache.jackrabbit.oak.spi.lifecycle.RepositoryInitializer;
 import org.apache.jackrabbit.oak.spi.security.ConfigurationParameters;
 import org.apache.jackrabbit.oak.spi.security.SecurityConfiguration;
@@ -236,9 +243,10 @@ public class RepositoryUpgrade {
         logger.info(
                 "Copying repository content from {} to Oak", config.getHomeDir());
         try {
-            NodeBuilder builder = target.getRoot().builder();
+            NodeState base = target.getRoot();
+            NodeBuilder builder = base.builder();
 
-            String workspace =
+            String workspaceName =
                     source.getRepositoryConfig().getDefaultWorkspaceName();
             SecurityProviderImpl security = new SecurityProviderImpl(
                     mapSecurityConfig(config.getSecurityConfig()));
@@ -249,7 +257,7 @@ public class RepositoryUpgrade {
                 initializer.initialize(builder);
             }
             for (SecurityConfiguration sc : security.getConfigurations()) {
-                sc.getWorkspaceInitializer().initialize(builder, workspace);
+                sc.getWorkspaceInitializer().initialize(builder, workspaceName);
             }
 
             HashBiMap<String, String> uriToPrefix = HashBiMap.create();
@@ -258,9 +266,15 @@ public class RepositoryUpgrade {
             copyNodeTypes(builder, uriToPrefix.inverse());
             copyPrivileges(builder);
 
+            // Triggers compilation of type information, which we need for
+            // the type predicates used by the bulk  copy operations below.
+            new TypeEditorProvider(false).getRootEditor(
+                    base, builder.getNodeState(), builder, null);
+
+            Map<String, String> versionablePaths = newHashMap();
             NodeState root = builder.getNodeState();
-            copyVersionStore(builder, root, uriToPrefix, idxToPrefix);
-            copyWorkspace(builder, root, workspace, uriToPrefix, idxToPrefix);
+            copyWorkspace(builder, root, workspaceName, uriToPrefix, idxToPrefix, versionablePaths);
+            copyVersionStore(builder, root, workspaceName, uriToPrefix, idxToPrefix, versionablePaths);
 
             logger.info("Applying default commit hooks");
             // TODO: default hooks?
@@ -279,20 +293,56 @@ public class RepositoryUpgrade {
 
             // security-related hooks
             for (SecurityConfiguration sc : security.getConfigurations()) {
-                hooks.addAll(sc.getCommitHooks(workspace));
+                hooks.addAll(sc.getCommitHooks(workspaceName));
             }
 
             // type validation, reference and indexing hooks
             hooks.add(new EditorHook(new CompositeEditorProvider(
-                            new TypeEditorProvider(false),
-                            new IndexUpdateProvider(new CompositeIndexEditorProvider(
-                                    new ReferenceEditorProvider(),
-                                    new PropertyIndexEditorProvider())))));
+                createTypeEditorProvider(),
+                createIndexEditorProvider()
+            )));
 
             target.merge(builder, CompositeHook.compose(hooks), CommitInfo.EMPTY);
         } catch (Exception e) {
             throw new RepositoryException("Failed to copy content", e);
         }
+    }
+
+    private static EditorProvider createTypeEditorProvider() {
+        return new EditorProvider() {
+            @Override
+            public Editor getRootEditor(NodeState before, NodeState after, NodeBuilder builder, CommitInfo info)
+                    throws CommitFailedException {
+                Editor rootEditor = new TypeEditorProvider(false)
+                        .getRootEditor(before, after, builder, info);
+                return ProgressNotificationEditor.wrap(rootEditor, logger, "Checking node types:");
+            }
+        };
+    }
+
+    private static EditorProvider createIndexEditorProvider() {
+        final ProgressTicker ticker = new AsciiArtTicker();
+        return new EditorProvider() {
+            @Override
+            public Editor getRootEditor(NodeState before, NodeState after, NodeBuilder builder, CommitInfo info) {
+                IndexEditorProvider editorProviders = new CompositeIndexEditorProvider(
+                        new ReferenceEditorProvider(),
+                        new PropertyIndexEditorProvider());
+
+                return new IndexUpdate(editorProviders, null, after, builder, new IndexUpdateCallback() {
+                    String progress = "Updating indexes ";
+                    long t0;
+                    @Override
+                    public void indexUpdate() {
+                        long t = System.currentTimeMillis();
+                        if (t - t0 > 2000) {
+                            logger.info("{} {}", progress, ticker.tick());
+                            t0 = t ;
+                        }
+                    }
+                });
+            }
+        };
     }
 
     protected ConfigurationParameters mapSecurityConfig(SecurityConfig config) {
@@ -716,46 +766,81 @@ public class RepositoryUpgrade {
     }
 
     private void copyVersionStore(
-            NodeBuilder builder, NodeState root,
-            Map<String, String> uriToPrefix, Map<Integer, String> idxToPrefix)
+            NodeBuilder builder, NodeState root, String workspaceName,
+            Map<String, String> uriToPrefix, Map<Integer, String> idxToPrefix,
+            Map<String, String> versionablePaths)
             throws RepositoryException, IOException {
-        logger.info("Copying version histories");
-
         PersistenceManager pm =
                 source.getInternalVersionManager().getPersistenceManager();
-
         NodeBuilder system = builder.child(JCR_SYSTEM);
-        system.setChildNode(JCR_VERSIONSTORAGE, new JackrabbitNodeState(
+
+        logger.info("Copying version histories");
+        copyState(system, JCR_VERSIONSTORAGE, new JackrabbitNodeState(
                 pm, root, uriToPrefix, VERSION_STORAGE_NODE_ID,
-                "/jcr:system/jcr:versionStorage", copyBinariesByReference));
-        system.setChildNode("jcr:activities", new JackrabbitNodeState(
+                "/jcr:system/jcr:versionStorage",
+                workspaceName, versionablePaths, copyBinariesByReference));
+
+        logger.info("Copying activities");
+        copyState(system, "jcr:activities", new JackrabbitNodeState(
                 pm, root, uriToPrefix, ACTIVITIES_NODE_ID,
-                "/jcr:system/jcr:activities", copyBinariesByReference));
-    }   
+                "/jcr:system/jcr:activities",
+                workspaceName, versionablePaths, copyBinariesByReference));
+    }
 
     private String copyWorkspace(
-            NodeBuilder builder, NodeState root, String name,
-            Map<String, String> uriToPrefix, Map<Integer, String> idxToPrefix)
+            NodeBuilder builder, NodeState root, String workspaceName,
+            Map<String, String> uriToPrefix, Map<Integer, String> idxToPrefix,
+            Map<String, String> versionablePaths)
             throws RepositoryException, IOException {
-        logger.info("Copying workspace {}", name);
+        logger.info("Copying workspace {}", workspaceName);
 
         PersistenceManager pm =
-                source.getWorkspaceInfo(name).getPersistenceManager();
+                source.getWorkspaceInfo(workspaceName).getPersistenceManager();
 
         NodeState state = new JackrabbitNodeState(
-                pm, root, uriToPrefix, ROOT_NODE_ID, "/", copyBinariesByReference);
+                pm, root, uriToPrefix, ROOT_NODE_ID, "/",
+                workspaceName, versionablePaths, copyBinariesByReference);
+
         for (PropertyState property : state.getProperties()) {
             builder.setProperty(property);
         }
         for (ChildNodeEntry child : state.getChildNodeEntries()) {
             String childName = child.getName();
             if (!JCR_SYSTEM.equals(childName)) {
-                builder.setChildNode(childName, child.getNodeState());
+                logger.info("Copying subtree /{}", childName);
+                copyState(builder, childName, child.getNodeState());
             }
         }
 
-        return name;
+        return workspaceName;
     }
 
+    private void copyState(NodeBuilder parent, String name, NodeState state) {
+        if (parent instanceof SegmentNodeBuilder) {
+            parent.setChildNode(name, state);
+        } else {
+            setChildNode(parent, name, state);
+        }
+    }
+
+    /**
+     * NodeState are copied by value by recursing down the complete tree
+     * This is a temporary approach for OAK-1760 for 1.0 branch.
+     */
+    private void setChildNode(NodeBuilder parent, String name, NodeState state) {
+        // OAK-1589: maximum supported length of name for DocumentNodeStore
+        // is 150 bytes. Skip the sub tree if the the name is too long
+        if (name.length() > 37 && name.getBytes(Charsets.UTF_8).length > 150) {
+            logger.warn("Node name too long. Skipping {}", state);
+            return;
+        }
+        NodeBuilder builder = parent.setChildNode(name);
+        for (PropertyState property : state.getProperties()) {
+            builder.setProperty(property);
+        }
+        for (ChildNodeEntry child : state.getChildNodeEntries()) {
+            setChildNode(builder, child.getName(), child.getNodeState());
+        }
+    }
 
 }

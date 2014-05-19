@@ -49,11 +49,18 @@ import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.stats.Clock;
+import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.google.common.collect.Iterables;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.jackrabbit.oak.api.CommitFailedException.CONSTRAINT;
+import static org.apache.jackrabbit.oak.plugins.document.Collection.NODES;
+import static org.apache.jackrabbit.oak.plugins.document.NodeDocument.MODIFIED_IN_SECS;
+import static org.apache.jackrabbit.oak.plugins.document.NodeDocument.MODIFIED_IN_SECS_RESOLUTION;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -61,6 +68,11 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class DocumentNodeStoreTest {
+
+    @After
+    public void tearDown() {
+        Revision.resetClockToDefault();
+    }
 
     // OAK-1254
     @Test
@@ -335,6 +347,186 @@ public class DocumentNodeStoreTest {
         }
 
         ns.dispose();
+    }
+
+    // OAK-1814
+    @Test
+    public void visibilityAfterRevisionComparatorPurge() throws Exception {
+        Clock clock = new Clock.Virtual();
+        clock.waitUntil(System.currentTimeMillis());
+        Revision.setClock(clock);
+        MemoryDocumentStore docStore = new MemoryDocumentStore();
+        DocumentNodeStore nodeStore1 = new DocumentMK.Builder()
+                .setDocumentStore(docStore).setClusterId(1)
+                .setAsyncDelay(0).clock(clock).getNodeStore();
+        nodeStore1.runBackgroundOperations();
+        DocumentNodeStore nodeStore2 = new DocumentMK.Builder()
+                .setDocumentStore(docStore).setClusterId(2)
+                .setAsyncDelay(0).clock(clock).getNodeStore();
+        DocumentNodeStore nodeStore3 = new DocumentMK.Builder()
+                .setDocumentStore(docStore).setClusterId(3)
+                .setAsyncDelay(0).clock(clock).getNodeStore();
+
+        NodeDocument doc = docStore.find(NODES, Utils.getIdFromPath("/"));
+        assertNotNull(doc);
+        Revision created = doc.getLocalDeleted().firstKey();
+        assertEquals(1, created.getClusterId());
+
+        clock.waitUntil(System.currentTimeMillis() +
+                DocumentNodeStore.REMEMBER_REVISION_ORDER_MILLIS / 2);
+
+        NodeBuilder builder = nodeStore2.getRoot().builder();
+        builder.setProperty("prop", "value");
+        nodeStore2.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        nodeStore2.runBackgroundOperations();
+
+        clock.waitUntil(System.currentTimeMillis() +
+                DocumentNodeStore.REMEMBER_REVISION_ORDER_MILLIS + 1000);
+        nodeStore3.runBackgroundOperations();
+
+        doc = docStore.find(NODES, Utils.getIdFromPath("/"));
+        assertNotNull(doc);
+        NodeState state = doc.getNodeAtRevision(nodeStore3,
+                nodeStore3.getHeadRevision(), null);
+        assertNotNull(state);
+
+        nodeStore1.dispose();
+        nodeStore2.dispose();
+        nodeStore3.dispose();
+    }
+
+    // OAK-1820
+    @Test
+    public void setLastRevOnCommitForNewNode() throws Exception {
+        DocumentNodeStore ns = new DocumentMK.Builder()
+                .setAsyncDelay(0).getNodeStore();
+        // add a first child node. this will set the children flag on root
+        // and move the commit root to the root
+        NodeBuilder builder = ns.getRoot().builder();
+        builder.child("foo");
+        ns.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        // the second time, the added node is also the commit root, this
+        // is the case we are interested in
+        builder = ns.getRoot().builder();
+        builder.child("bar");
+        ns.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        NodeDocument doc = ns.getDocumentStore().find(NODES,
+                Utils.getIdFromPath("/bar"));
+        assertEquals(1, doc.getLastRev().size());
+
+        ns.dispose();
+    }
+
+    @Ignore("OAK-1822")
+    @Test
+    public void modifiedReset() throws Exception {
+        Clock clock = new Clock.Virtual();
+        clock.waitUntil(System.currentTimeMillis());
+        Revision.setClock(clock);
+        MemoryDocumentStore docStore = new MemoryDocumentStore();
+        DocumentNodeStore ns1 = new DocumentMK.Builder()
+                .setDocumentStore(docStore).setClusterId(1)
+                .setAsyncDelay(0).clock(clock).getNodeStore();
+        NodeBuilder builder1 = ns1.getRoot().builder();
+        builder1.child("node");
+        ns1.merge(builder1, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        ns1.runBackgroundOperations();
+
+        DocumentNodeStore ns2 = new DocumentMK.Builder()
+                .setDocumentStore(docStore).setClusterId(2)
+                .setAsyncDelay(0).clock(clock).getNodeStore();
+
+        NodeBuilder builder2 = ns2.getRoot().builder();
+        builder2.child("node").child("child-2");
+        ns2.merge(builder2, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        // wait at least _modified resolution. in reality the wait may
+        // not be necessary. e.g. when the clock passes the resolution boundary
+        // exactly at this time
+        clock.waitUntil(System.currentTimeMillis() +
+                SECONDS.toMillis(MODIFIED_IN_SECS_RESOLUTION + 1));
+
+        builder1 = ns1.getRoot().builder();
+        builder1.child("node").child("child-1");
+        ns1.merge(builder1, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        ns1.runBackgroundOperations();
+
+        // get current _modified timestamp on /node
+        NodeDocument doc = docStore.find(NODES, Utils.getIdFromPath("/node"));
+        Long mod1 = (Long) doc.get(MODIFIED_IN_SECS);
+        assertNotNull(mod1);
+
+        ns2.runBackgroundOperations();
+
+        doc = docStore.find(NODES, Utils.getIdFromPath("/node"));
+        Long mod2 = (Long) doc.get(MODIFIED_IN_SECS);
+        assertTrue("" + mod2 + " < " + mod1, mod2 >= mod1);
+
+        ns1.dispose();
+        ns2.dispose();
+    }
+
+    @Ignore("OAK-1822")
+    @Test
+    public void modifiedResetWithDiff() throws Exception {
+        Clock clock = new Clock.Virtual();
+        clock.waitUntil(System.currentTimeMillis());
+        Revision.setClock(clock);
+        MemoryDocumentStore docStore = new MemoryDocumentStore();
+        DocumentNodeStore ns1 = new DocumentMK.Builder()
+                .setDocumentStore(docStore).setClusterId(1)
+                .setAsyncDelay(0).clock(clock)
+                // use a no-op diff cache to simulate a cache miss
+                // when the diff is made later in the test
+                .setDiffCache(AmnesiaDiffCache.INSTANCE)
+                .getNodeStore();
+        NodeBuilder builder1 = ns1.getRoot().builder();
+        builder1.child("node");
+        for (int i = 0; i < DocumentMK.MANY_CHILDREN_THRESHOLD; i++) {
+            builder1.child("node-" + i);
+        }
+        ns1.merge(builder1, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        // make sure commit is visible to other node store instance
+        ns1.runBackgroundOperations();
+
+        DocumentNodeStore ns2 = new DocumentMK.Builder()
+                .setDocumentStore(docStore).setClusterId(2)
+                .setAsyncDelay(0).clock(clock).getNodeStore();
+
+        NodeBuilder builder2 = ns2.getRoot().builder();
+        builder2.child("node").child("child-a");
+        ns2.merge(builder2, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        // wait at least _modified resolution. in reality the wait may
+        // not be necessary. e.g. when the clock passes the resolution boundary
+        // exactly at this time
+        clock.waitUntil(System.currentTimeMillis() +
+                SECONDS.toMillis(MODIFIED_IN_SECS_RESOLUTION + 1));
+
+        builder1 = ns1.getRoot().builder();
+        builder1.child("node").child("child-b");
+        ns1.merge(builder1, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        // remember root for diff
+        DocumentNodeState root1 = ns1.getRoot();
+
+        builder1 = root1.builder();
+        builder1.child("node").child("child-c");
+        ns1.merge(builder1, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        // remember root for diff
+        DocumentNodeState root2 = ns1.getRoot();
+
+        ns1.runBackgroundOperations();
+        ns2.runBackgroundOperations();
+
+        String diff = ns1.diffChildren(root2, root1);
+        // must report /node as changed
+        assertEquals("^\"node\":{}", diff);
+
+        ns1.dispose();
+        ns2.dispose();
     }
 
     private static class TestHook extends EditorHook {

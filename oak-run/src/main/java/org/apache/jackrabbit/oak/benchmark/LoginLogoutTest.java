@@ -34,7 +34,7 @@ public class LoginLogoutTest extends AbstractTest {
     @Override
     public void runTest() throws RepositoryException {
         Repository repository = getRepository();
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < LoginUserTest.COUNT; i++) {
             Session session = repository.login(getCredentials());
             try {
                 session.getRootNode();

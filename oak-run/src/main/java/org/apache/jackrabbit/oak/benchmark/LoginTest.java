@@ -24,7 +24,7 @@ import javax.jcr.SimpleCredentials;
 
 public class LoginTest extends AbstractTest {
 
-    private final Session[] sessions = new Session[1000];
+    private final Session[] sessions = new Session[LoginUserTest.COUNT];
 
     @Override
     public void setUp(Repository repository, Credentials credentials)

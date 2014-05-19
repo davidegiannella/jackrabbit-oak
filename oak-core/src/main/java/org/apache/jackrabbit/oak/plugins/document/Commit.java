@@ -23,7 +23,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
@@ -83,18 +82,6 @@ public class Commit {
             operations.put(path, op);
         }
         return op;
-    }
-
-    /**
-     * Return time in seconds with 5 second resolution
-     *
-     * @param timestamp time in millis to convert
-     * @return
-     */
-    public static long getModifiedInSecs(long timestamp) {
-        // 5 second resolution
-        long timeInSec = TimeUnit.MILLISECONDS.toSeconds(timestamp);
-        return timeInSec - timeInSec % 5;
     }
 
     /**
@@ -167,7 +154,7 @@ public class Commit {
         Revision baseRev = getBaseRevision();
         boolean isBranch = baseRev != null && baseRev.isBranch();
         Revision rev = getRevision();
-        if (isBranch) {
+        if (isBranch && !nodeStore.isDisableBranches()) {
             rev = rev.asBranchRevision();
             // remember branch commit
             Branch b = nodeStore.getBranches().getBranch(baseRev);
@@ -191,6 +178,9 @@ public class Commit {
             }
         } else {
             applyInternal();
+        }
+        if (isBranch) {
+            rev = rev.asBranchRevision();
         }
         return rev;
     }
@@ -275,6 +265,8 @@ public class Commit {
             }
         }
         int commitRootDepth = PathUtils.getDepth(commitRootPath);
+        // check if there are real changes on the commit root
+        boolean commitRootHasChanges = operations.containsKey(commitRootPath);
         // create a "root of the commit" if there is none
         UpdateOp commitRoot = getUpdateOperationForNode(commitRootPath);
         for (String p : operations.keySet()) {
@@ -283,7 +275,10 @@ public class Commit {
                 NodeDocument.setDeleted(op, revision, false);
             }
             if (op == commitRoot) {
-                // apply at the end
+                if (!op.isNew() && commitRootHasChanges) {
+                    // commit root already exists and this is an update
+                    changedNodes.add(op);
+                }
             } else {
                 NodeDocument.setCommitRoot(op, revision, commitRootDepth);
                 if (op.isNew()) {
@@ -304,6 +299,7 @@ public class Commit {
             // it is the root of a subtree added in a commit.
             // so we try to add the root like all other nodes
             NodeDocument.setRevision(commitRoot, revision, commitValue);
+            NodeDocument.setLastRev(commitRoot, revision);
             newNodes.add(commitRoot);
         }
         try {
@@ -327,11 +323,10 @@ public class Commit {
                 }
             }
             for (UpdateOp op : changedNodes) {
-                // set commit root on changed nodes unless it's the
-                // commit root itself
-                if (op != commitRoot) {
-                    NodeDocument.setCommitRoot(op, revision, commitRootDepth);
-                }
+                // set commit root on changed nodes. this may even apply
+                // to the commit root. the _commitRoot entry is removed
+                // again when the _revisions entry is set at the end
+                NodeDocument.setCommitRoot(op, revision, commitRootDepth);
                 opLog.add(op);
                 createOrUpdateNode(store, op);
             }
@@ -340,7 +335,12 @@ public class Commit {
             // first to check if there was a conflict, and only then to commit
             // the revision, with the revision property set)
             if (changedNodes.size() > 0 || !commitRoot.isNew()) {
+                // set revision to committed
                 NodeDocument.setRevision(commitRoot, revision, commitValue);
+                if (commitRootHasChanges) {
+                    // remove previously added commit root
+                    NodeDocument.removeCommitRoot(commitRoot, revision);
+                }
                 opLog.add(commitRoot);
                 if (baseBranchRevision == null) {
                     // create a clone of the commitRoot in order
@@ -554,7 +554,7 @@ public class Commit {
             // or document did not exist before
             return false;
         }
-        return doc.isConflicting(op, baseRevision, nodeStore);
+        return doc.isConflicting(op, baseRevision, revision, nodeStore);
     }
 
     /**
