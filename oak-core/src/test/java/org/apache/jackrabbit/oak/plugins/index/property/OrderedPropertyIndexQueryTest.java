@@ -26,6 +26,7 @@ import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_N
 import static org.junit.Assert.assertNotNull;
 
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Iterator;
@@ -38,6 +39,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyValue;
@@ -172,7 +174,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         Calendar searchForCalendar = (Calendar) start.clone();
         searchForCalendar.add(Calendar.HOUR_OF_DAY, 36);
-        String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+        String searchFor = new SimpleDateFormat(ISO_8601_2000).format(searchForCalendar.getTime());
         Map<String, PropertyValue> filter = ImmutableMap.of(ORDERED_PROPERTY,
             PropertyValues.newDate(searchFor));
         Iterator<? extends ResultRow> results = executeQuery(
@@ -211,7 +213,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         Calendar searchForCalendar = (Calendar) start.clone();
         searchForCalendar.add(Calendar.HOUR_OF_DAY, 36);
-        String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+        String searchFor = new SimpleDateFormat(ISO_8601_2000).format(searchForCalendar.getTime());
         Map<String, PropertyValue> filter = ImmutableMap.of(ORDERED_PROPERTY,
             PropertyValues.newDate(searchFor));
         Iterator<? extends ResultRow> results = executeQuery(
@@ -251,7 +253,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         Calendar searchForCalendar = (Calendar) start.clone();
         searchForCalendar.add(Calendar.HOUR_OF_DAY, -36);
-        String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+        String searchFor = new SimpleDateFormat(ISO_8601_2000).format(searchForCalendar.getTime());
 
         // re-sorting ascending as the index is ASC and the results will be returned as ASC
         Collections.sort(nodes);
@@ -307,7 +309,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         Calendar searchForCalendar = (Calendar) start.clone();
         searchForCalendar.add(Calendar.HOUR_OF_DAY, -36);
-        String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+        String searchFor = new SimpleDateFormat(ISO_8601_2000).format(searchForCalendar.getTime());
         
         // re-sorting ascending as the index is ASC and the results will be returned as ASC
         Collections.sort(nodes);
@@ -675,7 +677,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         Calendar searchForCalendar = (Calendar) start.clone();
         searchForCalendar.add(Calendar.HOUR_OF_DAY, 36);
-        String searchFor = ISO_8601_2000.format(searchForCalendar.getTime());
+        String searchFor = new SimpleDateFormat(ISO_8601_2000).format(searchForCalendar.getTime());
         Iterator<? extends ResultRow> results = executeQuery(String.format(query, searchFor), SQL2,
             null).getRows().iterator();
         Iterator<ValuePathTuple> filtered = Iterables.filter(nodes,
@@ -709,12 +711,13 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         Calendar searchForCalendarStart = (Calendar) start.clone();
         searchForCalendarStart.add(Calendar.HOUR_OF_DAY, 36);
-        String searchForStart = ISO_8601_2000.format(searchForCalendarStart.getTime());
+        SimpleDateFormat sdf  = new SimpleDateFormat(ISO_8601_2000);
+        String searchForStart = sdf.format(searchForCalendarStart.getTime());
 
         Calendar endCalendar = Calendar.getInstance();
-        endCalendar.setTime(ISO_8601_2000.parse(nodes.get(nodes.size() - 1).getValue()));
+        endCalendar.setTime(sdf.parse(nodes.get(nodes.size() - 1).getValue()));
         endCalendar.add(Calendar.HOUR_OF_DAY, -36);
-        String searchForEnd = ISO_8601_2000.format(endCalendar.getTime());
+        String searchForEnd = sdf.format(endCalendar.getTime());
 
         Map<String, PropertyValue> filter = ImmutableMap.of("start",
             PropertyValues.newDate(searchForStart), "end", PropertyValues.newDate(searchForEnd));
@@ -754,12 +757,13 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         Calendar searchForCalendarStart = (Calendar) start.clone();
         searchForCalendarStart.add(Calendar.HOUR_OF_DAY, 36);
-        String searchForStart = ISO_8601_2000.format(searchForCalendarStart.getTime());
+        SimpleDateFormat sdf = new SimpleDateFormat(ISO_8601_2000);
+        String searchForStart = sdf.format(searchForCalendarStart.getTime());
 
         Calendar endCalendar = Calendar.getInstance();
-        endCalendar.setTime(ISO_8601_2000.parse(nodes.get(nodes.size() - 1).getValue()));
+        endCalendar.setTime(sdf.parse(nodes.get(nodes.size() - 1).getValue()));
         endCalendar.add(Calendar.HOUR_OF_DAY, -36);
-        String searchForEnd = ISO_8601_2000.format(endCalendar.getTime());
+        String searchForEnd = sdf.format(endCalendar.getTime());
 
         Map<String, PropertyValue> filter = ImmutableMap.of("start",
             PropertyValues.newDate(searchForStart), "end", PropertyValues.newDate(searchForEnd));
@@ -799,12 +803,13 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         
         Calendar searchForCalendarStart = (Calendar) start.clone();
         searchForCalendarStart.add(Calendar.HOUR_OF_DAY, 36);
-        String searchForStart = ISO_8601_2000.format(searchForCalendarStart.getTime());
+        SimpleDateFormat sdf = new SimpleDateFormat(ISO_8601_2000);
+        String searchForStart = sdf.format(searchForCalendarStart.getTime());
 
         Calendar endCalendar = Calendar.getInstance();
-        endCalendar.setTime(ISO_8601_2000.parse(nodes.get(nodes.size() - 1).getValue()));
+        endCalendar.setTime(sdf.parse(nodes.get(nodes.size() - 1).getValue()));
         endCalendar.add(Calendar.HOUR_OF_DAY, -36);
-        String searchForEnd = ISO_8601_2000.format(endCalendar.getTime());
+        String searchForEnd = sdf.format(endCalendar.getTime());
 
         Map<String, PropertyValue> filter = ImmutableMap.of("start",
             PropertyValues.newDate(searchForStart), "end", PropertyValues.newDate(searchForEnd));
@@ -844,12 +849,13 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
 
         Calendar searchForCalendarStart = (Calendar) start.clone();
         searchForCalendarStart.add(Calendar.HOUR_OF_DAY, 36);
-        String searchForStart = ISO_8601_2000.format(searchForCalendarStart.getTime());
+        SimpleDateFormat sdf = new SimpleDateFormat(ISO_8601_2000);
+        String searchForStart = sdf.format(searchForCalendarStart.getTime());
 
         Calendar endCalendar = Calendar.getInstance();
-        endCalendar.setTime(ISO_8601_2000.parse(nodes.get(nodes.size() - 1).getValue()));
+        endCalendar.setTime(sdf.parse(nodes.get(nodes.size() - 1).getValue()));
         endCalendar.add(Calendar.HOUR_OF_DAY, -36);
-        String searchForEnd = ISO_8601_2000.format(endCalendar.getTime());
+        String searchForEnd = sdf.format(endCalendar.getTime());
 
         Map<String, PropertyValue> filter = ImmutableMap.of("start",
             PropertyValues.newDate(searchForStart), "end", PropertyValues.newDate(searchForEnd));
