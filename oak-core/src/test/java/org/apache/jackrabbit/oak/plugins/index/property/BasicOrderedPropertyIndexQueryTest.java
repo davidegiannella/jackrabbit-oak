@@ -63,7 +63,7 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
     /**
      * formatter for date conversions
      */
-    protected static String ISO_8601_2000 = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"; 
+    protected static final String ISO_8601_2000 = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"; 
 
     /**
      * generate a list of values to be used as ordered set. Will return something like
