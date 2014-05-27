@@ -258,10 +258,11 @@ public class OrderedIndexConcurrentClusterIT {
         session.save();
         
         if (exceptions.isEmpty()) {
-            // temporary sleep for allowing the cluster to synch otherwise we could get a
+            // ensuring the cluster is aligned before triggering in order to avoid any
             // PathNotFoundException
-            // TODO can we find something better than a sleep?
-            Thread.sleep(2000);
+            for (DocumentMK mk : mks) {
+                mk.getNodeStore().runBackgroundOperations();
+            }
             for (Thread t : workers) {
                 t.start();
             }
