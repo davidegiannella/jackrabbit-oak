@@ -721,34 +721,65 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             keepWalked = true;
         }
 
-        int lane = OrderedIndex.LANES - 1;
+        int lane;
         boolean stillLaning;
         String nextkey; 
         ChildNodeEntry next;
-        
-        do {
-            stillLaning = lane > 0;
-            nextkey = getPropertyNext(current, lane);
-            next = (Strings.isNullOrEmpty(nextkey)) 
-                ? null 
-                : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
-            if ((next == null || !walkingPredicate.apply(next)) && lane > 0) {
-                // if we're currently pointing to NIL or the next element does not fit the search
-                // but we still have lanes left, let's lower the lane;
-                lane--;
-            } else {
-                if (condition.apply(next)) {
-                    found = next;
+
+        if ((direction.isAscending() && condition instanceof PredicateLessThan)
+            || (direction.isDescending() && condition instanceof PredicateGreaterThan)) {
+            // we're asking for a <, <= query from ascending index or >, >= from descending
+            // we have to walk the lanes from bottom to up rather than up to bottom.
+            
+            lane = 0;
+            do {
+                stillLaning = lane < OrderedIndex.LANES;
+                nextkey = getPropertyNext(current, lane);
+                next = (Strings.isNullOrEmpty(nextkey)) 
+                    ? null 
+                    : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
+                if ((next == null || !walkingPredicate.apply(next)) && lane < OrderedIndex.LANES) {
+                    // if we're currently pointing to NIL or the next element does not fit the search
+                    // but we still have lanes left
+                    lane++;
                 } else {
-                    current = next;
-                    if (keepWalked && current != null) {
-                        for (int l = lane; l >= 0; l--) {
-                            walkedLanes[l] = current;
+                    if (condition.apply(next)) {
+                        found = next;
+                    } else {
+                        current = next;
+                        if (keepWalked && current != null) {
+                            walkedLanes[lane] = current;
                         }
                     }
                 }
-            }
-        } while (((next != null && walkingPredicate.apply(next)) || stillLaning) && (found == null));
+            } while (((next != null && walkingPredicate.apply(next)) || stillLaning) && (found == null));
+        } else {
+            lane = OrderedIndex.LANES - 1;
+            
+            do {
+                stillLaning = lane > 0;
+                nextkey = getPropertyNext(current, lane);
+                next = (Strings.isNullOrEmpty(nextkey)) 
+                    ? null 
+                    : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
+                if ((next == null || !walkingPredicate.apply(next)) && lane > 0) {
+                    // if we're currently pointing to NIL or the next element does not fit the search
+                    // but we still have lanes left, let's lower the lane;
+                    lane--;
+                } else {
+                    if (condition.apply(next)) {
+                        found = next;
+                    } else {
+                        current = next;
+                        if (keepWalked && current != null) {
+                            for (int l = lane; l >= 0; l--) {
+                                walkedLanes[l] = current;
+                            }
+                        }
+                    }
+                }
+            } while (((next != null && walkingPredicate.apply(next)) || stillLaning) && (found == null));
+        }
         
         return found;
     }
