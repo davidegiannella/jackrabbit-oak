@@ -14,35 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.mk.test;
+package org.apache.jackrabbit.oak.plugins.document;
 
-import org.apache.jackrabbit.mk.api.MicroKernel;
-import org.apache.jackrabbit.mk.core.MicroKernelImpl;
+public abstract class AbstractMultiDocumentStoreTest extends AbstractDocumentStoreTest {
 
-public class MicroKernelImplFixture implements MicroKernelFixture {
+    protected DocumentStore ds1, ds2;
 
-    @Override
-    public boolean isAvailable() {
-        return true;
+    public AbstractMultiDocumentStoreTest(DocumentStoreFixture dsf) {
+        super(dsf);
+        this.ds1 = super.ds;
+        this.ds2 = dsf.createDocumentStore(2);
     }
-
-    @Override
-    public void setUpCluster(MicroKernel[] cluster) {
-        MicroKernel mk = new MicroKernelImpl();
-        for (int i = 0; i < cluster.length; i++) {
-            cluster[i] = mk;
-        }
-    }
-
-    @Override
-    public void syncMicroKernelCluster(MicroKernel... nodes) {
-    }
-
-    @Override
-    public void tearDownCluster(MicroKernel[] cluster) {
-        for (int i = 0; i < cluster.length; i++) {
-            ((MicroKernelImpl) cluster[i]).dispose();
-        }
-    }
-
 }

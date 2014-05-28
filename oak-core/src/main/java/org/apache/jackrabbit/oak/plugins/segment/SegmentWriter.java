@@ -219,7 +219,7 @@ public class SegmentWriter {
                 data.put(buffer, buffer.length - length, length);
                 data.rewind();
             } else {
-                data = ByteBuffer.wrap(buffer);
+                data = ByteBuffer.wrap(buffer, buffer.length - length, length);
             }
             tracker.setSegment(id, new Segment(tracker, id, data));
 
@@ -715,6 +715,20 @@ public class SegmentWriter {
         }
 
         return writeStream(blob.getNewStream());
+    }
+
+    SegmentBlob writeExternalBlob(String blobId) throws IOException {
+        RecordId id = writeValueRecord(blobId);
+        return new SegmentBlob(id);
+    }
+
+    SegmentBlob writeLargeBlob(long length, List<RecordId> list) {
+        RecordId id = writeValueRecord(length, writeList(list));
+        return new SegmentBlob(id);
+    }
+
+    public synchronized void dropCache(){
+        records.clear();
     }
 
     /**

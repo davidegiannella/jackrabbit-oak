@@ -189,6 +189,27 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
     }
 
     @Test
+    public void testQueryBinary() {
+        // create ten documents
+        String base = this.getClass().getName() + ".testQueryBinary-";
+        for (int i = 0; i < 10; i++) {
+            String id = base + i;
+            UpdateOp up = new UpdateOp(id, true);
+            up.set("_id", id);
+            up.set(NodeDocument.HAS_BINARY_FLAG, i % 2L);
+            boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
+            assertTrue("document with " + id + " not created", success);
+            removeMe.add(id);
+        }
+
+        List<String> result = getKeys(ds.query(Collection.NODES, base, base + "Z", NodeDocument.HAS_BINARY_FLAG,
+                NodeDocument.HAS_BINARY_VAL, 1000));
+        assertEquals(5, result.size());
+        assertTrue(result.contains(base + "1"));
+        assertFalse(result.contains(base + "0"));
+    }
+
+    @Test
     public void testQueryCollation() {
         // create ten documents
         String base = this.getClass().getName() + ".testQueryCollation";
@@ -240,32 +261,43 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
 
     @Test
     public void testCreatePerfSmall() {
-        createPerf(16);
+        createPerf(16, 1);
+    }
+
+    @Test
+    public void testCreatePerfSmallBatch() {
+        createPerf(16, 64);
     }
 
     @Test
     public void testCreatePerfBig() {
-        createPerf(32 * 1024);
+        createPerf(32 * 1024, 1);
     }
 
-    private void createPerf(int size) {
+    private void createPerf(int size, int amount) {
         String pval = generateString(size);
         long duration = 1000;
         long end = System.currentTimeMillis() + duration;
         long cnt = 0;
+        List<String> ids = new ArrayList<String>();
 
         while (System.currentTimeMillis() < end) {
-            String id = this.getClass().getName() + ".testCreatePerf-" + size + "-" + cnt;
-            UpdateOp up = new UpdateOp(id, true);
-            up.set("_id", id);
-            up.set("foo", pval);
-            boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
-            assertTrue("document with " + id + " not created", success);
-            removeMe.add(id);
+            List<UpdateOp> ups = new ArrayList<UpdateOp>();
+            for (int i = 0; i < amount; i++) {
+                String id = this.getClass().getName() + ".testCreatePerf-" + size + "-" + cnt + "-" + i;
+                UpdateOp up = new UpdateOp(id, true);
+                up.set("_id", id);
+                up.set("foo", pval);
+                ups.add(up);
+                ids.add(id);
+            }
+            boolean success = super.ds.create(Collection.NODES, ups);
+            removeMe.addAll(ids);
+            assertTrue("documents with " + ids + " not created", success);
             cnt += 1;
         }
 
-        LOG.info("document creation with property of size " + size + " for " + super.dsname + " was " + cnt + " in " + duration + "ms ("
+        LOG.info("document creation with property of size " + size + " and batch size " + amount + " for " + super.dsname + " was " + cnt + " in " + duration + "ms ("
                 + (cnt / (duration / 1000f)) + "/s)");
     }
 

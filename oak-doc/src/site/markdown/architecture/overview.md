@@ -15,11 +15,23 @@
    limitations under the License.
   -->
 
-# The big picture
+Oak - The big picture
+--------------------------------------------------------------------------------
+
+TODO: Explain concepts: MVCC, Oak modules and plugins, key APIs, ...
 
 ![The big picture](big-picture.png?raw=true)
 
-TODO: Explain concepts: MVCC, Oak modules and plugins, key APIs, ...
+## Main Concepts
+
+* [Node State Model](nodestate.html)
+* [Transactional Model](transactional-model.html)
+
+## The APIs
+
+* [JCR](http://www.day.com/specs/jcr/2.0/index.html)
+* [Oak API](../oak_api/overview.html)
+* [NodeStore API](../nodestore/overview.html)
 
 ## Readmes
 

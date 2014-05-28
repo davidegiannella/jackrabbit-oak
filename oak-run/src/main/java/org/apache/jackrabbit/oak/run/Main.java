@@ -17,10 +17,12 @@
 package org.apache.jackrabbit.oak.run;
 
 import static com.google.common.collect.Sets.newHashSet;
+import static java.util.Arrays.asList;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -39,15 +41,19 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientURI;
+
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+
 import org.apache.jackrabbit.core.RepositoryContext;
 import org.apache.jackrabbit.core.config.RepositoryConfig;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.benchmark.BenchmarkRunner;
 import org.apache.jackrabbit.oak.commons.PathUtils;
+import org.apache.jackrabbit.oak.console.Console;
+import org.apache.jackrabbit.oak.explorer.Explorer;
 import org.apache.jackrabbit.oak.fixture.OakFixture;
 import org.apache.jackrabbit.oak.http.OakServlet;
 import org.apache.jackrabbit.oak.jcr.Jcr;
@@ -99,8 +105,14 @@ public class Main {
             case BENCHMARK:
                 BenchmarkRunner.main(args);
                 break;
+            case CONSOLE:
+                Console.main(args);
+                break;
             case DEBUG:
                 debug(args);
+                break;
+            case COMPACT:
+                compact(args);
                 break;
             case SERVER:
                 server(URI, args);
@@ -110,7 +122,10 @@ public class Main {
                 break;
             case SCALABILITY:
                 ScalabilityRunner.main(args);
-                break;                
+                break;
+            case EXPLORE:
+                Explorer.main(args);
+                break;
             default:
                 System.err.println("Unknown command: " + mode);
                 System.exit(1);
@@ -155,6 +170,35 @@ public class Main {
         } else {
             System.err.println("usage: backup <repository> <backup>");
             System.exit(1);
+        }
+    }
+
+    private static void compact(String[] args) throws IOException {
+        if (args.length != 1) {
+            System.err.println("usage: compact <path>");
+            System.exit(1);
+        } else {
+            File directory = new File(args[0]);
+            FileStore store = new FileStore(directory, 256, false);
+            System.out.println("Compacting " + directory);
+
+            System.out.println("    before " + Arrays.toString(directory.list()));
+            try {
+                store.gc();
+                store.flush();
+                store.close();
+                System.gc();
+
+                store = new FileStore(directory, 256, false);
+                store.gc();
+                store.flush();
+
+                System.out
+                        .println("    after  " + Arrays.toString(directory.list()));
+            } finally {
+                store.close();
+            }
+
         }
     }
 
@@ -270,10 +314,10 @@ public class Main {
     private static void upgrade(String[] args) throws Exception {
         OptionParser parser = new OptionParser();
         parser.accepts("datastore", "keep data store");
-
+        OptionSpec<String> nonOption = parser.nonOptions();
         OptionSet options = parser.parse(args);
 
-        List<String> argList = options.nonOptionArguments();
+        List<String> argList = nonOption.values(options);
         if (argList.size() == 2 || argList.size() == 3) {
             File dir = new File(argList.get(0));
             File xml = new File(dir, "repository.xml");
@@ -341,12 +385,18 @@ public class Main {
         OptionSpec<Integer> port = parser.accepts("port", "MongoDB port").withRequiredArg().ofType(Integer.class).defaultsTo(27017);
         OptionSpec<String> dbName = parser.accepts("db", "MongoDB database").withRequiredArg();
         OptionSpec<Integer> clusterIds = parser.accepts("clusterIds", "Cluster Ids").withOptionalArg().ofType(Integer.class).withValuesSeparatedBy(',');
-
+        OptionSpec<String> nonOption = parser.nonOptions();
+        OptionSpec help = parser.acceptsAll(asList("h", "?", "help"), "show help").forHelp();
         OptionSet options = parser.parse(args);
+
+        if (options.has(help)) {
+            parser.printHelpOn(System.out);
+            System.exit(0);
+        }
 
         OakFixture oakFixture;
 
-        List<String> arglist = options.nonOptionArguments();
+        List<String> arglist = nonOption.values(options);
         String uri = (arglist.isEmpty()) ? defaultUri : arglist.get(0);
         String fix = (arglist.size() <= 1) ? OakFixture.OAK_MEMORY : arglist.get(1);
 
@@ -487,11 +537,14 @@ public class Main {
 
         BACKUP("backup"),
         BENCHMARK("benchmark"),
+        CONSOLE("debug"),
         DEBUG("debug"),
+        COMPACT("compact"),
         SERVER("server"),
         UPGRADE("upgrade"),
-        SCALABILITY("scalability");
-        
+        SCALABILITY("scalability"),
+        EXPLORE("explore");
+
         private final String name;
 
         Mode(String name) {

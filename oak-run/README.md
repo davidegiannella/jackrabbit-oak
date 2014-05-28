@@ -9,6 +9,7 @@ The following runmodes are currently available:
     * debug     : Print status information about an Oak repository.
     * upgrade   : Upgrade from Jackrabbit 2.x repository to Oak.
     * server    : Run the Oak Server
+    * console   : Start an interactive console
 
 See the subsections below for more details on how to use these modes.
 
@@ -29,6 +30,27 @@ store. Currently this is only supported for the TarMK. To start this mode, use:
 
     $ java -jar oak-run-*.jar debug /path/to/oak/repository [id...]
 
+Console
+-------
+
+The 'console' mode allows to work with an interactive console and browse an
+existing oak repository. Type 'help' within the console to get a list of all
+supported commands. The console currently supports TarMK and MongoMK. To start
+the console for a TarMK repository, use:
+
+    $ java -jar oak-run-*.jar console /path/to/oak/repository
+    
+To start the console for a MongoMK repository, use:
+
+    $ java -jar oak-run-*.jar console mongodb://host
+
+Compact
+-------
+
+The 'compact' mode runs the segment compaction operation on the provided TarMK
+repository. To start this mode, use:
+
+    $ java -jar oak-run-*.jar compact /path/to/oak/repository
 
 Upgrade
 -------
