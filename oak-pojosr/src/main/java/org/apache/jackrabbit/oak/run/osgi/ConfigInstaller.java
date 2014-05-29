@@ -27,7 +27,6 @@ import java.util.Set;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import org.apache.felix.utils.collections.DictionaryAsMap;
 import org.apache.felix.utils.properties.InterpolationHelper;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.Constants;
@@ -37,7 +36,7 @@ import org.osgi.service.cm.ConfigurationAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ConfigInstaller {
+class ConfigInstaller {
     private static final String MARKER_NAME = "oak.configinstall.name";
     private final Logger log = LoggerFactory.getLogger(getClass());
     private final ConfigurationAdmin cm;
