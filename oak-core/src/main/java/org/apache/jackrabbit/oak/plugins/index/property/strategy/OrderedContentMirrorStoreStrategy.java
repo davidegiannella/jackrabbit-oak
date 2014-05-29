@@ -260,8 +260,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 firstValueableItem = seek(index,
                     new PredicateGreaterThan(pr.first.getValue(Type.STRING), pr.firstIncluding));
                 if (firstValueableItem != null) {
-                    childrenIterable = new SeekedIterable(index, firstValueableItem);
-                    it = new QueryResultsWrapper(filter, indexName, childrenIterable);
+                    if (direction.isAscending()) {
+                        childrenIterable = new SeekedIterable(index, firstValueableItem);
+                        it = new QueryResultsWrapper(filter, indexName, childrenIterable);
+                    } else {
+                        it = new QueryResultsWrapper(filter, indexName, new BetweenIterable(index,
+                            firstValueableItem, pr.first.getValue(Type.STRING), pr.firstIncluding,
+                            direction));
+                    }
                 }
             } else {
                 String first, last;
