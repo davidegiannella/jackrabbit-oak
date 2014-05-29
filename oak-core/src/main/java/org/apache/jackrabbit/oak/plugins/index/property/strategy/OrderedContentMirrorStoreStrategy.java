@@ -311,8 +311,13 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             
             Iterable<String> it = Collections.emptyList();
             if (firstValueableItem != null) {
-                it = new QueryResultsWrapper(filter, indexName, new SeekedIterable(index,
-                    firstValueableItem));
+                if (direction.isAscending()) {
+                    it = new QueryResultsWrapper(filter, indexName, new BetweenIterable(index,
+                        firstValueableItem, searchfor, include, direction));
+                } else {
+                    it = new QueryResultsWrapper(filter, indexName, new SeekedIterable(index,
+                        firstValueableItem));
+                }
             }
             return it;
         } else {
@@ -538,9 +543,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     private static class FullIterator implements Iterator<ChildNodeEntry> {
         private boolean includeStart;
         private NodeState start;
-        private NodeState current;
+        NodeState current;
         private NodeState index;
-        private String currentName;
+        String currentName;
 
         public FullIterator(NodeState index, NodeState start, boolean includeStart,
                             NodeState current) {
@@ -650,6 +655,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             if (firstReturned) {
                 return super.next();
             } else {
+                currentName = first.getName();
+                current = first.getNodeState();
                 firstReturned = true;
                 return first;
             }
@@ -921,9 +928,17 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 
                 @Override
                 public boolean apply(String input) {
-                    return d.equals(OrderDirection.ASC) 
-                        ? v.compareTo(input) > 0 || (i && v.equals(input))
-                        : v.compareTo(input) < 0 || (i && v.equals(input));
+                    // splitting in multiple lines for easier debugging
+                    boolean compareTo, equals, apply;
+                    if (d.equals(OrderDirection.ASC)) {
+                        compareTo = v.compareTo(input) > 0;
+                    } else {
+                        compareTo = v.compareTo(input) < 0;
+                    }
+                    
+                    equals =  v.equals(input);
+                    apply = compareTo || (i && equals);
+                    return apply;
                 }
 
                 @Override
@@ -935,14 +950,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 
         @Override
         public boolean hasNext() {
-            boolean next = super.hasNext();
+            boolean hasNext = super.hasNext();
             String name = getCurrentName();
-
-            if (name != null && next) {
-                name = convert(name);
-                next = next && condition.apply(name);
+            
+            if (name != null && hasNext) {
+                String next = getPropertyNext(current);
+                hasNext = hasNext && condition.apply(next);
             }
-            return next;
+            return hasNext;
         }
     }
 

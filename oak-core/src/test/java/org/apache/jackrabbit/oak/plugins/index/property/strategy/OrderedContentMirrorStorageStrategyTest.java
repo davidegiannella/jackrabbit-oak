@@ -47,9 +47,12 @@ import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
+import org.apache.jackrabbit.oak.plugins.index.property.ValuePathTuple;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.OrderedChildNodeEntry;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.PredicateLessThan;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
+import org.apache.jackrabbit.oak.query.ast.Operator;
+import org.apache.jackrabbit.oak.query.index.FilterImpl;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
@@ -3279,6 +3282,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         // printing the elements
         NodeState current = index.getChildNode(START);
         sb.append("STR ");
+        
         String next = getNext(current);
         int position = 0;
         while (!Strings.isNullOrEmpty(next)) {
@@ -3489,5 +3493,82 @@ public class OrderedContentMirrorStorageStrategyTest {
         assertEquals(ImmutableList.of("", "", "", ""),
             getMultiNext(node.getNodeState()));
         assertFalse(node.getChildNode(KEYS[5]).exists());
+    }
+    
+    /**
+     * tests the query aspect of an item that falls int he middle of two lane jumps
+     */
+    @Test
+    public void queryMiddleItem() {
+        MockOrderedContentMirrorStoreStrategy ascending = new MockOrderedContentMirrorStoreStrategy(
+            OrderDirection.ASC);
+        MockOrderedContentMirrorStoreStrategy descending = new MockOrderedContentMirrorStoreStrategy(
+            OrderDirection.DESC);
+        NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
+        final String propertyName = "property";
+        Iterator<String> resultset;
+        FilterImpl filter;
+        NodeBuilder indexMeta;
+        
+        /* generating
+         * 
+         * STR 000 001 002 003 004 005 NIL
+         *  |-->o-->o-->o-->o-->o-->o-->|
+         *  |------>o------>o---------->|
+         *  |-------------->o---------->|
+         *  |-------------------------->|
+         */
+        ascending.setLane(0);
+        ascending.update(index, "/path/a", EMPTY_KEY_SET, newHashSet(KEYS[0]));
+        ascending.setLane(1);
+        ascending.update(index, "/path/b", EMPTY_KEY_SET, newHashSet(KEYS[1]));
+        ascending.setLane(0);
+        ascending.update(index, "/path/c", EMPTY_KEY_SET, newHashSet(KEYS[2]));
+        ascending.setLane(2);
+        ascending.update(index, "/path/d", EMPTY_KEY_SET, newHashSet(KEYS[3]));
+        ascending.setLane(0);
+        ascending.update(index, "/path/e", EMPTY_KEY_SET, newHashSet(KEYS[4]));
+        ascending.update(index, "/path/f", EMPTY_KEY_SET, newHashSet(KEYS[5]));
+
+        printSkipList(index.getNodeState());
+        
+        indexMeta = EmptyNodeState.EMPTY_NODE.builder();
+        indexMeta.setChildNode(IndexConstants.INDEX_CONTENT_NODE_NAME, index.getNodeState());
+
+        // querying >= 002
+        filter = new FilterImpl();
+        filter.restrictProperty(propertyName, Operator.GREATER_OR_EQUAL,
+            PropertyValues.newString(KEYS[2]));
+
+        resultset = ascending.query(filter, "indexName", indexMeta.getNodeState(),
+            filter.getPropertyRestriction(propertyName)).iterator();
+        
+        assertEquals("path/c", resultset.next());
+        assertEquals("path/d", resultset.next());
+        assertEquals("path/e", resultset.next());
+        assertEquals("path/f", resultset.next());
+        assertFalse("We should have not any results left", resultset.hasNext());
+        
+        //querying <= 002
+        filter = new FilterImpl();
+        filter.restrictProperty(propertyName, Operator.LESS_OR_EQUAL,
+            PropertyValues.newString(KEYS[2]));
+
+        if (LOG.isDebugEnabled()) {
+            resultset = ascending.query(filter, "indexName", indexMeta.getNodeState(),
+                filter.getPropertyRestriction(propertyName)).iterator();
+    
+            while (resultset.hasNext()) {
+                LOG.debug(resultset.next());
+            }
+        }
+        
+        resultset = ascending.query(filter, "indexName", indexMeta.getNodeState(),
+            filter.getPropertyRestriction(propertyName)).iterator();
+
+        assertEquals("path/a", resultset.next());
+        assertEquals("path/b", resultset.next());
+        assertEquals("path/c", resultset.next());
+        assertFalse("We should have not any results left", resultset.hasNext());
     }
 }
