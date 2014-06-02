@@ -36,7 +36,23 @@ public class OrderedPropertyIndexEditorProvider implements IndexEditorProvider, 
    @Override
    @CheckForNull
    public Editor getIndexEditor(@Nonnull String type, @Nonnull NodeBuilder definition, @Nonnull NodeState root, @Nonnull IndexUpdateCallback callback) throws CommitFailedException {
-      Editor editor = (TYPE.equals(type)) ? new OrderedPropertyIndexEditor(definition,root,callback) : null;
+      Version v;
+      Editor editor = null;
+      
+      if (TYPE.equals(type)) {
+          v = Version.fromString(definition.getString(PROP_VERSION));
+          if (v == null) {
+              v = Version.V1;
+          }
+          switch (v) {
+          case V1:
+                editor = new OrderedPropertyIndexEditor(definition, root, callback);
+              break;
+          case V2:
+              break;
+          }
+      }
+      
       return editor; 
    }
 }

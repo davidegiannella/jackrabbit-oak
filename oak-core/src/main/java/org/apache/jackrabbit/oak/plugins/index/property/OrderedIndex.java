@@ -17,6 +17,10 @@
 
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -103,6 +107,39 @@ public interface OrderedIndex {
         }
     };
     
+    enum Version {
+        V1("1"), V2("2");
+        
+        private String v;
+        private Version(@Nonnull final String v) {
+            this.v = v;
+        }
+        
+        @Override
+        public String toString() {
+            return v;
+        }
+        
+        
+        private static final Map<String, Version> MAP = Collections
+            .synchronizedMap(new HashMap<String, Version>());
+        static {
+            for (Version v : values()) {
+                MAP.put(v.toString(), v);
+            }
+        }
+        
+        /**
+         * retrieve the proper Version from a String. if not found {@code null} will be returned
+         * 
+         * @param v
+         * @return
+         */
+        @Nullable public static Version fromString(final String v) {
+            return (v == null) ? null : MAP.get(v);
+        }
+    };
+    
     String TYPE = "ordered";
     
     /**
@@ -116,4 +153,14 @@ public interface OrderedIndex {
      * the default direction for sorting the index
      */
     OrderDirection DEFAULT_DIRECTION = OrderDirection.ASC;
+    
+    /**
+     * default index algorithm
+     */
+    Version DEFAULT_VERSION = Version.V1;
+    
+    /**
+     * property that identify the implementation version of the index.
+     */
+    String PROP_VERSION = "version";
 }
