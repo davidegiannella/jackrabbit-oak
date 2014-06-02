@@ -35,7 +35,10 @@ public class OrderedPropertyIndexEditorProvider implements IndexEditorProvider, 
    
    @Override
    @CheckForNull
-   public Editor getIndexEditor(@Nonnull String type, @Nonnull NodeBuilder definition, @Nonnull NodeState root, @Nonnull IndexUpdateCallback callback) throws CommitFailedException {
+   public Editor getIndexEditor(@Nonnull String type, 
+                                @Nonnull NodeBuilder definition, 
+                                @Nonnull NodeState root, 
+                                @Nonnull IndexUpdateCallback callback) throws CommitFailedException {
       Version v;
       Editor editor = null;
       
