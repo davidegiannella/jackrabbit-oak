@@ -52,6 +52,7 @@ public class OrderedPropertyIndexEditorProvider implements IndexEditorProvider, 
                 editor = new OrderedPropertyIndexEditor(definition, root, callback);
               break;
           case V2:
+              editor = new OrderedPropertyIndexEditorV2(definition, root, callback);
               break;
           }
       }

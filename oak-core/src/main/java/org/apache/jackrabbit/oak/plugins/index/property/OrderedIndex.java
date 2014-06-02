@@ -107,6 +107,9 @@ public interface OrderedIndex {
         }
     };
     
+    /**
+     * used for discerning the correct implementation to use
+     */
     enum Version {
         V1("1"), V2("2");
         
