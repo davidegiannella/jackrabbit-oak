@@ -16,6 +16,9 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.UnsupportedCharsetException;
 import java.util.Collections;
 import java.util.Set;
 
@@ -36,6 +39,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Charsets;
 import com.google.common.collect.Sets;
 
 public class OrderedPropertyIndexEditorV2 implements IndexEditor {
@@ -106,7 +110,24 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
      * @return
      */
     static Set<String> encode(final PropertyValue pv) {
-        return null;
+        Set<String> set;
+        
+        if (pv == null) {
+            set = null;
+        } else {
+            // TODO consider different use-cases on type based on configuration. Date, Ints, etc.
+            set = Sets.newHashSet();
+            try {
+                for (String s : pv.getValue(Type.STRINGS)) {
+                    s = URLEncoder.encode(s, Charsets.UTF_8.name()).replaceAll("\\*", "%2A");
+                    set.add(s);
+                }
+            } catch (UnsupportedEncodingException e) {
+                throw new IllegalStateException("UTF-8 is unsupported", e);
+            }
+        }
+        
+        return set;
     }
     
     @Override

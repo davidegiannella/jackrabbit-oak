@@ -18,21 +18,30 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Set;
 
 import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.plugins.memory.StringBasedBlob;
+import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 
@@ -83,5 +92,32 @@ public class OrderedPropertyIndexEditorV2Test {
             Collections.EMPTY_LIST, Type.STRINGS)));
         assertFalse(editor.isToProcess(PropertyStates.createProperty(indexed, new StringBasedBlob(
             "justavalue"), Type.BINARY)));
+    }
+    
+    /**
+     * test the encoding of a property value
+     * @throws UnsupportedEncodingException 
+     */
+    @Test
+    public void encode() throws UnsupportedEncodingException {
+        PropertyValue pv;
+        
+        pv = null;
+        assertNull(OrderedPropertyIndexEditorV2.encode(pv));
+        
+        pv = PropertyValues.newString("foobar");
+        assertEquals(ImmutableSet.of("foobar"), OrderedPropertyIndexEditorV2.encode(pv));
+
+        pv = PropertyValues.newString("foobar bazbaz");
+        assertEquals(ImmutableSet.of(URLEncoder.encode("foobar bazbaz", Charsets.UTF_8.name())), OrderedPropertyIndexEditorV2.encode(pv));
+
+        pv = PropertyValues.newString("foobar*bazbaz");
+        assertEquals(ImmutableSet.of(URLEncoder.encode("foobar*bazbaz", Charsets.UTF_8.name()).replaceAll("\\*", "%2A")), OrderedPropertyIndexEditorV2.encode(pv));
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+        Calendar c = Calendar.getInstance();
+        String d = sdf.format(c.getTime());
+        pv = PropertyValues.newDate(d);
+        assertEquals(ImmutableSet.of(URLEncoder.encode(d, Charsets.UTF_8.name())), OrderedPropertyIndexEditorV2.encode(pv));
     }
 }
