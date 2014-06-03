@@ -69,53 +69,66 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     @Override
     public void enter(NodeState before, NodeState after) throws CommitFailedException {
         // TODO Auto-generated method stub
-
+        LOG.debug("enter()");
+        LOG.debug("-- before: {}", before);
+        LOG.debug("-- after: {}", after);
     }
 
     @Override
     public void leave(NodeState before, NodeState after) throws CommitFailedException {
         // TODO Auto-generated method stub
-
+        LOG.debug("leave()");
+        LOG.debug("-- before: {}", before);
+        LOG.debug("-- after: {}", after);
     }
 
     @Override
     public void propertyAdded(PropertyState after) throws CommitFailedException {
         // TODO Auto-generated method stub
-
+        LOG.debug("propertyAdded()");
+        LOG.debug("-- after: {}", after);
     }
 
     @Override
-    public void
-        propertyChanged(PropertyState before, PropertyState after) throws CommitFailedException {
+    public void propertyChanged(PropertyState before, PropertyState after) throws CommitFailedException {
         // TODO Auto-generated method stub
-
+        LOG.debug("propertyChanged()");
+        LOG.debug("-- before: {}", before);
+        LOG.debug("-- after: {}", after);
     }
 
     @Override
     public void propertyDeleted(PropertyState before) throws CommitFailedException {
         // TODO Auto-generated method stub
-
+        LOG.debug("propertyDeleted()");
+        LOG.debug("-- before: {}", before);
     }
 
     @Override
     public Editor childNodeAdded(String name, NodeState after) throws CommitFailedException {
         // TODO Auto-generated method stub
+        LOG.debug("childNodeAdded()");
+        LOG.debug("-- name: {}", name);
+        LOG.debug("-- after: {}", after);
         return null;
     }
 
     @Override
-    public
-        Editor
-        childNodeChanged(String name, NodeState before, NodeState after)
-                                                                        throws CommitFailedException {
+    public Editor childNodeChanged(String name, NodeState before, NodeState after) throws CommitFailedException {
         // TODO Auto-generated method stub
+        LOG.debug("childNodeChanged()");
+        LOG.debug("-- name: {}", name);
+        LOG.debug("-- before: {}", before);
+        LOG.debug("-- after: {}", after);
         return null;
     }
 
     @Override
     public Editor childNodeDeleted(String name, NodeState before) throws CommitFailedException {
         // TODO Auto-generated method stub
+        LOG.debug("childNodeDeleted()");
+        LOG.debug("-- name: {}", name);
+        LOG.debug("-- before: {}", before);
         return null;
     }
-
 }
