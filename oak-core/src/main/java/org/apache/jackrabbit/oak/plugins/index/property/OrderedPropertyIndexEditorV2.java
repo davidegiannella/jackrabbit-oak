@@ -19,6 +19,8 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 import java.util.Collections;
 import java.util.Set;
 
+import javax.annotation.Nonnull;
+
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
@@ -34,6 +36,7 @@ import org.slf4j.LoggerFactory;
 public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexEditorV2.class);
     
+    
     /**
      * the index definition
      */
@@ -43,9 +46,14 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
      * the propertyNames as by {@link #definition}
      */
     private final Set<String> propertyNames;
+
+    private OrderedPropertyIndexEditorV2 parent;
+    private final String name;
     
     public OrderedPropertyIndexEditorV2(NodeBuilder definition, NodeState root,
                                         IndexUpdateCallback callback) {
+        this.parent = null;
+        this.name = null;
         this.definition = definition;
 
         PropertyState pns = definition.getProperty(IndexConstants.PROPERTY_NAMES);
@@ -56,6 +64,13 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
                 pn);
         }
         this.propertyNames = Collections.singleton(pn);
+    }
+    
+    public OrderedPropertyIndexEditorV2(@Nonnull final OrderedPropertyIndexEditorV2 parent, @Nonnull final String name) {
+        this.parent = parent;
+        this.name = name;
+        this.definition = parent.definition;
+        this.propertyNames = parent.propertyNames;
     }
     
     /**
@@ -106,29 +121,24 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
 
     @Override
     public Editor childNodeAdded(String name, NodeState after) throws CommitFailedException {
-        // TODO Auto-generated method stub
-        LOG.debug("childNodeAdded()");
-        LOG.debug("-- name: {}", name);
-        LOG.debug("-- after: {}", after);
-        return null;
+        LOG.debug("childNodeAdded() - name: '{}'", name);
+        return childIndexEditor(this, name);
     }
 
     @Override
     public Editor childNodeChanged(String name, NodeState before, NodeState after) throws CommitFailedException {
-        // TODO Auto-generated method stub
-        LOG.debug("childNodeChanged()");
-        LOG.debug("-- name: {}", name);
-        LOG.debug("-- before: {}", before);
-        LOG.debug("-- after: {}", after);
-        return null;
+        LOG.debug("childNodeChanged() - name: '{}'", name);
+        return childIndexEditor(this, name);
     }
 
     @Override
     public Editor childNodeDeleted(String name, NodeState before) throws CommitFailedException {
-        // TODO Auto-generated method stub
-        LOG.debug("childNodeDeleted()");
-        LOG.debug("-- name: {}", name);
-        LOG.debug("-- before: {}", before);
-        return null;
+        LOG.debug("childNodeDeleted() - name: '{}'", name);
+        return childIndexEditor(this, name);
+    }
+    
+    OrderedPropertyIndexEditorV2 childIndexEditor(@Nonnull final OrderedPropertyIndexEditorV2 editor, 
+                                                  @Nonnull final String name) {
+        return new OrderedPropertyIndexEditorV2(editor, name);
     }
 }
