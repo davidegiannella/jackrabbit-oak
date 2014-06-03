@@ -20,18 +20,23 @@ import java.util.Collections;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
+import javax.jcr.PropertyType;
 
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexEditor;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
+import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Sets;
 
 public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexEditorV2.class);
@@ -46,6 +51,8 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
      * the propertyNames as by {@link #definition}
      */
     private final Set<String> propertyNames;
+    private Set<String> beforeKeys;
+    private Set<String> afterKeys;
 
     private OrderedPropertyIndexEditorV2 parent;
     private final String name;
@@ -80,13 +87,34 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     Set<String> getPropertyNames() {
         return propertyNames;
     }
+    
+    /**
+     * tells whether the current property has to be processed or not.
+     * 
+     * @param name
+     * @return
+     */
+    boolean isToProcess(@Nonnull final PropertyState state) {
+        return getPropertyNames().contains(state.getName()) && state.count() > 0
+               && PropertyType.BINARY != state.getType().tag();
+    }
 
+    /**
+     * encode the PropertyValue for being used by the Strategy
+     * 
+     * @param pv
+     * @return
+     */
+    static Set<String> encode(final PropertyValue pv) {
+        return null;
+    }
+    
     @Override
     public void enter(NodeState before, NodeState after) throws CommitFailedException {
-        // TODO Auto-generated method stub
         LOG.debug("enter()");
-        LOG.debug("-- before: {}", before);
-        LOG.debug("-- after: {}", after);
+        
+        beforeKeys = Sets.newHashSet();
+        afterKeys = Sets.newHashSet();
     }
 
     @Override
@@ -99,9 +127,13 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
 
     @Override
     public void propertyAdded(PropertyState after) throws CommitFailedException {
-        // TODO Auto-generated method stub
-        LOG.debug("propertyAdded()");
-        LOG.debug("-- after: {}", after);
+        boolean toProcess = isToProcess(after);
+
+        LOG.debug("propertyAdded() - name: {} - toProcess: {}", after.getName(), toProcess);
+        
+        if (toProcess) {
+            afterKeys.addAll(encode(PropertyValues.create(after)));
+        }
     }
 
     @Override
