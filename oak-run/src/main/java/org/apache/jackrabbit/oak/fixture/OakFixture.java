@@ -20,6 +20,7 @@ import java.io.File;
 import java.util.Map;
 
 import com.google.common.collect.Maps;
+
 import org.apache.commons.io.FileUtils;
 import org.apache.jackrabbit.core.data.DataStore;
 import org.apache.jackrabbit.core.data.DataStoreException;
@@ -33,6 +34,7 @@ import org.apache.jackrabbit.oak.plugins.blob.cloud.CloudBlobStore;
 import org.apache.jackrabbit.oak.plugins.blob.datastore.DataStoreBlobStore;
 import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
 import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndexContentInitialiser;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStore;
@@ -291,7 +293,8 @@ public abstract class OakFixture {
             @Override
             public Oak getOak(int clusterId) throws Exception {
                 FileStore fs = new FileStore(base, maxFileSizeMB, cacheSizeMB, memoryMapping);
-                return new Oak(new SegmentNodeStore(fs));
+//                return new Oak(new SegmentNodeStore(fs));
+                return new Oak(new SegmentNodeStore(fs)).with(new OrderedIndexContentInitialiser());
             }
 
             @Override
