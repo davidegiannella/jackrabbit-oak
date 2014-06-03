@@ -46,6 +46,8 @@ public class OrderedIndexContentInitialiser implements RepositoryInitializer {
         } else {
             LOG.debug("Node already exists. Skipping.");
         }
+        
+        // creating the /content are for testing
+        builder.child("content");
     }
-
 }
