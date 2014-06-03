@@ -52,7 +52,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         String pn = pns.getValue(Type.NAME, 0);
         if (LOG.isDebugEnabled() && pns.count() > 1) {
             LOG.debug(
-                "as we don't manage multi-property ordered indexes only the first one will be used. Using: {}",
+                "as we don't manage multi-property ordered indexes only the first one will be used. Using: '{}'",
                 pn);
         }
         this.propertyNames = Collections.singleton(pn);
