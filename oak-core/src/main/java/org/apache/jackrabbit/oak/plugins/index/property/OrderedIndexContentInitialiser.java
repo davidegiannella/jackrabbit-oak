@@ -20,6 +20,7 @@ import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
+import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.apache.jackrabbit.oak.spi.lifecycle.RepositoryInitializer;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.slf4j.Logger;
@@ -38,16 +39,24 @@ public class OrderedIndexContentInitialiser implements RepositoryInitializer {
         if (!indexDef.exists()) {
             LOG.debug("Creating index definition");
             indexDef = oakIndex.child(indexDefNode);
-            indexDef.setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE, Type.NAME);
+            indexDef.setProperty(JcrConstants.JCR_PRIMARYTYPE,
+                IndexConstants.INDEX_DEFINITIONS_NODE_TYPE, Type.NAME);
             indexDef.setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE, Type.STRING);
-            indexDef.setProperty(OrderedIndex.PROP_VERSION, OrderedIndex.Version.V2.toString(), Type.STRING);
-            indexDef.setProperty(PropertyStates.createProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of("theproperty"), Type.NAMES));
+            indexDef.setProperty(OrderedIndex.PROP_VERSION, OrderedIndex.Version.V2.toString(),
+                Type.STRING);
+            indexDef.setProperty(PropertyStates.createProperty(IndexConstants.PROPERTY_NAMES,
+                ImmutableList.of("author"), Type.NAMES));
             indexDef.setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN);
         } else {
             LOG.debug("Node already exists. Skipping.");
         }
-        
+
         // creating the /content are for testing
-        builder.child("content");
+        NodeBuilder content = builder.getChildNode("content");
+        if (!content.exists()) {
+            content = builder.child("content");
+            content.setProperty(JcrConstants.JCR_PRIMARYTYPE,
+                NodeTypeConstants.NT_OAK_UNSTRUCTURED, Type.NAME);
+        }
     }
 }
