@@ -95,6 +95,14 @@ public interface OrderedIndex {
         public static boolean isDescending(NodeState indexMeta) {
             return DESC.equals(fromIndexMeta(indexMeta));
         }
+        
+        public boolean isAscending() {
+            return ASC.equals(this);
+        }
+        
+        public boolean isDescending() {
+            return DESC.equals(this);
+        }
 
         /**
          * convenience method that tells if the provided index definition is ascending
@@ -166,4 +174,34 @@ public interface OrderedIndex {
      * property that identify the implementation version of the index.
      */
     String PROP_VERSION = "version";
+    
+    /**
+     * defines the default distribution of items across the skip list. It's with a factor of 10%
+     * having therefore
+     * 
+     * <dl>
+     *  <dt>lane 0:</dt> <dd>100.0% (the base linked list)</dd>
+     *  <dt>lane 1:</dt> <dd>10.0%</dd>
+     *  <dt>lane 2:</dt> <dd>1.0%</dd>
+     *  <dt>lane 3:</dt> <dd>0.1%</dd>
+     * </dl>
+     */
+    double DEFAULT_PROBABILITY = 0.1;
+    
+    /**
+     * the number of lanes used in the SkipList 
+     */
+    int LANES = 4;
+    
+    /**
+     * Convenience Predicate that will force the implementor to expose what we're searching for
+     *
+     * @param <T>
+     */
+    interface Predicate<T> extends com.google.common.base.Predicate<T> {
+        /**
+         * @return the string we're searching for during this predicate
+         */
+        String getSearchFor();
+    }
 }
