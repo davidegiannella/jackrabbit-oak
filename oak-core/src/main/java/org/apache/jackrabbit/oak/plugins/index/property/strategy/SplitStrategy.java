@@ -16,7 +16,9 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -31,6 +33,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
 /**
@@ -41,20 +44,23 @@ public class SplitStrategy implements IndexStoreStrategy {
     private static final Logger LOG = LoggerFactory.getLogger(SplitStrategy.class);
 
     /**
+     * char used for filling in with nodes.
+     */
+    public static final String FILLER = ":";
+
+    /**
+     * internal use as some libs want a char but Strings are normally better understood.
+     */
+    private static final char FILLER_C = FILLER.charAt(0);
+    
+    /**
      * the rules for the index
      */
     private final SplitRules rules;
     private final List<Long> split;
     private final SortLogic logic;
 
-    /**
-     * what the key length should be. computed once and used for padding.
-     */
-    private long lenght;
-
-    // --------------------------------------------------------------------------------- < private >
     
-    public static final String FILLER = ":";
     
     /**
      * enum for easing the sort logic management
@@ -69,7 +75,7 @@ public class SplitStrategy implements IndexStoreStrategy {
     public static class SplitRules {
         private final List<Long> split;
         private final SortLogic logic;
-        private long length = -1;
+        private int length = -1;
         
         /**
          * Create the class based on the index definition. See the {@link #SplitStrategy}
@@ -132,7 +138,7 @@ public class SplitStrategy implements IndexStoreStrategy {
          * 
          * @return
          */
-        public long getLength() {
+        public int getLength() {
             if (length == -1) {
                 // not computed yet. Let's do it.
                 length = 0;
@@ -161,7 +167,10 @@ public class SplitStrategy implements IndexStoreStrategy {
                 "Index not correctly set. Missing split or logic settings. ABORTING! split: {} - logic: {}",
                 split, logic);
         } else {
-            
+            // 1. tokenise
+            // 2. create tree
+            // 3. hash the path
+            // 4. store the path
         }
     }
 
@@ -188,7 +197,20 @@ public class SplitStrategy implements IndexStoreStrategy {
      * @param rules
      * @return
      */
-    static String[] tokenise(@Nonnull final String key, @Nonnull final SplitRules rules) {
-        return null;
+    static Iterable<String> tokenise(@Nonnull final String key, @Nonnull final SplitRules rules) {
+        String k = Strings.padEnd(key, rules.getLength(), FILLER_C);
+        List<String> tokens = new ArrayList<String>();
+        Iterator<Long> iter = rules.getSplit().iterator();
+        int start = 0;
+        while (iter.hasNext()) {
+            int l = (int) (long) iter.next();
+            String s = k.substring(start, Math.min(k.length(), start+l));
+            if (s.startsWith(FILLER)) {
+                s = FILLER;
+            }
+            tokens.add(s);
+            start += l;
+        }
+        return Collections.unmodifiableList(tokens);
     }
 }
