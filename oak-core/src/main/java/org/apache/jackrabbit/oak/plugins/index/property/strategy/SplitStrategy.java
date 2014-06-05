@@ -44,6 +44,17 @@ public class SplitStrategy implements IndexStoreStrategy {
      * the rules for the index
      */
     private final SplitRules rules;
+    private final List<Long> split;
+    private final SortLogic logic;
+
+    /**
+     * what the key length should be. computed once and used for padding.
+     */
+    private long lenght;
+
+    // --------------------------------------------------------------------------------- < private >
+    
+    public static final String FILLER = ":";
     
     /**
      * enum for easing the sort logic management
@@ -58,6 +69,7 @@ public class SplitStrategy implements IndexStoreStrategy {
     public static class SplitRules {
         private final List<Long> split;
         private final SortLogic logic;
+        private long length = -1;
         
         /**
          * Create the class based on the index definition. See the {@link #SplitStrategy}
@@ -113,17 +125,44 @@ public class SplitStrategy implements IndexStoreStrategy {
         public SortLogic getLogic() {
             return logic;
         }
+        
+        /**
+         * lazily compute and return the length the key should have for "balancing" the tree. See
+         * {@link #SplitStrategy} for details.
+         * 
+         * @return
+         */
+        public long getLength() {
+            if (length == -1) {
+                // not computed yet. Let's do it.
+                length = 0;
+                for (Long l : getSplit()) {
+                    length += l;
+                }
+            }
+            return length;
+        }
     }
+    
+    // ---------------------------------------------------------------------------------- < public >
     
     public SplitStrategy(@Nonnull final SplitRules rules) {
         this.rules = rules;
+        this.split = rules.getSplit();
+        this.logic = rules.getLogic();
+        
     }
     
     @Override
     public void update(NodeBuilder index, String path, Set<String> beforeKeys, Set<String> afterKeys) {
         LOG.debug("update()");
-        // TODO Auto-generated method stub
-        
+        if (split == null || logic == null) {
+            LOG.warn(
+                "Index not correctly set. Missing split or logic settings. ABORTING! split: {} - logic: {}",
+                split, logic);
+        } else {
+            
+        }
     }
 
     @Override
@@ -141,4 +180,15 @@ public class SplitStrategy implements IndexStoreStrategy {
         return 0;
     }
 
+    /**
+     * convert the input key into the set of nodes for creating the keys-tree. See
+     * {@link #SplitStrategy} for details
+     * 
+     * @param key
+     * @param rules
+     * @return
+     */
+    static String[] tokenise(@Nonnull final String key, @Nonnull final SplitRules rules) {
+        return null;
+    }
 }

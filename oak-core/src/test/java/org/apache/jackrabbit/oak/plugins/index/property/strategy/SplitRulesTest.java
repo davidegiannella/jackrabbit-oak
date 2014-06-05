@@ -68,4 +68,19 @@ public class SplitRulesTest {
         assertEquals(SplitStrategy.SortLogic.STRING, rules.getLogic());
         id = EmptyNodeState.EMPTY_NODE.builder();
     }
+    
+    @Test
+    public void length() { 
+        NodeBuilder id; 
+        
+        id = EmptyNodeState.EMPTY_NODE.builder();
+        id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_SPLIT,
+            ImmutableList.of(1L, 2L, 3L), Type.LONGS));
+        assertEquals(6, new SplitRules(id).getLength());
+
+        id = EmptyNodeState.EMPTY_NODE.builder();
+        id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_SPLIT,
+            ImmutableList.of(3L), Type.LONGS));
+        assertEquals(3, new SplitRules(id).getLength());
+}
 }
