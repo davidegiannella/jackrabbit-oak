@@ -42,7 +42,7 @@ public class OrderedIndexContentInitialiser implements RepositoryInitializer {
             indexDef.setProperty(JcrConstants.JCR_PRIMARYTYPE,
                 IndexConstants.INDEX_DEFINITIONS_NODE_TYPE, Type.NAME);
             indexDef.setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE, Type.STRING);
-            indexDef.setProperty(OrderedIndex.PROP_VERSION, OrderedIndex.Version.V2.toString(),
+            indexDef.setProperty(OrderedIndex.PROPERTY_VERSION, OrderedIndex.Version.V2.toString(),
                 Type.STRING);
             indexDef.setProperty(PropertyStates.createProperty(IndexConstants.PROPERTY_NAMES,
                 ImmutableList.of("author"), Type.NAMES));

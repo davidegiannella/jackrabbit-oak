@@ -43,7 +43,7 @@ public class OrderedPropertyIndexEditorProvider implements IndexEditorProvider, 
       Editor editor = null;
       
       if (TYPE.equals(type)) {
-          v = Version.fromString(definition.getString(PROP_VERSION));
+          v = Version.fromString(definition.getString(PROPERTY_VERSION));
           if (v == null) {
               v = Version.V1;
           }

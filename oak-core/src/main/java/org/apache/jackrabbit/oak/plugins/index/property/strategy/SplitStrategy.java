@@ -24,6 +24,7 @@ import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -52,17 +53,6 @@ public class SplitStrategy implements IndexStoreStrategy {
     }
 
     /**
-     * property used for specifying the desired split
-     */
-    public static final String PROPERTY_SPLIT = "split";
-    
-    /**
-     * property used for specifying the desired sort logic
-     */
-    public static final String PROPERTY_LOGIC = "logic";
-    
-    
-    /**
      * used for passing an immutable easy-to-use index definition
      */
     public static class SplitRules {
@@ -76,8 +66,8 @@ public class SplitStrategy implements IndexStoreStrategy {
          * @param indexDefinition cannot be null
          */
         public SplitRules(@Nonnull final NodeBuilder indexDefinition) {
-            PropertyState sp = indexDefinition.getProperty(PROPERTY_SPLIT);
-            PropertyState lo = indexDefinition.getProperty(PROPERTY_LOGIC);
+            PropertyState sp = indexDefinition.getProperty(OrderedIndex.PROPERTY_SPLIT);
+            PropertyState lo = indexDefinition.getProperty(OrderedIndex.PROPERTY_LOGIC);
             
             if (sp != null && Type.LONGS.equals(sp.getType())) {
                 split = Collections.unmodifiableList(Lists.newArrayList(sp.getValue(Type.LONGS)));

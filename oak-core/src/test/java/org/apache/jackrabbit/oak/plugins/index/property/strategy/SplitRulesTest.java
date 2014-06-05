@@ -21,6 +21,7 @@ import static org.junit.Assert.assertEquals;
 import java.util.List;
 
 import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.SplitStrategy.SplitRules;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
@@ -45,8 +46,8 @@ public class SplitRulesTest {
 
         // property type enforcing
         id = EmptyNodeState.EMPTY_NODE.builder();
-        id.setProperty(PropertyStates.createProperty(SplitStrategy.PROPERTY_LOGIC, 123L, Type.LONG));
-        id.setProperty(PropertyStates.createProperty(SplitStrategy.PROPERTY_SPLIT, "", Type.STRING));
+        id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_LOGIC, 123L, Type.LONG));
+        id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_SPLIT, "", Type.STRING));
         rules = new SplitRules(id);
         assertEquals("with wrong property type, null is expected", null, rules.getSplit());
         assertEquals("with wrong property type, null is expected", null, rules.getSplit());
@@ -54,15 +55,15 @@ public class SplitRulesTest {
         // correct settings
         split = ImmutableList.of(1L, 2L, 3L);
         id = EmptyNodeState.EMPTY_NODE.builder();
-        id.setProperty(PropertyStates.createProperty(SplitStrategy.PROPERTY_LOGIC, "long", Type.STRING));
-        id.setProperty(PropertyStates.createProperty(SplitStrategy.PROPERTY_SPLIT, split, Type.LONGS));
+        id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_LOGIC, "long", Type.STRING));
+        id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_SPLIT, split, Type.LONGS));
         rules = new SplitRules(id);
         assertEquals(split, rules.getSplit());
         assertEquals(SplitStrategy.SortLogic.LONG, rules.getLogic());
         
         // defaulting on String for sort logic
         id = EmptyNodeState.EMPTY_NODE.builder();
-        id.setProperty(PropertyStates.createProperty(SplitStrategy.PROPERTY_LOGIC, "foobar", Type.STRING));
+        id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_LOGIC, "foobar", Type.STRING));
         rules = new SplitRules(id);
         assertEquals(SplitStrategy.SortLogic.STRING, rules.getLogic());
         id = EmptyNodeState.EMPTY_NODE.builder();

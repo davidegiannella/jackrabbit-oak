@@ -51,7 +51,7 @@ public class OrderedPropertyIndexEditorProviderTest {
         assertNull("With wrong index type a null is expected", editor);
         
         indexDefinition = Mockito.mock(NodeBuilder.class);
-        Mockito.when(indexDefinition.getString(OrderedIndex.PROP_VERSION)).thenReturn(null);
+        Mockito.when(indexDefinition.getString(OrderedIndex.PROPERTY_VERSION)).thenReturn(null);
         Mockito.when(indexDefinition.getProperty(IndexConstants.PROPERTY_NAMES)).thenReturn(
             propertyNames);
         editor = iep.getIndexEditor(OrderedIndex.TYPE, indexDefinition, null, null);
@@ -59,7 +59,7 @@ public class OrderedPropertyIndexEditorProviderTest {
             editor instanceof OrderedPropertyIndexEditor);
 
         indexDefinition = Mockito.mock(NodeBuilder.class);
-        Mockito.when(indexDefinition.getString(OrderedIndex.PROP_VERSION)).thenReturn(
+        Mockito.when(indexDefinition.getString(OrderedIndex.PROPERTY_VERSION)).thenReturn(
             String.valueOf(Integer.MAX_VALUE));
         Mockito.when(indexDefinition.getProperty(IndexConstants.PROPERTY_NAMES)).thenReturn(
             propertyNames);
@@ -68,7 +68,7 @@ public class OrderedPropertyIndexEditorProviderTest {
             editor instanceof OrderedPropertyIndexEditor);
 
         indexDefinition = Mockito.mock(NodeBuilder.class);
-        Mockito.when(indexDefinition.getString(OrderedIndex.PROP_VERSION)).thenReturn(
+        Mockito.when(indexDefinition.getString(OrderedIndex.PROPERTY_VERSION)).thenReturn(
             OrderedIndex.Version.V1.toString());
         Mockito.when(indexDefinition.getProperty(IndexConstants.PROPERTY_NAMES)).thenReturn(
             propertyNames);
@@ -77,7 +77,7 @@ public class OrderedPropertyIndexEditorProviderTest {
             editor instanceof OrderedPropertyIndexEditor);
 
         indexDefinition = Mockito.mock(NodeBuilder.class);
-        Mockito.when(indexDefinition.getString(OrderedIndex.PROP_VERSION)).thenReturn(
+        Mockito.when(indexDefinition.getString(OrderedIndex.PROPERTY_VERSION)).thenReturn(
             OrderedIndex.Version.V2.toString());
         Mockito.when(indexDefinition.getProperty(IndexConstants.PROPERTY_NAMES)).thenReturn(
             propertyNames);

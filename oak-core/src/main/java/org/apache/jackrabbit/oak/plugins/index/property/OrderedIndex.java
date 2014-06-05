@@ -173,8 +173,18 @@ public interface OrderedIndex {
     /**
      * property that identify the implementation version of the index.
      */
-    String PROP_VERSION = "version";
-    
+    String PROPERTY_VERSION = "version";
+
+    /**
+     * property used for specifying the desired sort logic
+     */
+    String PROPERTY_LOGIC = "logic";
+
+    /**
+     * property used for specifying the desired split
+     */
+    String PROPERTY_SPLIT = "split";
+
     /**
      * defines the default distribution of items across the skip list. It's with a factor of 10%
      * having therefore
