@@ -18,7 +18,6 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.nio.charset.UnsupportedCharsetException;
 import java.util.Collections;
 import java.util.Set;
 
@@ -29,9 +28,12 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexEditor;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.SplitStrategy;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -45,7 +47,6 @@ import com.google.common.collect.Sets;
 public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexEditorV2.class);
     
-    
     /**
      * the index definition
      */
@@ -55,16 +56,20 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
      * the propertyNames as by {@link #definition}
      */
     private final Set<String> propertyNames;
+    private final OrderedPropertyIndexEditorV2 parent;
+    private final String name;
+    private final IndexUpdateCallback callback;
+    
+    private String path;
     private Set<String> beforeKeys;
     private Set<String> afterKeys;
 
-    private OrderedPropertyIndexEditorV2 parent;
-    private final String name;
     
     public OrderedPropertyIndexEditorV2(NodeBuilder definition, NodeState root,
                                         IndexUpdateCallback callback) {
         this.parent = null;
         this.name = null;
+        this.path = "/";
         this.definition = definition;
 
         PropertyState pns = definition.getProperty(IndexConstants.PROPERTY_NAMES);
@@ -75,13 +80,16 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
                 pn);
         }
         this.propertyNames = Collections.singleton(pn);
+        this.callback = callback;
     }
     
     public OrderedPropertyIndexEditorV2(@Nonnull final OrderedPropertyIndexEditorV2 parent, @Nonnull final String name) {
         this.parent = parent;
         this.name = name;
+        this.path = null;
         this.definition = parent.definition;
         this.propertyNames = parent.propertyNames;
+        this.callback = parent.callback;
     }
     
     /**
@@ -115,7 +123,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         if (pv == null) {
             set = null;
         } else {
-            // TODO consider different use-cases on type based on configuration. Date, Ints, etc.
+            // TODO consider different use-cases on type based on configuration. Date, Long, etc.
             set = Sets.newHashSet();
             try {
                 for (String s : pv.getValue(Type.STRINGS)) {
@@ -140,10 +148,18 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
 
     @Override
     public void leave(NodeState before, NodeState after) throws CommitFailedException {
-        // TODO Auto-generated method stub
-        LOG.debug("leave()");
-        LOG.debug("-- before: {}", before);
-        LOG.debug("-- after: {}", after);
+        NodeBuilder index;
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("leave() - before: {}", before);
+            LOG.debug("leave() - after: {}", after);
+        }
+        
+        if (!beforeKeys.isEmpty() || !afterKeys.isEmpty()) {
+            LOG.debug("updating...");
+            callback.indexUpdate();
+            index = definition.child(IndexConstants.INDEX_CONTENT_NODE_NAME);
+            getStrategy().update(index, getPath(), beforeKeys, afterKeys);
+        }
     }
 
     @Override
@@ -193,5 +209,16 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     OrderedPropertyIndexEditorV2 childIndexEditor(@Nonnull final OrderedPropertyIndexEditorV2 editor, 
                                                   @Nonnull final String name) {
         return new OrderedPropertyIndexEditorV2(editor, name);
+    }
+    
+    IndexStoreStrategy getStrategy() {
+        return new SplitStrategy(new SplitStrategy.SplitRules(definition));
+    }
+    
+    public String getPath() {
+        if (path == null) {
+            path = PathUtils.concat(parent.getPath(), name);
+        }
+        return path;
     }
 }

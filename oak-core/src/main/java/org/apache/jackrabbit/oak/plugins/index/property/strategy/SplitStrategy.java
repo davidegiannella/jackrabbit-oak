@@ -40,6 +40,11 @@ public class SplitStrategy implements IndexStoreStrategy {
     private static final Logger LOG = LoggerFactory.getLogger(SplitStrategy.class);
 
     /**
+     * the rules for the index
+     */
+    private final SplitRules rules;
+    
+    /**
      * enum for easing the sort logic management
      */
     public enum SortLogic {
@@ -120,8 +125,8 @@ public class SplitStrategy implements IndexStoreStrategy {
         }
     }
     
-    public SplitStrategy(SplitRules rules) {
-        
+    public SplitStrategy(@Nonnull final SplitRules rules) {
+        this.rules = rules;
     }
     
     @Override
