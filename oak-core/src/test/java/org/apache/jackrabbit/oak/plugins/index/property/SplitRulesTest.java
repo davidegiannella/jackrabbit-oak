@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.plugins.index.property.strategy;
+package org.apache.jackrabbit.oak.plugins.index.property;
 
 import static org.junit.Assert.assertEquals;
 
@@ -22,7 +22,9 @@ import java.util.List;
 
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
-import org.apache.jackrabbit.oak.plugins.index.property.strategy.SplitStrategy.SplitRules;
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEditorV2;
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEditorV2.SplitRules;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.SplitStrategy;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -35,12 +37,12 @@ public class SplitRulesTest {
     @Test
     public void constructor() {
         NodeBuilder id;
-        SplitRules rules;
+        OrderedPropertyIndexEditorV2.SplitRules rules;
         List<Long> split;
         
         // property presence
         id = EmptyNodeState.EMPTY_NODE.builder();
-        rules = new SplitRules(id);
+        rules = new OrderedPropertyIndexEditorV2.SplitRules(id);
         assertEquals("If we don't have the property set null is expected", null, rules.getSplit());
         assertEquals("If we don't have the property set null is expected", null, rules.getSplit());
 
@@ -48,7 +50,7 @@ public class SplitRulesTest {
         id = EmptyNodeState.EMPTY_NODE.builder();
         id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_LOGIC, 123L, Type.LONG));
         id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_SPLIT, "", Type.STRING));
-        rules = new SplitRules(id);
+        rules = new OrderedPropertyIndexEditorV2.SplitRules(id);
         assertEquals("with wrong property type, null is expected", null, rules.getSplit());
         assertEquals("with wrong property type, null is expected", null, rules.getSplit());
         
@@ -57,15 +59,15 @@ public class SplitRulesTest {
         id = EmptyNodeState.EMPTY_NODE.builder();
         id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_LOGIC, "long", Type.STRING));
         id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_SPLIT, split, Type.LONGS));
-        rules = new SplitRules(id);
+        rules = new OrderedPropertyIndexEditorV2.SplitRules(id);
         assertEquals(split, rules.getSplit());
-        assertEquals(SplitStrategy.SortLogic.LONG, rules.getLogic());
+        assertEquals(OrderedPropertyIndexEditorV2.SortLogic.LONG, rules.getLogic());
         
         // defaulting on String for sort logic
         id = EmptyNodeState.EMPTY_NODE.builder();
         id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_LOGIC, "foobar", Type.STRING));
-        rules = new SplitRules(id);
-        assertEquals(SplitStrategy.SortLogic.STRING, rules.getLogic());
+        rules = new OrderedPropertyIndexEditorV2.SplitRules(id);
+        assertEquals(OrderedPropertyIndexEditorV2.SortLogic.STRING, rules.getLogic());
         id = EmptyNodeState.EMPTY_NODE.builder();
     }
     
@@ -76,11 +78,11 @@ public class SplitRulesTest {
         id = EmptyNodeState.EMPTY_NODE.builder();
         id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_SPLIT,
             ImmutableList.of(1L, 2L, 3L), Type.LONGS));
-        assertEquals(6, new SplitRules(id).getLength());
+        assertEquals(6, new OrderedPropertyIndexEditorV2.SplitRules(id).getLength());
 
         id = EmptyNodeState.EMPTY_NODE.builder();
         id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_SPLIT,
             ImmutableList.of(3L), Type.LONGS));
-        assertEquals(3, new SplitRules(id).getLength());
+        assertEquals(3, new OrderedPropertyIndexEditorV2.SplitRules(id).getLength());
 }
 }
