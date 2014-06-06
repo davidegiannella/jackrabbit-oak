@@ -21,10 +21,7 @@ import static org.junit.Assert.assertEquals;
 import java.util.List;
 
 import org.apache.jackrabbit.oak.api.Type;
-import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
-import org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEditorV2;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEditorV2.SplitRules;
-import org.apache.jackrabbit.oak.plugins.index.property.strategy.SplitStrategy;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -43,16 +40,16 @@ public class SplitRulesTest {
         // property presence
         id = EmptyNodeState.EMPTY_NODE.builder();
         rules = new OrderedPropertyIndexEditorV2.SplitRules(id);
-        assertEquals("If we don't have the property set null is expected", null, rules.getSplit());
-        assertEquals("If we don't have the property set null is expected", null, rules.getSplit());
+        assertEquals(ImmutableList.of(SplitRules.MAX), rules.getSplit());
+        assertEquals("If we don't have the property set null is expected", null, rules.getLogic());
 
         // property type enforcing
         id = EmptyNodeState.EMPTY_NODE.builder();
         id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_LOGIC, 123L, Type.LONG));
         id.setProperty(PropertyStates.createProperty(OrderedIndex.PROPERTY_SPLIT, "", Type.STRING));
         rules = new OrderedPropertyIndexEditorV2.SplitRules(id);
-        assertEquals("with wrong property type, null is expected", null, rules.getSplit());
-        assertEquals("with wrong property type, null is expected", null, rules.getSplit());
+        assertEquals(ImmutableList.of(SplitRules.MAX), rules.getSplit());
+        assertEquals("with wrong property type, null is expected", null, rules.getLogic());
         
         // correct settings
         split = ImmutableList.of(1L, 2L, 3L);

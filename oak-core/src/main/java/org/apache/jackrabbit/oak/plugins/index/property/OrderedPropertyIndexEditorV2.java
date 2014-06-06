@@ -47,6 +47,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
@@ -72,6 +73,11 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
      * used for passing an immutable easy-to-use index definition
      */
     public static class SplitRules {
+        /**
+         * maximum length used when no split is provided in the definition 
+         */
+        public static final Long MAX = 100L;
+        
         private final List<Long> split;
         private final SortLogic logic;
         private int length = -1;
@@ -90,9 +96,9 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
                 split = Collections.unmodifiableList(Lists.newArrayList(sp.getValue(Type.LONGS)));
             } else {
                 SplitStrategy.LOG.debug(
-                    "Property 'split' is null or not of the correct type. Setting to null. split: {}",
+                    "Property 'split' is null or not of the correct type. Setting to MAX. split: {}",
                     sp);
-                split = null;
+                split = ImmutableList.of(MAX);
             }
             
             if (lo != null && Type.STRING.equals(lo.getType())) {
