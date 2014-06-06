@@ -117,7 +117,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
      * @param pv
      * @return
      */
-    static Set<String> encode(final PropertyValue pv) {
+    public static Set<String> encode(final PropertyValue pv) {
         Set<String> set;
         
         if (pv == null) {
@@ -125,17 +125,30 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         } else {
             // TODO consider different use-cases on type based on configuration. Date, Long, etc.
             set = Sets.newHashSet();
-            try {
-                for (String s : pv.getValue(Type.STRINGS)) {
-                    s = URLEncoder.encode(s, Charsets.UTF_8.name()).replaceAll("\\*", "%2A");
-                    set.add(s);
-                }
-            } catch (UnsupportedEncodingException e) {
-                throw new IllegalStateException("UTF-8 is unsupported", e);
+            for (String s : pv.getValue(Type.STRINGS)) {
+                set.add(encode(s));
             }
         }
         
         return set;
+    }
+
+    /**
+     * convert a single String according to the rules
+     * 
+     * @param s
+     * @return
+     */
+    public static String encode(@Nonnull final String s) {
+        String ss;
+        
+        try {
+            ss = URLEncoder.encode(s, Charsets.UTF_8.name()).replaceAll("\\*", "%2A");
+        } catch (UnsupportedEncodingException e) {
+            throw new IllegalStateException("UTF-8 is unsupported", e);
+        }
+
+        return ss;
     }
     
     @Override

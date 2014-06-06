@@ -22,9 +22,12 @@ import java.util.List;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEditorV2;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.SplitStrategy.SplitRules;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
+import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.junit.Test;
+
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.SplitStrategy.FILLER;
 
 import com.google.common.collect.ImmutableList;
@@ -51,7 +54,7 @@ public class SplitStrategyTest {
     @Test
     public void tokenise() {
         SplitRules rules;
-        
+
         rules = new MockRules(ImmutableList.of(3L));
         assertEquals(ImmutableList.of("a::"), SplitStrategy.tokenise("a", rules));
         assertEquals(ImmutableList.of("ap:"), SplitStrategy.tokenise("ap", rules));
@@ -62,7 +65,8 @@ public class SplitStrategyTest {
         assertEquals(ImmutableList.of("app"), SplitStrategy.tokenise("apps", rules));
 
         rules = new MockRules(ImmutableList.of(3L, 2L));
-        assertEquals(ImmutableList.of("a" + FILLER + FILLER, FILLER), SplitStrategy.tokenise("a", rules));
+        assertEquals(ImmutableList.of("a" + FILLER + FILLER, FILLER),
+            SplitStrategy.tokenise("a", rules));
         assertEquals(ImmutableList.of("ap" + FILLER, FILLER), SplitStrategy.tokenise("ap", rules));
         assertEquals(ImmutableList.of("app", FILLER), SplitStrategy.tokenise("app", rules));
         assertEquals(ImmutableList.of("app", "le"), SplitStrategy.tokenise("apple", rules));
@@ -71,12 +75,52 @@ public class SplitStrategyTest {
         assertEquals(ImmutableList.of("app", "s" + FILLER), SplitStrategy.tokenise("apps", rules));
 
         rules = new MockRules(ImmutableList.of(3L, 2L, 2L));
-        assertEquals(ImmutableList.of("a" + FILLER + FILLER, FILLER, FILLER), SplitStrategy.tokenise("a", rules));
-        assertEquals(ImmutableList.of("ap" + FILLER, FILLER, FILLER), SplitStrategy.tokenise("ap", rules));
+        assertEquals(ImmutableList.of("a" + FILLER + FILLER, FILLER, FILLER),
+            SplitStrategy.tokenise("a", rules));
+        assertEquals(ImmutableList.of("ap" + FILLER, FILLER, FILLER),
+            SplitStrategy.tokenise("ap", rules));
         assertEquals(ImmutableList.of("app", FILLER, FILLER), SplitStrategy.tokenise("app", rules));
         assertEquals(ImmutableList.of("app", "le", FILLER), SplitStrategy.tokenise("apple", rules));
-        assertEquals(ImmutableList.of("app", "le", "s" + FILLER), SplitStrategy.tokenise("apples", rules));
+        assertEquals(ImmutableList.of("app", "le", "s" + FILLER),
+            SplitStrategy.tokenise("apples", rules));
         assertEquals(ImmutableList.of("app", "le", "ts"), SplitStrategy.tokenise("applets", rules));
-        assertEquals(ImmutableList.of("app", "s" + FILLER, FILLER), SplitStrategy.tokenise("apps", rules));
+        assertEquals(ImmutableList.of("app", "s" + FILLER, FILLER),
+            SplitStrategy.tokenise("apps", rules));
+        
+//        rules = new MockRules(ImmutableList.of(4L, 6L));
+//        assertEquals(ImmutableList.of("2013", "-02-01"), SplitStrategy.tokenise(
+//            OrderedPropertyIndexEditorV2.encode(
+//                PropertyValues.newString("2013-02-01T12:13:17.580Z")).toArray(new String[0])[0],
+//            rules));
+//        assertEquals(ImmutableList.of("2013", "-03-01"), SplitStrategy.tokenise(
+//            OrderedPropertyIndexEditorV2.encode(
+//                PropertyValues.newString("2013-03-01T12:13:17.580Z")).toArray(new String[0])[0],
+//            rules));
+//        assertEquals(ImmutableList.of("2013", "-04-01"), SplitStrategy.tokenise(
+//            OrderedPropertyIndexEditorV2.encode(
+//                PropertyValues.newString("2013-04-01T12:13:17.580Z")).toArray(new String[0])[0],
+//            rules));
+//        assertEquals(ImmutableList.of("2014", "-02-01"), SplitStrategy.tokenise(
+//            OrderedPropertyIndexEditorV2.encode(
+//                PropertyValues.newString("2014-02-01T12:13:17.580Z")).toArray(new String[0])[0],
+//            rules));
+//
+//        rules = new MockRules(ImmutableList.of(4L, 6L, 6L, 3L));
+//        assertEquals(ImmutableList.of("2013", "-02-01"), SplitStrategy.tokenise(
+//            OrderedPropertyIndexEditorV2.encode(
+//                PropertyValues.newString("2013-02-01T12:13:17.580Z")).toArray(new String[0])[0],
+//            rules));
+//        assertEquals(ImmutableList.of("2013", "-03-01"), SplitStrategy.tokenise(
+//            OrderedPropertyIndexEditorV2.encode(
+//                PropertyValues.newString("2013-03-01T12:13:17.580Z")).toArray(new String[0])[0],
+//            rules));
+//        assertEquals(ImmutableList.of("2013", "-04-01"), SplitStrategy.tokenise(
+//            OrderedPropertyIndexEditorV2.encode(
+//                PropertyValues.newString("2013-04-01T12:13:17.580Z")).toArray(new String[0])[0],
+//            rules));
+//        assertEquals(ImmutableList.of("2014", "-02-01"), SplitStrategy.tokenise(
+//            OrderedPropertyIndexEditorV2.encode(
+//                PropertyValues.newString("2014-02-01T12:13:17.580Z")).toArray(new String[0])[0],
+//            rules));
     }
 }
