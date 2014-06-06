@@ -16,17 +16,16 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
-import java.util.List;
 import java.util.Set;
 
-import javax.annotation.Nonnull;
-
-import org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEditorV2;
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Splitter;
 
 /**
  * Implements the split strategy for the ordered indexes
@@ -36,18 +35,23 @@ public class SplitStrategy implements IndexStoreStrategy {
     public static final Logger LOG = LoggerFactory.getLogger(SplitStrategy.class);
 
     
-
-    
-    
+    private static void insert(NodeBuilder index, String key, String path) {
+        // 1. tokenise
+        Splitter.on(OrderedIndex.SPLITTER).split(key);
+        // 2. create tree
+        // 3. hash the path
+        // 4. store the path
+    }
     
     @Override
     public void update(NodeBuilder index, String path, Set<String> beforeKeys, Set<String> afterKeys) {
         // TODO Auto-generated method stub
         LOG.debug("update()");
-            // 1. tokenise
-            // 2. create tree
-            // 3. hash the path
-            // 4. store the path
+        // remove all the beforeKeys
+        // add all the afterKeys
+        for (String key : afterKeys) {
+            insert(index, key, path);
+        }
     }
 
     @Override
