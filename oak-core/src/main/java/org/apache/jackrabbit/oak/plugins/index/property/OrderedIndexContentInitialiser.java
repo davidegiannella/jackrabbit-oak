@@ -47,6 +47,7 @@ public class OrderedIndexContentInitialiser implements RepositoryInitializer {
             indexDef.setProperty(PropertyStates.createProperty(IndexConstants.PROPERTY_NAMES,
                 ImmutableList.of("author"), Type.NAMES));
             indexDef.setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN);
+            indexDef.setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS);
         } else {
             LOG.debug("Node already exists. Skipping.");
         }
