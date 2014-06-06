@@ -16,7 +16,6 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
-import static org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEditorV2.FILLER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -152,40 +151,58 @@ public class OrderedPropertyIndexEditorV2Test {
         OrderedPropertyIndexEditorV2.SplitRules rules;
 
         rules = new MockRules(ImmutableList.of(3L));
-        assertEquals(ImmutableList.of("a::"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("a", rules));
-        assertEquals(ImmutableList.of("ap:"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("ap", rules));
-        assertEquals(ImmutableList.of("app"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("app", rules));
-        assertEquals(ImmutableList.of("app"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("apple", rules));
-        assertEquals(ImmutableList.of("app"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("apples", rules));
-        assertEquals(ImmutableList.of("app"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("applets", rules));
-        assertEquals(ImmutableList.of("app"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("apps", rules));
+        assertEquals(ImmutableList.of("a::"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("a", rules));
+        assertEquals(ImmutableList.of("ap:"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("ap", rules));
+        assertEquals(ImmutableList.of("app"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("app", rules));
+        assertEquals(ImmutableList.of("app"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("apple", rules));
+        assertEquals(ImmutableList.of("app"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("apples", rules));
+        assertEquals(ImmutableList.of("app"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("applets", rules));
+        assertEquals(ImmutableList.of("app"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("apps", rules));
 
         rules = new MockRules(ImmutableList.of(3L, 2L));
-        assertEquals(ImmutableList.of("a" + FILLER + FILLER, FILLER),
+        assertEquals(
+            ImmutableList.of("a" + OrderedIndex.FILLER + OrderedIndex.FILLER, OrderedIndex.FILLER),
             OrderedPropertyIndexEditorV2.tokeniseAndEncode("a", rules));
-        assertEquals(ImmutableList.of("ap" + FILLER, FILLER), OrderedPropertyIndexEditorV2.tokeniseAndEncode("ap", rules));
-        assertEquals(ImmutableList.of("app", FILLER), OrderedPropertyIndexEditorV2.tokeniseAndEncode("app", rules));
-        assertEquals(ImmutableList.of("app", "le"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("apple", rules));
-        assertEquals(ImmutableList.of("app", "le"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("apples", rules));
-        assertEquals(ImmutableList.of("app", "le"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("applets", rules));
-        assertEquals(ImmutableList.of("app", "s" + FILLER), OrderedPropertyIndexEditorV2.tokeniseAndEncode("apps", rules));
+        assertEquals(ImmutableList.of("ap" + OrderedIndex.FILLER, OrderedIndex.FILLER),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("ap", rules));
+        assertEquals(ImmutableList.of("app", OrderedIndex.FILLER),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("app", rules));
+        assertEquals(ImmutableList.of("app", "le"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("apple", rules));
+        assertEquals(ImmutableList.of("app", "le"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("apples", rules));
+        assertEquals(ImmutableList.of("app", "le"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("applets", rules));
+        assertEquals(ImmutableList.of("app", "s" + OrderedIndex.FILLER),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("apps", rules));
 
         rules = new MockRules(ImmutableList.of(3L, 2L, 2L));
-        assertEquals(ImmutableList.of("a" + FILLER + FILLER, FILLER, FILLER),
+        assertEquals(ImmutableList.of("a" + OrderedIndex.FILLER + OrderedIndex.FILLER,
+            OrderedIndex.FILLER, OrderedIndex.FILLER),
             OrderedPropertyIndexEditorV2.tokeniseAndEncode("a", rules));
-        assertEquals(ImmutableList.of("ap" + FILLER, FILLER, FILLER),
+        assertEquals(
+            ImmutableList.of("ap" + OrderedIndex.FILLER, OrderedIndex.FILLER, OrderedIndex.FILLER),
             OrderedPropertyIndexEditorV2.tokeniseAndEncode("ap", rules));
-        assertEquals(ImmutableList.of("app", FILLER, FILLER), OrderedPropertyIndexEditorV2.tokeniseAndEncode("app", rules));
-        assertEquals(ImmutableList.of("app", "le", FILLER), OrderedPropertyIndexEditorV2.tokeniseAndEncode("apple", rules));
-        assertEquals(ImmutableList.of("app", "le", "s" + FILLER),
+        assertEquals(ImmutableList.of("app", OrderedIndex.FILLER, OrderedIndex.FILLER),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("app", rules));
+        assertEquals(ImmutableList.of("app", "le", OrderedIndex.FILLER),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("apple", rules));
+        assertEquals(ImmutableList.of("app", "le", "s" + OrderedIndex.FILLER),
             OrderedPropertyIndexEditorV2.tokeniseAndEncode("apples", rules));
-        assertEquals(ImmutableList.of("app", "le", "ts"), OrderedPropertyIndexEditorV2.tokeniseAndEncode("applets", rules));
-        assertEquals(ImmutableList.of("app", "s" + FILLER, FILLER),
+        assertEquals(ImmutableList.of("app", "le", "ts"),
+            OrderedPropertyIndexEditorV2.tokeniseAndEncode("applets", rules));
+        assertEquals(ImmutableList.of("app", "s" + OrderedIndex.FILLER, OrderedIndex.FILLER),
             OrderedPropertyIndexEditorV2.tokeniseAndEncode("apps", rules));
-        
+
         rules = new MockRules(ImmutableList.of(4L, 6L, 6L, 8L));
         assertEquals(ImmutableList.of("2014", "-06-06", "T10%3A58", "%3A39.165Z"),
             OrderedPropertyIndexEditorV2.tokeniseAndEncode("2014-06-06T10:58:39.165Z", rules));
     }
-
 }

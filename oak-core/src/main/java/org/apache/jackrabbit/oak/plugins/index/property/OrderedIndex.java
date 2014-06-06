@@ -202,6 +202,16 @@ public interface OrderedIndex {
      * the number of lanes used in the SkipList 
      */
     int LANES = 4;
+
+    /**
+     * char used for filling in with nodes.
+     */
+    String FILLER = ":";
+    
+    /**
+     * char used as token separator in the key encoding
+     */
+    String SPLITTER = ",";
     
     /**
      * Convenience Predicate that will force the implementor to expose what we're searching for

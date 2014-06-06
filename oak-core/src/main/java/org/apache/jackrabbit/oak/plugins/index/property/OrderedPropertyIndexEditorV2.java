@@ -53,14 +53,9 @@ import com.google.common.collect.Sets;
 
 public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     /**
-     * char used for filling in with nodes.
-     */
-    public static final String FILLER = ":";
-
-    /**
      * internal use as some libs want a char but Strings are normally better understood.
      */
-    public static final char FILLER_C = FILLER.charAt(0);
+    private static final char FILLER_C = OrderedIndex.FILLER.charAt(0);
 
     /**
      * enum for easing the sort logic management
@@ -332,7 +327,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
             // TODO consider different use-cases on type based on configuration. Date, Long, etc.
             set = Sets.newHashSet();
             for (String s : pv.getValue(Type.STRINGS)) {
-                set.add(Joiner.on(",").join(tokeniseAndEncode(s, rules)));
+                set.add(Joiner.on(OrderedIndex.SPLITTER).join(tokeniseAndEncode(s, rules)));
             }
         }
         
@@ -366,7 +361,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
                 int l = (int) (long) iter.next();
                 if (start >= k.length()) {
                     // we reached the end of the string and proceed with filled
-                    s = FILLER;
+                    s = OrderedIndex.FILLER;
                 } else {
                     s = k.substring(start, Math.min(k.length(), start+l));
                     if (s.length() < l) {
