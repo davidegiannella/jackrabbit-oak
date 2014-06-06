@@ -45,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
+import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -162,6 +163,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     private final OrderedPropertyIndexEditorV2 parent;
     private final String name;
     private final IndexUpdateCallback callback;
+    private final SplitRules rules;
     
     private String path;
     private Set<String> beforeKeys;
@@ -184,6 +186,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         }
         this.propertyNames = Collections.singleton(pn);
         this.callback = callback;
+        this.rules = new SplitRules(definition);
     }
     
     public OrderedPropertyIndexEditorV2(@Nonnull final OrderedPropertyIndexEditorV2 parent, @Nonnull final String name) {
@@ -193,6 +196,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         this.definition = parent.definition;
         this.propertyNames = parent.propertyNames;
         this.callback = parent.callback;
+        this.rules = parent.rules;
     }
     
     /**
@@ -212,46 +216,6 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     boolean isToProcess(@Nonnull final PropertyState state) {
         return getPropertyNames().contains(state.getName()) && state.count() > 0
                && PropertyType.BINARY != state.getType().tag();
-    }
-
-    /**
-     * encode the PropertyValue for being used by the Strategy
-     * 
-     * @param pv
-     * @return
-     */
-    public static Set<String> encode(final PropertyValue pv) {
-        Set<String> set;
-        
-        if (pv == null) {
-            set = null;
-        } else {
-            // TODO consider different use-cases on type based on configuration. Date, Long, etc.
-            set = Sets.newHashSet();
-            for (String s : pv.getValue(Type.STRINGS)) {
-                set.add(encode(s));
-            }
-        }
-        
-        return set;
-    }
-
-    /**
-     * convert a single String according to the rules
-     * 
-     * @param s
-     * @return
-     */
-    public static String encode(@Nonnull final String s) {
-        String ss;
-        
-        try {
-            ss = URLEncoder.encode(s, Charsets.UTF_8.name()).replaceAll("\\*", "%2A");
-        } catch (UnsupportedEncodingException e) {
-            throw new IllegalStateException("UTF-8 is unsupported", e);
-        }
-
-        return ss;
     }
     
     @Override
@@ -285,7 +249,13 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         LOG.debug("propertyAdded() - name: {} - toProcess: {}", after.getName(), toProcess);
         
         if (toProcess) {
-            afterKeys.addAll(encode(PropertyValues.create(after)));
+            /*
+             * it seems we are in a chicken-egg problem where we want to have strings for the
+             * strategy but we have to know the property type for conversion. So our encoding
+             * process will do the tokenisation as well and then re-merge them in a string split by
+             * ','. The strategy will then know to re-split on the ','.
+             */
+            afterKeys.addAll(encode(PropertyValues.create(after), rules));
         }
     }
 
@@ -339,27 +309,73 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     }
 
     /**
+     * encode the PropertyValue for being used by the Strategy.
+     * 
+     * It will split it up according to {@code rules}, encode and re-join into one single string
+     * separated by ','
+     * 
+     * @param pv
+     * @return
+     */
+    public static Set<String> encode(final PropertyValue pv, @Nonnull final SplitRules rules) {
+        Set<String> set;
+        
+        if (pv == null) {
+            set = null;
+        } else {
+            // TODO consider different use-cases on type based on configuration. Date, Long, etc.
+            set = Sets.newHashSet();
+            for (String s : pv.getValue(Type.STRINGS)) {
+                set.add(Joiner.on(",").join(tokeniseAndEncode(s, rules)));
+            }
+        }
+        
+        return set;
+    }
+
+    private static String encode(@Nonnull final String s) {
+        try {
+            return URLEncoder.encode(s, Charsets.UTF_8.name()).replaceAll("\\*", "%2A");
+        } catch (UnsupportedEncodingException e) {
+            throw new IllegalStateException("UTF-8 is unsupported", e);
+        }
+    }
+    
+    /**
      * convert the input key into the set of nodes for creating the keys-tree. See
-     * {@link #SplitStrategy} for details
+     * {@link #SplitStrategy} for details and encode them for being able to be nodes
      * 
      * @param key
      * @param rules
      * @return
      */
-    public static Iterable<String> tokenise(@Nonnull final String key, @Nonnull final SplitRules rules) {
-        String k = Strings.padEnd(key, rules.getLength(), FILLER_C);
+    public static Iterable<String> tokeniseAndEncode(@Nonnull final String key, @Nonnull final SplitRules rules) {
+        String k = key;
+        String s;
         List<String> tokens = new ArrayList<String>();
         Iterator<Long> iter = rules.getSplit().iterator();
         int start = 0;
-        while (iter.hasNext()) {
-            int l = (int) (long) iter.next();
-            String s = k.substring(start, Math.min(k.length(), start+l));
-            if (s.startsWith(FILLER)) {
-                s = FILLER;
+        
+            while (iter.hasNext()) {
+                int l = (int) (long) iter.next();
+                if (start >= k.length()) {
+                    // we reached the end of the string and proceed with filled
+                    s = FILLER;
+                } else {
+                    s = k.substring(start, Math.min(k.length(), start+l));
+                    if (s.length() < l) {
+                        // we need to pad the string for balancing
+                        int diff = l - s.length();
+                        s = encode(s);
+                        s = Strings.padEnd(s, s.length() + diff, FILLER_C);
+                    } else {
+                        s = encode(s);
+                    }
+                }
+                
+                tokens.add(s);
+                start += l;
             }
-            tokens.add(s);
-            start += l;
-        }
         return Collections.unmodifiableList(tokens);
     }
 }
