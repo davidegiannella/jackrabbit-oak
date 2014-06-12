@@ -33,6 +33,7 @@
   <properties>
     <skip.deployment>true</skip.deployment>
     <groovy.version>2.3.1</groovy.version>
+    <tika.version>1.5</tika.version>
   </properties>
 
   <build>
@@ -141,6 +142,11 @@
       <version>4.3.1</version>
     </dependency>
     <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.compendium</artifactId>
+      <version>4.3.1</version>
+    </dependency>
+    <dependency>
       <groupId>com.googlecode.pojosr</groupId>
       <artifactId>de.kalpatec.pojosr.framework.bare</artifactId>
       <version>0.2.1</version>
@@ -166,10 +172,64 @@
       <version>0.0.2</version>
     </dependency>
     <dependency>
+      <groupId>org.apache.aries.jmx</groupId>
+      <artifactId>org.apache.aries.jmx.whiteboard</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+    <dependency>
       <groupId>com.googlecode.json-simple</groupId>
       <artifactId>json-simple</artifactId>
       <version>1.1.1</version>
     </dependency>
+
+
+    <!--
+         oak-lucene embeds the Lucene jar. However when running in IDE
+         the IDE use the module classpath. So need to explicitly list the
+         lucene jars
+        -->
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-core</artifactId>
+      <version>${tika.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-parsers</artifactId>
+      <version>${tika.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.jackrabbit</groupId>
+      <artifactId>oak-lucene</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-core</artifactId>
+      <version>${lucene.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-analyzers-common</artifactId>
+      <version>${lucene.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-queryparser</artifactId>
+      <version>${lucene.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-queries</artifactId>
+      <version>${lucene.version}</version>
+    </dependency>
+
 
     <!-- Test dependencies -->
     <dependency>
@@ -181,12 +241,6 @@
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
       <version>${h2.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.osgi</groupId>
-      <artifactId>org.osgi.compendium</artifactId>
-      <version>4.3.1</version>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>com.gmongo</groupId>

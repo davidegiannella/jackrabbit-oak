@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 public class OrderedIndexConcurrentClusterIT {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedIndexConcurrentClusterIT.class);
     
+    private static final long CACHE_SIZE = 32 * 1024 * 1024;
     private static final int NUM_CLUSTER_NODES = 5;
     private static final int LOOP = 2800;
     private static final int COUNT = 5;
@@ -223,6 +224,7 @@ public class OrderedIndexConcurrentClusterIT {
         // creating instances
         for (int i = 1; i <= clusters; i++) {
             DocumentMK mk = new DocumentMK.Builder()
+                    .memoryCacheSize(CACHE_SIZE)
                     .setMongoDB(createConnection().getDB())
                     .setClusterId(i).open();
             mks.add(mk);
