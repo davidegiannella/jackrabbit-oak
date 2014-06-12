@@ -16,10 +16,12 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Set;
 
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.junit.Test;
@@ -32,14 +34,21 @@ public class SplitStrategyTest {
         SplitStrategy strategy = new SplitStrategy();
         NodeBuilder index = EmptyNodeState.EMPTY_NODE.builder();
         NodeBuilder node;
-        String path = "/content/foo/bar";
+        final String path = "/content/foo/bar";
+        final String sha1Path = "acdd763534a786e0d21adb9d6c6b1565d5bd5211";
         Set<String> before = Sets.newHashSet();
         Set<String> after;
         
         after = Sets.newHashSet("app");
+        node = index;
         strategy.update(index, path, before, after);
-        node = index.getChildNode("app");
+        node = node.getChildNode("app");
         assertTrue(node.exists());
+        node = node.getChildNode(OrderedIndex.FILLER);
+        assertTrue("a leaf should always have a FILLER if there'are paths under it", node.exists());
+        node = node.getChildNode(sha1Path);
+        assertTrue("SHA1 node doesn't exists", node.exists());
+        assertEquals(path, node.getString(OrderedIndex.PROPERTY_PATH));
         
         after = Sets.newHashSet("app,les");
         node = index;
@@ -48,6 +57,11 @@ public class SplitStrategyTest {
         assertTrue(node.exists());
         node = node.getChildNode("les");
         assertTrue(node.exists());
+        node = node.getChildNode(OrderedIndex.FILLER);
+        assertTrue("a leaf should always have a FILLER if there'are paths under it", node.exists());
+        node = node.getChildNode(sha1Path);
+        assertTrue("SHA1 node doesn't exists", node.exists());
+        assertEquals(path, node.getString(OrderedIndex.PROPERTY_PATH));
 
         after = Sets.newHashSet("app,le,ts,:");
         node = index;
@@ -60,5 +74,10 @@ public class SplitStrategyTest {
         assertTrue(node.exists());
         node = node.getChildNode(":");
         assertTrue(node.exists());
+        node = node.getChildNode(OrderedIndex.FILLER);
+        assertTrue("a leaf should always have a FILLER if there'are paths under it", node.exists());
+        node = node.getChildNode(sha1Path);
+        assertTrue("SHA1 node doesn't exists", node.exists());
+        assertEquals(path, node.getString(OrderedIndex.PROPERTY_PATH));
     }
 }

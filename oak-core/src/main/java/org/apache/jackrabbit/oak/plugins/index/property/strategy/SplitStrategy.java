@@ -18,6 +18,8 @@ package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
 import java.util.Set;
 
+import javax.annotation.Nonnull;
+
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -25,7 +27,9 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
+import com.google.common.hash.Hashing;
 
 /**
  * Implements the split strategy for the ordered indexes
@@ -34,8 +38,28 @@ import com.google.common.base.Splitter;
 public class SplitStrategy implements IndexStoreStrategy {
     public static final Logger LOG = LoggerFactory.getLogger(SplitStrategy.class);
 
+    /**
+     * simple pojo for encoding the path.
+     */
+    private static class Sha1Path {
+        private final String path;
+        private final String sha1;
+        
+        public Sha1Path(@Nonnull final String path) {
+            this.path = path;
+            this.sha1 = Hashing.sha1().hashBytes(path.getBytes(Charsets.UTF_8)).toString();
+        }
+        
+        public String getPath() {
+            return path;
+        }
+        
+        public String getSha1() {
+            return sha1;
+        }
+    }
     
-    private static void insert(NodeBuilder index, String key, String path) {
+    private static void insert(final NodeBuilder index, final String key, final String path) {
         Iterable<String> tokens;
         NodeBuilder node;
         
@@ -46,8 +70,17 @@ public class SplitStrategy implements IndexStoreStrategy {
         for (String token : tokens) {
             node = node.child(token);
         }
-        // 3. hash the path
-        // 4. store the path
+        
+        // 'node' should now be our leaf where we should add the path
+        // let's add a special node that will be treated specially for the sortin
+        // putting it as first or last depending on the order by.
+        // here we'll put our paths
+        node = node.child(OrderedIndex.FILLER);
+        
+        // 3. hash and store the path
+        Sha1Path sp = new Sha1Path(path);
+        node = node.child(sp.getSha1());
+        node.setProperty(OrderedIndex.PROPERTY_PATH, sp.getPath());
     }
 
     @Override

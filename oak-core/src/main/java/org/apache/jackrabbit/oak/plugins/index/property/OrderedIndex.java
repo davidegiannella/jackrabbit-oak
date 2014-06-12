@@ -184,6 +184,11 @@ public interface OrderedIndex {
      * property used for specifying the desired split
      */
     String PROPERTY_SPLIT = "split";
+    
+    /**
+     * property used for storing the path of the content
+     */
+    String PROPERTY_PATH = "path";
 
     /**
      * defines the default distribution of items across the skip list. It's with a factor of 10%
