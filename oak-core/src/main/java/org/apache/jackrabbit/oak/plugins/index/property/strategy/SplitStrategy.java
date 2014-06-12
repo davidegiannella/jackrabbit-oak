@@ -36,13 +36,20 @@ public class SplitStrategy implements IndexStoreStrategy {
 
     
     private static void insert(NodeBuilder index, String key, String path) {
+        Iterable<String> tokens;
+        NodeBuilder node;
+        
         // 1. tokenise
-        Splitter.on(OrderedIndex.SPLITTER).split(key);
+        tokens = Splitter.on(OrderedIndex.SPLITTER).split(key);
         // 2. create tree
+        node = index;
+        for (String token : tokens) {
+            node = node.child(token);
+        }
         // 3. hash the path
         // 4. store the path
     }
-    
+
     @Override
     public void update(NodeBuilder index, String path, Set<String> beforeKeys, Set<String> afterKeys) {
         // TODO Auto-generated method stub
