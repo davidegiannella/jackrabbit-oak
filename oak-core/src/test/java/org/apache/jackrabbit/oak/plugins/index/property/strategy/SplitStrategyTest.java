@@ -34,10 +34,31 @@ public class SplitStrategyTest {
         NodeBuilder node;
         String path = "/content/foo/bar";
         Set<String> before = Sets.newHashSet();
-        Set<String> after = Sets.newHashSet("app");
+        Set<String> after;
         
+        after = Sets.newHashSet("app");
         strategy.update(index, path, before, after);
         node = index.getChildNode("app");
+        assertTrue(node.exists());
+        
+        after = Sets.newHashSet("app,les");
+        node = index;
+        strategy.update(index, path, before, after);
+        node = node.getChildNode("app");
+        assertTrue(node.exists());
+        node = node.getChildNode("les");
+        assertTrue(node.exists());
+
+        after = Sets.newHashSet("app,le,ts,:");
+        node = index;
+        strategy.update(index, path, before, after);
+        node = node.getChildNode("app");
+        assertTrue(node.exists());
+        node = node.getChildNode("le");
+        assertTrue(node.exists());
+        node = node.getChildNode("ts");
+        assertTrue(node.exists());
+        node = node.getChildNode(":");
         assertTrue(node.exists());
     }
 }
