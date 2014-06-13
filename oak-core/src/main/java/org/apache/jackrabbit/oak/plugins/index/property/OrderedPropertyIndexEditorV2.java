@@ -52,6 +52,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
 public class OrderedPropertyIndexEditorV2 implements IndexEditor {
+    private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexEditorV2.class);
+
     /**
      * internal use as some libs want a char but Strings are normally better understood.
      */
@@ -149,8 +151,6 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
             return length;
         }
     }
-
-    private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexEditorV2.class);
     
     /**
      * the index definition

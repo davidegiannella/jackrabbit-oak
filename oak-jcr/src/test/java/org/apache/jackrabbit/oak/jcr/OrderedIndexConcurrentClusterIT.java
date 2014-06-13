@@ -18,9 +18,7 @@ package org.apache.jackrabbit.oak.jcr;
 
 import static org.apache.jackrabbit.oak.jcr.AbstractRepositoryTest.dispose;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -28,8 +26,6 @@ import java.util.Map;
 
 import javax.jcr.Credentials;
 import javax.jcr.Node;
-import javax.jcr.NodeIterator;
-import javax.jcr.PathNotFoundException;
 import javax.jcr.PropertyType;
 import javax.jcr.Repository;
 import javax.jcr.RepositoryException;
@@ -40,6 +36,8 @@ import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
 import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
+import org.apache.jackrabbit.value.LongValue;
+import org.apache.jackrabbit.value.StringValue;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -47,6 +45,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.ImmutableMap;
 
 public class OrderedIndexConcurrentClusterIT {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedIndexConcurrentClusterIT.class);
@@ -60,6 +60,12 @@ public class OrderedIndexConcurrentClusterIT {
     private static final String INDEX_PROPERTY = "lastModified";
     private static final CreateNodesWorker.IndexDefinition INDEX_DEFINITION = new CreateNodesWorker.IndexDefinition(
         INDEX_NODE_NAME, OrderedIndex.TYPE, new String[] { INDEX_PROPERTY });
+    private static final CreateNodesWorker.IndexDefinition INDEX_DEFINITION_V2 = new CreateNodesWorker.IndexDefinition(
+        INDEX_NODE_NAME, OrderedIndex.TYPE, new String[] { INDEX_PROPERTY }, ImmutableMap.of(
+            OrderedIndex.PROPERTY_VERSION, new StringValue("2"),
+            OrderedIndex.PROPERTY_SPLIT,
+            new NodesWorker.MultiValue(new LongValue[] { new LongValue(4), new LongValue(6),
+                                                        new LongValue(6), new LongValue(3) })));
 
     private List<Repository> repos = new ArrayList<Repository>();
     private List<DocumentMK> mks = new ArrayList<DocumentMK>();
@@ -101,7 +107,8 @@ public class OrderedIndexConcurrentClusterIT {
                 .setClusterId(1).open();
         Repository repository = new Jcr(mk.getNodeStore()).createRepository();
         Session session = repository.login(ADMIN);
-        ensureIndex(session);
+        // removed the ensureIndex() from here as we could have different version to consider in
+        // each tests
         session.logout();
         dispose(repository);
         mk.dispose(); // closes connection as well
@@ -135,6 +142,46 @@ public class OrderedIndexConcurrentClusterIT {
         }
     }
 
+    @Test
+    public void addNodesConcurrently() throws Exception {
+        LOG.debug(
+            "Adding a total of {} nodes evely spread across cluster. Loop: {}, Count: {}, Cluster nodes: {}",
+            new Object[] { LOOP * COUNT * NUM_CLUSTER_NODES, LOOP, COUNT, NUM_CLUSTER_NODES });
+
+        // creating instances
+        for (int i = 1; i <= NUM_CLUSTER_NODES; i++) {
+            DocumentMK mk = new DocumentMK.Builder()
+                    .memoryCacheSize(CACHE_SIZE)
+                    .setMongoDB(createConnection().getDB())
+                    .setClusterId(i).open();
+            mks.add(mk);
+        }
+
+        Map<String, Exception> exceptions = Collections
+            .synchronizedMap(new HashMap<String, Exception>());
+
+        // initialising repositories and creating workers
+        for (int i = 0; i < mks.size(); i++) {
+            DocumentMK mk = mks.get(i);
+            Repository repo = createMongoRepo(mk);
+            Session session = repo.login(ADMIN);
+            CreateNodesWorker.ensureIndex(session, INDEX_DEFINITION_V2);
+            session.logout();
+            repos.add(repo);
+            workers.add(new Thread(new CreateNodesWorker(repo, exceptions, ADMIN, INDEX_DEFINITION_V2,
+                LOOP, COUNT), "Worker-" + (i + 1)));
+        }
+
+        for (Thread t : workers) {
+            t.start();
+        }
+        for (Thread t : workers) {
+            t.join();
+        }
+
+        raiseExceptions(exceptions);
+    }
+    
     @Test
     public void deleteConcurrently() throws Exception {
         final int loop = LOOP;
