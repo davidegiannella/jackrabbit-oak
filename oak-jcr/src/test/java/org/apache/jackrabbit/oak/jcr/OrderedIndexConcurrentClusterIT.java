@@ -58,7 +58,9 @@ public class OrderedIndexConcurrentClusterIT {
     private static final Credentials ADMIN = new SimpleCredentials("admin", "admin".toCharArray());
     private static final String INDEX_NODE_NAME = "lastModified";
     private static final String INDEX_PROPERTY = "lastModified";
-    
+    private static final CreateNodesWorker.IndexDefinition INDEX_DEFINITION = new CreateNodesWorker.IndexDefinition(
+        INDEX_NODE_NAME, OrderedIndex.TYPE, new String[] { INDEX_PROPERTY });
+
     private List<Repository> repos = new ArrayList<Repository>();
     private List<DocumentMK> mks = new ArrayList<DocumentMK>();
     private List<Thread> workers = new ArrayList<Thread>();
@@ -116,91 +118,12 @@ public class OrderedIndexConcurrentClusterIT {
         dropDB();
     }
 
-    private final class Worker implements Runnable {
-
-        private final Repository repo;
-        private final Map<String, Exception> exceptions;
-
-        Worker(Repository repo, Map<String, Exception> exceptions) {
-            this.repo = repo;
-            this.exceptions = exceptions;
-        }
-
-        @Override
-        public void run() {
-            try {
-                Session session = repo.login(ADMIN);
-                ensureIndex(session);
-
-                String nodeName = getNodeName(Thread.currentThread());
-                deleteNodes(session, nodeName, exceptions);
-            } catch (Exception e) {
-                exceptions.put(Thread.currentThread().getName(), e);
-            }
-        }
-    }
-
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     // ----- SHARED WITH ConcurrentAddNodesClusterIT (later refactoring) -----
-    
-    // Slightly modified by the ConcurrentAddNodesClusterIT making the indexes property a Date.
-    private void createNodes(Session session,
-                             String nodeName,
-                             int loopCount,
-                             int nodeCount,
-                             Map<String, Exception> exceptions)
-            throws RepositoryException {
-        Node root = session.getRootNode().addNode(nodeName, "nt:unstructured");
-        Calendar calendar = Calendar.getInstance();
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy hh:mm:ss.S");
-                
-        for (int i = 0; i < loopCount; i++) {
-            Node node = root.addNode("testnode" + i, "nt:unstructured");
-            for (int j = 0; j < nodeCount; j++) {
-                Node child = node.addNode("node" + j, "nt:unstructured");
-                calendar = Calendar.getInstance();
-                child.setProperty(INDEX_PROPERTY, calendar);
-            }
-            if (!exceptions.isEmpty()) {
-                break;
-            }
-            if (LOG.isDebugEnabled() && i % 10 == 0) {
-                LOG.debug("{} looped {}. Last calendar: {}",
-                    new Object[] { nodeName, i, sdf.format(calendar.getTime()) });
-            }
-            session.save();
-        }
-    }
 
-    private void deleteNodes(Session session,
-                             String nodeName,
-                             Map<String, Exception> exceptions)
-            throws RepositoryException {
-
-        Node root;
-        try {
-            root = session.getRootNode().getNode(nodeName);
-        } catch (PathNotFoundException e) {
-            LOG.error("Not found. {}", nodeName);
-            throw e;
-        }
-        
-        NodeIterator children = root.getNodes();
-        
-        while (children.hasNext()) {
-            Node node = children.nextNode();
-            NodeIterator children2 = node.getNodes();
-            while (children2.hasNext()) {
-                children2.nextNode().remove();
-            }
-            LOG.debug("deleting /{}/{}", nodeName, node.getName());
-            node.remove();
-            session.save();
-        }
-    }
-    
-    private static String getNodeName(final Thread t) {
-        return "testroot-" + t.getName();
+    private static Repository createMongoRepo(final DocumentMK mk) {
+        return new Jcr(mk.getNodeStore())
+            .createRepository();
     }
 
     private static void raiseExceptions(final Map<String, Exception> exceptions) throws Exception {
@@ -217,6 +140,7 @@ public class OrderedIndexConcurrentClusterIT {
         final int loop = LOOP;
         final int count = COUNT;
         final int clusters = NUM_CLUSTER_NODES;
+        final List<Thread> creationWorkers = new ArrayList<Thread>();
 
         LOG.debug(
             "Adding a total of {} nodes evely spread across cluster. Loop: {}, Count: {}, Cluster nodes: {}",
@@ -237,12 +161,15 @@ public class OrderedIndexConcurrentClusterIT {
         // initialising repositories and creating workers
         for (int i = 0; i < mks.size(); i++) {
             DocumentMK mk = mks.get(i);
-            Repository repo = new Jcr(mk.getNodeStore()).createRepository();
+            Repository repo = createMongoRepo(mk);
             Session session = repo.login(ADMIN);
-            ensureIndex(session);
+            NodesWorker.ensureIndex(session, INDEX_DEFINITION);
             session.logout();
             repos.add(repo);
-            workers.add(new Thread(new Worker(repo, exceptions), "Worker-" + (i + 1)));
+            workers.add(new Thread(new DeleteNodesWorker(repo, exceptions, ADMIN, INDEX_DEFINITION,
+                loop, count), "Worker-" + (i + 1)));
+            creationWorkers.add(new Thread(new CreateNodesWorker(repo, exceptions, ADMIN,
+                INDEX_DEFINITION, loop, count), "Worker-" + (i + 1)));
         }
 
         // we know we have at least repos[0]
@@ -252,9 +179,9 @@ public class OrderedIndexConcurrentClusterIT {
         
         // initialising the repository sequentially to avoid any possible
         // concurrency errors during inserts
-        for (Thread w : workers) {
-            String nodeName = getNodeName(w);
-            createNodes(session, nodeName, loop, count, exceptions);
+        for (Thread w : creationWorkers) {
+            w.start();
+            w.join();
         }
         
         // extra save for being sure.
