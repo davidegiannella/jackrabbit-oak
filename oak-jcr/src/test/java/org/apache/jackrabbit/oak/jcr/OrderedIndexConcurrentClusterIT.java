@@ -94,6 +94,7 @@ public class OrderedIndexConcurrentClusterIT {
     private static void initRepository() throws Exception {
         MongoConnection con = createConnection();
         DocumentMK mk = new DocumentMK.Builder()
+                .memoryCacheSize(CACHE_SIZE)
                 .setMongoDB(con.getDB())
                 .setClusterId(1).open();
         Repository repository = new Jcr(mk.getNodeStore()).createRepository();
