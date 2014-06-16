@@ -143,7 +143,6 @@ public class OrderedIndexConcurrentClusterIT {
         }
     }
 
-    @Ignore("OAK-1892")
     @Test
     public void addNodesConcurrently() throws Exception {
         LOG.debug(
@@ -184,6 +183,7 @@ public class OrderedIndexConcurrentClusterIT {
         raiseExceptions(exceptions);
     }
     
+    @Ignore("OAK-1892")
     @Test
     public void deleteConcurrently() throws Exception {
         final int loop = LOOP;
