@@ -16,6 +16,8 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
@@ -59,7 +61,15 @@ public class SplitStrategy implements IndexStoreStrategy {
         }
     }
     
+    /**
+     * the actual add into the index of the provided attributes
+     * 
+     * @param index
+     * @param key
+     * @param path
+     */
     private static void insert(final NodeBuilder index, final String key, final String path) {
+        LOG.debug("insert()");
         Iterable<String> tokens;
         NodeBuilder node;
         
@@ -83,16 +93,81 @@ public class SplitStrategy implements IndexStoreStrategy {
         node.setProperty(OrderedIndex.PROPERTY_PATH, sp.getPath());
     }
 
+    /**
+     * the actual delete from the index of the provided attributes
+     * 
+     * @param index
+     * @param key
+     * @param path
+     */
+    private static void remove(final NodeBuilder index, final String key, final String path) {
+        LOG.debug("remove()");
+        Deque<NodeBuilder> nodes;
+        Iterable<String> tokens;
+        NodeBuilder node;
+
+        // each node will have a ':' as leaf for keeping the paths. Let's add it
+        String k = key + OrderedIndex.SPLITTER + OrderedIndex.FILLER;
+
+        // 1. walking down the tree and keeping track of the path for later cleaning up
+        nodes = new ArrayDeque<NodeBuilder>();
+        tokens = Splitter.on(OrderedIndex.SPLITTER).split(k);
+        node = index;
+        for (String s : tokens) {
+            node = node.getChildNode(s);
+            if (node.exists()) {
+                nodes.addFirst(node);
+            } else {
+                if (!OrderedIndex.FILLER.equals(s)) {
+                    LOG.debug(
+                        "Something weird here but it could be. '{}' doesn't exits anymore. quitting.",
+                        s);
+                    node = null;
+                    break;
+                }
+            }
+        }
+        // 'node' will now contain the leaf of the tree
+
+        if (node != null) {
+            // 2. delete the node
+            Sha1Path sp = new Sha1Path(path);
+            node = node.getChildNode(sp.getSha1());
+            if (node.exists()) {
+                node.remove();
+            }
+
+            // 3. walking up the tree and delete nodes if no children
+            while (!nodes.isEmpty()) {
+                node = nodes.removeFirst();
+                if (node.getChildNodeCount(1) == 0) {
+                    node.remove();
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
     @Override
     public void update(NodeBuilder index, String path, Set<String> beforeKeys, Set<String> afterKeys) {
-        // TODO Auto-generated method stub
-        LOG.debug("update()");
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("update() - path: {}", path);
+            LOG.debug("update() - beforeKeys: {}", beforeKeys);
+            LOG.debug("update() - afterKeys: {}", afterKeys);
+        }
+        
         // remove all the beforeKeys
+        for (String key : beforeKeys) {
+            remove(index, key, path);
+        }
+        
         // add all the afterKeys
         for (String key : afterKeys) {
             insert(index, key, path);
         }
     }
+
 
     @Override
     public Iterable<String> query(Filter filter, String indexName, NodeState indexMeta,

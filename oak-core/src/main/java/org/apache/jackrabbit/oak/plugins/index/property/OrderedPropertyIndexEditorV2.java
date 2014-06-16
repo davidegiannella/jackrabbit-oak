@@ -235,6 +235,14 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
             LOG.debug("leave() - after: {}", after);
         }
         
+        if (!beforeKeys.isEmpty() && !afterKeys.isEmpty()) {
+            // in case we have both let's remove duplicates
+            Set<String> shared = Sets.newHashSet(beforeKeys);
+            shared.retainAll(afterKeys);
+            beforeKeys.removeAll(shared);
+            afterKeys.removeAll(shared);
+        }
+        
         if (!beforeKeys.isEmpty() || !afterKeys.isEmpty()) {
             LOG.debug("updating...");
             callback.indexUpdate();
@@ -270,9 +278,13 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
 
     @Override
     public void propertyDeleted(PropertyState before) throws CommitFailedException {
-        // TODO Auto-generated method stub
-        LOG.debug("propertyDeleted()");
-        LOG.debug("-- before: {}", before);
+        boolean toProcess = isToProcess(before);
+        
+        LOG.debug("propertyDeleted() - name: {} - toProcess: {}", before.getName(), toProcess);
+        
+        if (toProcess) {
+            beforeKeys.addAll(encode(PropertyValues.create(before), rules));
+        }
     }
 
     @Override
