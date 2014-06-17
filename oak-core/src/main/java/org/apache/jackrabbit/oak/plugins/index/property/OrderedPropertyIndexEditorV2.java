@@ -221,8 +221,6 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     
     @Override
     public void enter(NodeState before, NodeState after) throws CommitFailedException {
-        LOG.debug("enter()");
-        
         beforeKeys = Sets.newHashSet();
         afterKeys = Sets.newHashSet();
     }
@@ -293,19 +291,16 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
 
     @Override
     public Editor childNodeAdded(String name, NodeState after) throws CommitFailedException {
-        LOG.debug("childNodeAdded() - name: '{}'", name);
         return childIndexEditor(this, name);
     }
 
     @Override
     public Editor childNodeChanged(String name, NodeState before, NodeState after) throws CommitFailedException {
-        LOG.debug("childNodeChanged() - name: '{}'", name);
         return childIndexEditor(this, name);
     }
 
     @Override
     public Editor childNodeDeleted(String name, NodeState before) throws CommitFailedException {
-        LOG.debug("childNodeDeleted() - name: '{}'", name);
         return childIndexEditor(this, name);
     }
     
