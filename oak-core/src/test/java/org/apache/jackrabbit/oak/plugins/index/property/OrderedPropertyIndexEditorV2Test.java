@@ -95,22 +95,24 @@ public class OrderedPropertyIndexEditorV2Test {
     @Test
     public void isToProcess() {
         final String indexed = "a";
-        PropertyState propertyNames = PropertyStates.createProperty(IndexConstants.PROPERTY_NAMES,
-            Sets.newHashSet(indexed), Type.NAMES);
-        NodeBuilder indexDefinition = Mockito.mock(NodeBuilder.class);
-        Mockito.when(indexDefinition.getProperty(IndexConstants.PROPERTY_NAMES)).thenReturn(
-            propertyNames);
-        OrderedPropertyIndexEditorV2 editor = new OrderedPropertyIndexEditorV2(indexDefinition,
-            null, null);
+        NodeBuilder indexDefinition;
+        OrderedPropertyIndexEditorV2 editor;
+        PropertyState property;
 
-        assertTrue(editor.isToProcess(PropertyStates.createProperty(indexed, "justavalue",
-            Type.STRING)));
-        assertFalse(editor.isToProcess(PropertyStates.createProperty("foobar", "justavalue",
-            Type.STRING)));
-        assertFalse(editor.isToProcess(PropertyStates.createProperty(indexed,
-            Collections.EMPTY_LIST, Type.STRINGS)));
-        assertFalse(editor.isToProcess(PropertyStates.createProperty(indexed, new StringBasedBlob(
-            "justavalue"), Type.BINARY)));
+        indexDefinition = EmptyNodeState.EMPTY_NODE.builder();
+        indexDefinition.setProperty(IndexConstants.PROPERTY_NAMES, Sets.newHashSet(indexed),
+            Type.NAMES);
+        editor = new OrderedPropertyIndexEditorV2(indexDefinition, null, null);
+
+        property = PropertyStates.createProperty(indexed, "justavalue", Type.STRING);
+        assertTrue(editor.isToProcess(property));
+        property = PropertyStates.createProperty("foobar", "justavalue", Type.STRING);
+        assertFalse(editor.isToProcess(property));
+        property = PropertyStates.createProperty(indexed, Collections.EMPTY_LIST, Type.STRINGS);
+        assertFalse(editor.isToProcess(property));
+        property = PropertyStates.createProperty(indexed, new StringBasedBlob("justavalue"),
+            Type.BINARY);
+        assertFalse(editor.isToProcess(property));
     }
     
     /**
