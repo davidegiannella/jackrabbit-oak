@@ -107,12 +107,12 @@ public class OrderedPropertyIndexEditorV2Test {
         property = PropertyStates.createProperty(indexed, "justavalue", Type.STRING);
         assertTrue(editor.isToProcess(property));
         property = PropertyStates.createProperty("foobar", "justavalue", Type.STRING);
-        assertFalse(editor.isToProcess(property));
+        assertFalse("not indexed property", editor.isToProcess(property));
         property = PropertyStates.createProperty(indexed, Collections.EMPTY_LIST, Type.STRINGS);
-        assertFalse(editor.isToProcess(property));
+        assertFalse("empty lists are not processed", editor.isToProcess(property));
         property = PropertyStates.createProperty(indexed, new StringBasedBlob("justavalue"),
             Type.BINARY);
-        assertFalse(editor.isToProcess(property));
+        assertFalse("binaries are not processed", editor.isToProcess(property));
     }
     
     /**
