@@ -313,5 +313,59 @@ public class OrderedPropertyIndexEditorV2Test {
         assertEquals("/" + okNode, ns.getString(OrderedIndex.PROPERTY_PATH));
         ns = bookmark.getChildNode(wrongSha1);
         assertFalse("a node with the wrong nodeType should not exists", ns.exists());
+        
+        // by changing the node type to an existing node it should be indexed if all conditions
+        // match
+        builder = indexed.builder();
+        before = indexed;
+        builder.getChildNode(wrongNode)
+            .setProperty(JcrConstants.JCR_PRIMARYTYPE, nodeType, Type.NAME);
+        after = builder.getNodeState();
+        indexed = hook.processCommit(before, after, CommitInfo.EMPTY); 
+        ns = indexed.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(indexDefName);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(IndexConstants.INDEX_CONTENT_NODE_NAME);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode("app");
+        assertTrue(ns.exists());
+        ns = ns.getChildNode("le:");
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(OrderedIndex.FILLER);
+        assertTrue(ns.exists());
+        bookmark = ns; // keeping a bookmark for not rewalking from scratch
+        ns = ns.getChildNode(okSha1);
+        assertTrue(ns.exists());
+        assertEquals("/" + okNode, ns.getString(OrderedIndex.PROPERTY_PATH));
+        ns = bookmark.getChildNode(wrongSha1);
+        assertTrue("as the nodetype changed we expect the node to be indexed", ns.exists());
+        
+        // changing againt he nodetype to something not allowed should remove the node from the
+        // index
+        builder = indexed.builder();
+        before = indexed;
+        builder.getChildNode(wrongNode)
+            .setProperty(JcrConstants.JCR_PRIMARYTYPE, JcrConstants.NT_UNSTRUCTURED, Type.NAME);
+        after = builder.getNodeState();
+        indexed = hook.processCommit(before, after, CommitInfo.EMPTY); 
+        ns = indexed.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(indexDefName);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(IndexConstants.INDEX_CONTENT_NODE_NAME);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode("app");
+        assertTrue(ns.exists());
+        ns = ns.getChildNode("le:");
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(OrderedIndex.FILLER);
+        assertTrue(ns.exists());
+        bookmark = ns; // keeping a bookmark for not rewalking from scratch
+        ns = ns.getChildNode(okSha1);
+        assertTrue(ns.exists());
+        assertEquals("/" + okNode, ns.getString(OrderedIndex.PROPERTY_PATH));
+        ns = bookmark.getChildNode(wrongSha1);
+        assertFalse("a node with the wrong nodeType should not exists", ns.exists());
     }
 }

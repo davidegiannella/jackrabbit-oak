@@ -16,6 +16,8 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.DECLARING_NODE_TYPES;
+
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
@@ -27,6 +29,7 @@ import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.jcr.PropertyType;
 
+import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.PropertyValue;
@@ -37,6 +40,7 @@ import org.apache.jackrabbit.oak.plugins.index.IndexEditor;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.SplitStrategy;
+import org.apache.jackrabbit.oak.plugins.nodetype.TypePredicate;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -46,6 +50,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
+import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -74,7 +79,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
          * maximum length used when no split is provided in the definition 
          */
         public static final Long MAX = 100L;
-        
+                
         private final List<Long> split;
         private final SortLogic logic;
         private int length = -1;
@@ -165,10 +170,12 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     private final String name;
     private final IndexUpdateCallback callback;
     private final SplitRules rules;
-    
+    private final Predicate<NodeState> typePredicate;
+
     private String path;
     private Set<String> beforeKeys;
     private Set<String> afterKeys;
+    private boolean typeChanged;
 
     
     public OrderedPropertyIndexEditorV2(NodeBuilder definition, NodeState root,
@@ -188,6 +195,14 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         this.propertyNames = Collections.singleton(pn);
         this.callback = callback;
         this.rules = new SplitRules(definition);
+        
+        if (definition.hasProperty(DECLARING_NODE_TYPES)) {
+            this.typePredicate = new TypePredicate(
+                    root, definition.getNames(DECLARING_NODE_TYPES));
+        } else {
+            this.typePredicate = null;
+        }
+
     }
     
     public OrderedPropertyIndexEditorV2(@Nonnull final OrderedPropertyIndexEditorV2 parent, @Nonnull final String name) {
@@ -198,6 +213,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         this.propertyNames = parent.propertyNames;
         this.callback = parent.callback;
         this.rules = parent.rules;
+        this.typePredicate = parent.typePredicate;
     }
     
     /**
@@ -219,8 +235,20 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
                && PropertyType.BINARY != state.getType().tag();
     }
     
+    /**
+     * tells whether the current property is a jcr:primaryType or jcr:mixinTypes
+     * @param state
+     * @return
+     */
+    private static boolean isTypeProperty(@Nonnull final PropertyState state) {
+        String name = state.getName();
+        return JcrConstants.JCR_PRIMARYTYPE.equals(name)
+               || JcrConstants.JCR_MIXINTYPES.equals(name);
+    }
+
     @Override
     public void enter(NodeState before, NodeState after) throws CommitFailedException {
+        typeChanged = typePredicate == null;
         beforeKeys = Sets.newHashSet();
         afterKeys = Sets.newHashSet();
     }
@@ -232,6 +260,23 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         if (LOG.isDebugEnabled()) {
             LOG.debug("leave() - before: {}", before);
             LOG.debug("leave() - after: {}", after);
+        }
+        
+        if (typePredicate != null) {
+            if (typeChanged) {
+                // could be a change in the jcr:primaryType. Let's load the whole lot.
+                beforeKeys = loadKeys(before);
+                afterKeys = loadKeys(after);
+            }
+            
+            if (!beforeKeys.isEmpty() && !typePredicate.apply(before)) {
+                // in case the before keys are set and the nodetype doesn't match let's empty
+                beforeKeys.clear();
+            }
+            
+            if (!afterKeys.isEmpty() && !typePredicate.apply(after)) {
+                afterKeys.clear();
+            }
         }
         
         if (!beforeKeys.isEmpty() && !afterKeys.isEmpty()) {
@@ -249,12 +294,28 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         }
     }
 
+    private Set<String> loadKeys(NodeState state) {
+        Set<String> pns = getPropertyNames();
+        Set<String> keys = Sets.newHashSet();
+        
+        for (String p : pns) {
+            PropertyState ps = state.getProperty(p);
+            if (ps != null) {
+                keys.addAll(encode(PropertyValues.create(ps), rules));
+            }
+        }
+        
+        return keys;
+    }
+    
     @Override
     public void propertyAdded(PropertyState after) throws CommitFailedException {
         boolean toProcess = isToProcess(after);
 
         LOG.debug("propertyAdded() - name: {} - toProcess: {}", after.getName(), toProcess);
         
+        typeChanged = typeChanged || isTypeProperty(after);
+
         if (toProcess) {
             /*
              * it seems we are in a chicken-egg problem where we want to have strings for the
@@ -272,6 +333,8 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         
         LOG.debug("propertyChanged() - name: {} - toProcess: {}", after.getName(), toProcess);
         
+        typeChanged = typeChanged || isTypeProperty(after);
+
         if (toProcess) {
             beforeKeys.addAll(encode(PropertyValues.create(before), rules));
             afterKeys.addAll(encode(PropertyValues.create(after), rules));
@@ -284,6 +347,8 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         
         LOG.debug("propertyDeleted() - name: {} - toProcess: {}", before.getName(), toProcess);
         
+        typeChanged = typeChanged || isTypeProperty(before);
+
         if (toProcess) {
             beforeKeys.addAll(encode(PropertyValues.create(before), rules));
         }
