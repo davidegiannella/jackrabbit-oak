@@ -28,16 +28,24 @@ import java.util.Set;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.JcrConstants;
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
+import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEditorV2.SplitRules;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.plugins.memory.StringBasedBlob;
+import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
+import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
+import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.junit.Test;
 import org.mockito.Mockito;
 
@@ -206,5 +214,104 @@ public class OrderedPropertyIndexEditorV2Test {
         rules = new MockRules(ImmutableList.of(4L, 6L, 6L, 8L));
         assertEquals(ImmutableList.of("2014", "-06-06", "T10%3A58", "%3A39.165Z"),
             OrderedPropertyIndexEditorV2.tokeniseAndEncode("2014-06-06T10:58:39.165Z", rules));
+    }
+
+    /**
+     * tests the declaringNodeType filtering
+     * @throws CommitFailedException 
+     */
+    @Test
+    public void declaringNodeType() throws CommitFailedException {
+        final String propertyNames = "indexed";
+        final String nodeType = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
+        final String indexDefName = "TheIndex";
+        final String okNode = "oknode";
+        final String okSha1 = "2fad94fc15205634812cec7737ebc11d8e9db5c6";
+        final String wrongNode = "WRONGnode";
+        final String wrongSha1 = "f7dc04a5f3b8db1fd6dc16422ffda6a3c4448685";
+        
+        final EditorHook hook = new EditorHook(new IndexUpdateProvider(
+            new OrderedPropertyIndexEditorProvider()));
+        
+        NodeState root = InitialContent.INITIAL_CONTENT;
+        NodeBuilder builder = root.builder();
+        NodeBuilder node;
+        NodeBuilder indexDef = EmptyNodeState.EMPTY_NODE.builder()
+            .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
+                Type.NAME)
+            .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(propertyNames), Type.NAMES)
+            .setProperty(IndexConstants.DECLARING_NODE_TYPES, ImmutableList.of(nodeType),
+                Type.NAMES)
+            .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE)
+            .setProperty(OrderedIndex.PROPERTY_VERSION, OrderedIndex.Version.V2.toString())
+            .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
+            .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN);
+        NodeState before, after, indexed, ns, bookmark;
+        
+        //creating index definition
+        node = builder.child(IndexConstants.INDEX_DEFINITIONS_NAME);
+        node.setChildNode(indexDefName, indexDef.getNodeState());
+        
+        // adding a node with the proper nodetype should be indexed
+        
+        before = builder.getNodeState();
+        
+        // adding a node that should be indexed
+        builder.child(okNode)
+            .setProperty(JcrConstants.JCR_PRIMARYTYPE, nodeType, Type.NAME)
+            .setProperty(propertyNames, "apple");
+        
+        after = builder.getNodeState();
+        
+        // processing the commits
+        indexed = hook.processCommit(before, after, CommitInfo.EMPTY);
+        
+        ns = indexed.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(indexDefName);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(IndexConstants.INDEX_CONTENT_NODE_NAME);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode("app");
+        assertTrue(ns.exists());
+        ns = ns.getChildNode("le:");
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(OrderedIndex.FILLER);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(okSha1);
+        assertTrue(ns.exists());
+        assertEquals("/" + okNode, ns.getString(OrderedIndex.PROPERTY_PATH));
+        
+        // adding a node with the wrong nodetype should result in no indexing.
+        builder = indexed.builder();
+        before = indexed;
+
+        builder.child(wrongNode)
+        .setProperty(JcrConstants.JCR_PRIMARYTYPE, JcrConstants.NT_UNSTRUCTURED, Type.NAME)
+        .setProperty(propertyNames, "apple");
+        
+        after = builder.getNodeState();
+        
+        indexed = hook.processCommit(before, after, CommitInfo.EMPTY);
+        
+        // the old node should still be there
+        ns = indexed.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(indexDefName);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(IndexConstants.INDEX_CONTENT_NODE_NAME);
+        assertTrue(ns.exists());
+        ns = ns.getChildNode("app");
+        assertTrue(ns.exists());
+        ns = ns.getChildNode("le:");
+        assertTrue(ns.exists());
+        ns = ns.getChildNode(OrderedIndex.FILLER);
+        assertTrue(ns.exists());
+        bookmark = ns; // keeping a bookmark for not rewalking from scratch
+        ns = ns.getChildNode(okSha1);
+        assertTrue(ns.exists());
+        assertEquals("/" + okNode, ns.getString(OrderedIndex.PROPERTY_PATH));
+        ns = bookmark.getChildNode(wrongSha1);
+        assertFalse("a node with the wrong nodeType should not exists", ns.exists());
     }
 }
