@@ -32,6 +32,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 
 public class SplitStrategyTest {
+    
+    /**
+     * adding of a new document
+     */
     @Test
     public void insert() {
         SplitStrategy strategy = new SplitStrategy();
@@ -87,6 +91,9 @@ public class SplitStrategyTest {
         assertEquals(path, node.getString(OrderedIndex.PROPERTY_PATH));
     }
     
+    /**
+     * deleting an existing document
+     */
     @Test
     public void remove() {
         Map<String, String> shapaths = ImmutableMap.of(
@@ -169,6 +176,40 @@ public class SplitStrategyTest {
         node = node.getChildNode(OrderedIndex.FILLER);
         assertTrue(node.exists());
         node = node.getChildNode(shas[0]);
+        assertTrue(node.exists());
+    }
+    
+    /**
+     * change the property value of an existing document
+     */
+    @Test
+    public void change() {
+        SplitStrategy strategy = new SplitStrategy();
+        NodeBuilder index, node;
+        Set<String> before, after;
+        String path, sha1;
+        
+        sha1 = "acdd763534a786e0d21adb9d6c6b1565d5bd5211";
+        path = "/content/foo/bar";
+
+        index = EmptyNodeState.EMPTY_NODE.builder();
+        node = index.child("app");
+        node = node.child("le:");
+        node = node.child(OrderedIndex.FILLER);
+        node = node.child(sha1);
+        
+        before = Sets.newHashSet("app,le:");
+        after = Sets.newHashSet("app,les");
+        strategy.update(index, path, before, after);
+        node = index.getChildNode("app");
+        assertTrue(node.exists());
+        assertFalse("the document was the only child it should have been cleared", 
+            node.getChildNode("le:").exists());
+        node = node.getChildNode("les");
+        assertTrue(node.exists());
+        node = node.getChildNode(OrderedIndex.FILLER);
+        assertTrue(node.exists());
+        node = node.getChildNode(sha1);
         assertTrue(node.exists());
     }
 }

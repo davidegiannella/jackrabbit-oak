@@ -230,6 +230,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
     @Override
     public void leave(NodeState before, NodeState after) throws CommitFailedException {
         NodeBuilder index;
+        
         if (LOG.isDebugEnabled()) {
             LOG.debug("leave() - before: {}", before);
             LOG.debug("leave() - after: {}", after);
@@ -244,7 +245,6 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
         }
         
         if (!beforeKeys.isEmpty() || !afterKeys.isEmpty()) {
-            LOG.debug("updating...");
             callback.indexUpdate();
             index = definition.child(IndexConstants.INDEX_CONTENT_NODE_NAME);
             getStrategy().update(index, getPath(), beforeKeys, afterKeys);
@@ -270,10 +270,14 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
 
     @Override
     public void propertyChanged(PropertyState before, PropertyState after) throws CommitFailedException {
-        // TODO Auto-generated method stub
-        LOG.debug("propertyChanged()");
-        LOG.debug("-- before: {}", before);
-        LOG.debug("-- after: {}", after);
+        boolean toProcess = isToProcess(after);
+        
+        LOG.debug("propertyChanged() - name: {} - toProcess: {}", after.getName(), toProcess);
+        
+        if (toProcess) {
+            beforeKeys.addAll(encode(PropertyValues.create(before), rules));
+            afterKeys.addAll(encode(PropertyValues.create(after), rules));
+        }
     }
 
     @Override
