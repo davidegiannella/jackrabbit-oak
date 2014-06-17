@@ -92,7 +92,7 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
             if (sp != null && Type.LONGS.equals(sp.getType())) {
                 split = Collections.unmodifiableList(Lists.newArrayList(sp.getValue(Type.LONGS)));
             } else {
-                SplitStrategy.LOG.debug(
+                LOG.debug(
                     "Property 'split' is null or not of the correct type. Setting to MAX. split: {}",
                     sp);
                 split = ImmutableList.of(MAX);
@@ -104,12 +104,12 @@ public class OrderedPropertyIndexEditorV2 implements IndexEditor {
                 try {
                     l = SortLogic.valueOf(s.toUpperCase());
                 } catch (IllegalArgumentException e) {
-                    SplitStrategy.LOG.debug("Wrong logic specified. Defaulting to String");
+                    LOG.debug("Wrong logic specified. Defaulting to String");
                     l = SortLogic.STRING;
                 }
                 logic = l;
             } else {
-                SplitStrategy.LOG.debug(
+                LOG.debug(
                     "Property 'logic' is null or not of the correct type. Setting to null. logic: {}",
                     lo);
                 logic = null;

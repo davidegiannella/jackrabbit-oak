@@ -38,7 +38,7 @@ import com.google.common.hash.Hashing;
  */
 //TODO improve javadoc
 public class SplitStrategy implements IndexStoreStrategy {
-    public static final Logger LOG = LoggerFactory.getLogger(SplitStrategy.class);
+    private static final Logger LOG = LoggerFactory.getLogger(SplitStrategy.class);
 
     /**
      * simple pojo for encoding the path.
