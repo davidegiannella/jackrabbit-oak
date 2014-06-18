@@ -55,6 +55,9 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 
 public class OrderedPropertyIndexEditorV2Test {
+    private static final EditorHook HOOK = new EditorHook(new IndexUpdateProvider(
+        new OrderedPropertyIndexEditorProvider()));
+
     /**
      * mocking class to ease the testing
      */
@@ -229,10 +232,7 @@ public class OrderedPropertyIndexEditorV2Test {
         final String okSha1 = "2fad94fc15205634812cec7737ebc11d8e9db5c6";
         final String wrongNode = "WRONGnode";
         final String wrongSha1 = "f7dc04a5f3b8db1fd6dc16422ffda6a3c4448685";
-        
-        final EditorHook hook = new EditorHook(new IndexUpdateProvider(
-            new OrderedPropertyIndexEditorProvider()));
-        
+                
         NodeState root = InitialContent.INITIAL_CONTENT;
         NodeBuilder builder = root.builder();
         NodeBuilder node;
@@ -264,7 +264,7 @@ public class OrderedPropertyIndexEditorV2Test {
         after = builder.getNodeState();
         
         // processing the commits
-        indexed = hook.processCommit(before, after, CommitInfo.EMPTY);
+        indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
         
         ns = indexed.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
         assertTrue(ns.exists());
@@ -292,7 +292,7 @@ public class OrderedPropertyIndexEditorV2Test {
         
         after = builder.getNodeState();
         
-        indexed = hook.processCommit(before, after, CommitInfo.EMPTY);
+        indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
         
         // the old node should still be there
         ns = indexed.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
@@ -321,7 +321,7 @@ public class OrderedPropertyIndexEditorV2Test {
         builder.getChildNode(wrongNode)
             .setProperty(JcrConstants.JCR_PRIMARYTYPE, nodeType, Type.NAME);
         after = builder.getNodeState();
-        indexed = hook.processCommit(before, after, CommitInfo.EMPTY); 
+        indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY); 
         ns = indexed.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
         assertTrue(ns.exists());
         ns = ns.getChildNode(indexDefName);
@@ -348,7 +348,7 @@ public class OrderedPropertyIndexEditorV2Test {
         builder.getChildNode(wrongNode)
             .setProperty(JcrConstants.JCR_PRIMARYTYPE, JcrConstants.NT_UNSTRUCTURED, Type.NAME);
         after = builder.getNodeState();
-        indexed = hook.processCommit(before, after, CommitInfo.EMPTY); 
+        indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY); 
         ns = indexed.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
         assertTrue(ns.exists());
         ns = ns.getChildNode(indexDefName);
@@ -367,5 +367,82 @@ public class OrderedPropertyIndexEditorV2Test {
         assertEquals("/" + okNode, ns.getString(OrderedIndex.PROPERTY_PATH));
         ns = bookmark.getChildNode(wrongSha1);
         assertFalse("a node with the wrong nodeType should not exists", ns.exists());
+    }
+    
+    /**
+     * checks that if we define an index under a specific path it will index only that path of
+     * content
+     * @throws CommitFailedException 
+     */
+    @Test
+    public void pathSpecifcIndexes() throws CommitFailedException {
+        final String content = "content";
+        final String contentNode = "nodeUnderContent";
+        final String contentNodeSha1 = "1fd86c2368aacab0b025615ad82dfc5a6767cc95";
+        final String rootNode = "nodeUnderRoot";
+        final String indexedProperty = "indexedProperty";
+        final String repoWideIndex = "repoWideIndex";
+        final String pathSpecificIndex = "pathSpecificIndex";
+        NodeBuilder root = InitialContent.INITIAL_CONTENT.builder();
+        NodeState indexDef = EmptyNodeState.EMPTY_NODE.builder()
+            .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
+                Type.NAME)
+            .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(indexedProperty), Type.NAMES)
+            .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE)
+            .setProperty(OrderedIndex.PROPERTY_VERSION, OrderedIndex.Version.V2.toString())
+            .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
+            .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
+        NodeBuilder node;
+        NodeState before, after, indexed, state, bookmark;
+        
+        // defining the indexes
+        node = root.child(IndexConstants.INDEX_DEFINITIONS_NAME);
+        node.setChildNode(repoWideIndex, indexDef);
+        node = root.child(content);
+        node = node.child(IndexConstants.INDEX_DEFINITIONS_NAME);
+        node.setChildNode(pathSpecificIndex, indexDef);
+        
+        before = root.getNodeState();
+        
+        // adding the nodes
+        node = root.getChildNode(content);
+        node = node.child(contentNode);
+        node.setProperty(indexedProperty, "apple");
+        node = root.child(rootNode);
+        node.setProperty(indexedProperty, "pear");
+        
+        after = root.getNodeState();
+        
+        indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
+        
+        state = indexed.getChildNode(content);
+        assertTrue(state.exists());
+        state = state.getChildNode(contentNode);
+        assertTrue(state.exists());
+        
+        state = indexed.getChildNode(rootNode);
+        assertTrue(state.exists());
+        
+        state = indexed.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
+        assertTrue(state.exists());
+        state = state.getChildNode(repoWideIndex);
+        assertTrue(state.exists());
+        state = state.getChildNode(IndexConstants.INDEX_CONTENT_NODE_NAME);
+        bookmark = state;
+        assertTrue(state.exists());
+        state = state.getChildNode("app");
+        assertTrue(state.exists());
+        state = state.getChildNode("le:");
+        assertTrue(state.exists());
+        state = state.getChildNode(OrderedIndex.FILLER);
+        assertTrue(state.exists());
+        state = state.getChildNode(contentNodeSha1);
+        assertTrue(state.exists());
+        assertEquals("/" + content + "/" + contentNode, state.getString(OrderedIndex.PROPERTY_PATH));
+        state = bookmark.getChildNode("pea");
+        assertTrue(state.exists());
+        // investigate why we don't have 'r::'. Something wrong in the Strategy?
+        state = bookmark.getChildNode("r::");
+        assertTrue(state.exists());
     }
 }
