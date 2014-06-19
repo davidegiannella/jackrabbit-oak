@@ -18,6 +18,9 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 
 import java.util.List;
 
+import javax.annotation.Nonnull;
+
+import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.spi.query.Cursor;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex;
@@ -38,7 +41,19 @@ public class OrderedPropertyIndexV2 implements QueryIndex, AdvancedQueryIndex {
             LOG.debug("getPlans() - sortOrder: {}", sortOrder);
             LOG.debug("getPlans() - rootState: {}", rootState);
         }
-        return Lists.newArrayList();
+        AbstractPropertyIndexLookup lookup = getLookup(rootState);
+        List<IndexPlan> plans = Lists.newArrayList();
+        
+        if (sortOrder != null) {
+            // let's consider any eventual sorting we could do
+            for (OrderEntry order : sortOrder) {
+                String propertyName = PathUtils.getName(order.getPropertyName());
+                if (lookup.isIndexed(propertyName, "/", filter)) {
+                    
+                }
+            }
+        }
+        return plans; 
     }
 
     @Override
@@ -60,6 +75,10 @@ public class OrderedPropertyIndexV2 implements QueryIndex, AdvancedQueryIndex {
         return null;
     }
 
+    private OrderedPropertyIndexLookupV2 getLookup(@Nonnull final NodeState root) {
+        return new OrderedPropertyIndexLookupV2(root);
+    }
+    
     // ------------------------------------------------------------------------- QueryIndex methods
     @Override
     public double getCost(Filter filter, NodeState rootState) {
