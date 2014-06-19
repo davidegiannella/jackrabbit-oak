@@ -50,12 +50,18 @@ public class OrderedPropertyIndexV2Test {
     /**
      * test the returned plans. <b>Does not cover the {@code estimatedEntryCount}</b>
      */
-    @Test @Ignore("Not complete yet.")
+    @Test @Ignore("Still WIP")
     public void getPlans() {
         final String indexedProperty = "foo";
         final AdvancedQueryIndex index = new OrderedPropertyIndexV2();
-        NodeBuilder root = InitialContent.INITIAL_CONTENT.builder();
-        NodeState indexDef = EmptyNodeState.EMPTY_NODE.builder()
+        final NodeState indexDefV1 = EmptyNodeState.EMPTY_NODE.builder()
+            .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
+                Type.NAME)
+            .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(indexedProperty), Type.NAMES)
+            .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE)
+            .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
+            .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
+        final NodeState indexDefV2 = EmptyNodeState.EMPTY_NODE.builder()
             .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
                 Type.NAME)
             .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(indexedProperty), Type.NAMES)
@@ -63,17 +69,31 @@ public class OrderedPropertyIndexV2Test {
             .setProperty(OrderedIndex.PROPERTY_VERSION, OrderedIndex.Version.V2.toString())
             .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
             .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
+        NodeBuilder root;
         List<QueryIndex.OrderEntry> sortOrder;
         FilterImpl filter;
         List<IndexPlan> plans;
         IndexPlan plan;
         String statement;
-        
-        // defining the index
-        root.child(IndexConstants.INDEX_DEFINITIONS_NAME).setChildNode("theIndex", indexDef);
-        
+
         plans = index.getPlans(new FilterImpl(), null, EmptyNodeState.EMPTY_NODE);
         assertNotNull("it doesn't matter we should always return something", plans);
+
+        // defining the index V1
+        root = InitialContent.INITIAL_CONTENT.builder();
+        root.child(IndexConstants.INDEX_DEFINITIONS_NAME).setChildNode("theIndex", indexDefV1);
+
+        statement = "SELECT * FROM [nt:base] WHERE bazbaz IS NOT NULL ORDER BY " + indexedProperty;
+        sortOrder = createOrderEntry(indexedProperty, Order.ASCENDING);
+        filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
+        filter.restrictProperty("bazbaz", Operator.EQUAL, null);
+        plans = index.getPlans(filter, sortOrder, root.getNodeState());
+        assertNotNull(plans);
+        assertTrue("The V1 version of the index should not apply to us", plans.isEmpty());
+
+        // defining the index V2
+        root = InitialContent.INITIAL_CONTENT.builder();
+        root.child(IndexConstants.INDEX_DEFINITIONS_NAME).setChildNode("theIndex", indexDefV2);
         
         statement = "SELECT * FROM [nt:base] WHERE bazbaz IS NOT NULL";
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
@@ -124,12 +144,6 @@ public class OrderedPropertyIndexV2Test {
         
         try {
             qi.getCost(null, null);
-            fail("It should have risen an exception as it's not supported");
-        } catch (UnsupportedOperationException e) {
-            // all good if here
-        }
-        try {
-            qi.getIndexName();
             fail("It should have risen an exception as it's not supported");
         } catch (UnsupportedOperationException e) {
             // all good if here

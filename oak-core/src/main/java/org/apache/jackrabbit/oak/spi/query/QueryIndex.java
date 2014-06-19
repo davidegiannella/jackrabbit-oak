@@ -167,7 +167,13 @@ public interface QueryIndex {
          * @return a cursor to iterate over the result
          */
         Cursor query(IndexPlan plan, NodeState rootState);
-
+        
+        /**
+         * Get the unique index name.
+         *
+         * @return the index name
+         */
+        String getIndexName();
     }
 
     /**

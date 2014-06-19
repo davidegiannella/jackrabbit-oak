@@ -33,6 +33,7 @@ import com.google.common.collect.Lists;
 
 public class OrderedPropertyIndexV2 implements QueryIndex, AdvancedQueryIndex {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexV2.class);
+    private static final String NAME = OrderedPropertyIndexV2.class.getSimpleName();
     
     @Override
     public List<IndexPlan> getPlans(Filter filter, List<OrderEntry> sortOrder, NodeState rootState) {
@@ -78,7 +79,12 @@ public class OrderedPropertyIndexV2 implements QueryIndex, AdvancedQueryIndex {
     private OrderedPropertyIndexLookupV2 getLookup(@Nonnull final NodeState root) {
         return new OrderedPropertyIndexLookupV2(root);
     }
-    
+
+    @Override
+    public String getIndexName() {
+        return NAME;
+    }
+
     // ------------------------------------------------------------------------- QueryIndex methods
     @Override
     public double getCost(Filter filter, NodeState rootState) {
@@ -92,11 +98,6 @@ public class OrderedPropertyIndexV2 implements QueryIndex, AdvancedQueryIndex {
 
     @Override
     public String getPlan(Filter filter, NodeState rootState) {
-        throw new UnsupportedOperationException("Not supported as implementing AdvancedQueryIndex");
-    }
-
-    @Override
-    public String getIndexName() {
         throw new UnsupportedOperationException("Not supported as implementing AdvancedQueryIndex");
     }
 }
