@@ -23,23 +23,39 @@ import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.AdvancedQueryIndex;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Lists;
 
 public class OrderedPropertyIndexV2 implements QueryIndex, AdvancedQueryIndex {
-
+    private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexV2.class);
+    
     @Override
     public List<IndexPlan> getPlans(Filter filter, List<OrderEntry> sortOrder, NodeState rootState) {
-        // TODO Auto-generated method stub
-        return null;
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("getPlans() - filter: {}", filter);
+            LOG.debug("getPlans() - sortOrder: {}", sortOrder);
+            LOG.debug("getPlans() - rootState: {}", rootState);
+        }
+        return Lists.newArrayList();
     }
 
     @Override
     public String getPlanDescription(IndexPlan plan, NodeState root) {
-        // TODO Auto-generated method stub
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("getPlanDescription() - plan: {}", plan);
+            LOG.debug("getPlanDescription() - root: {}", root);
+        }
         return null;
     }
 
     @Override
     public Cursor query(IndexPlan plan, NodeState rootState) {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("query() - plan: {}", plan);
+            LOG.debug("query() - rootState: {}", rootState);
+        }
         // TODO Auto-generated method stub
         return null;
     }
