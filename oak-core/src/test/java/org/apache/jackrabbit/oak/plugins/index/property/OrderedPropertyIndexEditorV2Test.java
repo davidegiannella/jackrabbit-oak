@@ -371,15 +371,18 @@ public class OrderedPropertyIndexEditorV2Test {
     
     /**
      * checks that if we define an index under a specific path it will index only that path of
-     * content
+     * content.
+     * 
      * @throws CommitFailedException 
      */
     @Test
     public void pathSpecifcIndexes() throws CommitFailedException {
         final String content = "content";
         final String contentNode = "nodeUnderContent";
-        final String contentNodeSha1 = "1fd86c2368aacab0b025615ad82dfc5a6767cc95";
+        final String repoWideContentNodeSha1 = "1fd86c2368aacab0b025615ad82dfc5a6767cc95";
+        final String contentWideContentNodeSha1 = "10e8c9ccec2e58611b3521fec924a7fda70487cd";
         final String rootNode = "nodeUnderRoot";
+        final String rootNodeSha1 = "e931bbb6f91b0554a57c0dc8282c895c33b9a0fc";
         final String indexedProperty = "indexedProperty";
         final String repoWideIndex = "repoWideIndex";
         final String pathSpecificIndex = "pathSpecificIndex";
@@ -415,6 +418,7 @@ public class OrderedPropertyIndexEditorV2Test {
         
         indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
         
+        // do we really have the nodes. Paranoia to the rescue!
         state = indexed.getChildNode(content);
         assertTrue(state.exists());
         state = state.getChildNode(contentNode);
@@ -423,6 +427,7 @@ public class OrderedPropertyIndexEditorV2Test {
         state = indexed.getChildNode(rootNode);
         assertTrue(state.exists());
         
+        // the repo-wide index should have both nodes
         state = indexed.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
         assertTrue(state.exists());
         state = state.getChildNode(repoWideIndex);
@@ -436,13 +441,37 @@ public class OrderedPropertyIndexEditorV2Test {
         assertTrue(state.exists());
         state = state.getChildNode(OrderedIndex.FILLER);
         assertTrue(state.exists());
-        state = state.getChildNode(contentNodeSha1);
-        assertTrue(state.exists());
+        state = state.getChildNode(repoWideContentNodeSha1);
+        assertTrue("repo-wide index should have both the added nodes", state.exists());
         assertEquals("/" + content + "/" + contentNode, state.getString(OrderedIndex.PROPERTY_PATH));
         state = bookmark.getChildNode("pea");
         assertTrue(state.exists());
-        // investigate why we don't have 'r::'. Something wrong in the Strategy?
-        state = bookmark.getChildNode("r::");
+        state = state.getChildNode("r::");
         assertTrue(state.exists());
+        state = state.getChildNode(OrderedIndex.FILLER);
+        assertTrue(state.exists());
+        state = state.getChildNode(rootNodeSha1);
+        assertTrue("repo-wide index should have both the added nodes", state.exists());
+        assertEquals("/" + rootNode, state.getString(OrderedIndex.PROPERTY_PATH));
+        
+        // the path-specific index should have only 1 node
+        state = indexed.getChildNode(content);
+        state = state.getChildNode(IndexConstants.INDEX_DEFINITIONS_NAME);
+        assertTrue(state.exists());
+        state = state.getChildNode(pathSpecificIndex);
+        assertTrue(state.exists());
+        state = state.getChildNode(IndexConstants.INDEX_CONTENT_NODE_NAME);
+        assertTrue(state.exists());
+        bookmark = state;
+        state = state.getChildNode("app");
+        assertTrue(state.exists());
+        state = state.getChildNode("le:");
+        assertTrue(state.exists());
+        state = state.getChildNode(OrderedIndex.FILLER);
+        assertTrue(state.exists());
+        state = state.getChildNode(contentWideContentNodeSha1);
+        assertTrue(state.exists());
+        state = bookmark.getChildNode("pea");
+        assertFalse("as it's path-specific index we should not have this", state.exists());
     }
 }

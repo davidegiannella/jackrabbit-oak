@@ -36,6 +36,7 @@ public class OrderedPropertyIndexProvider implements QueryIndexProvider {
     @Override
     @Nonnull
     public List<? extends QueryIndex> getQueryIndexes(NodeState nodeState) {
+//        return ImmutableList.<QueryIndex> of(new OrderedPropertyIndex());
         return ImmutableList.<QueryIndex> of(new OrderedPropertyIndex(),
             new OrderedPropertyIndexV2());
     }
