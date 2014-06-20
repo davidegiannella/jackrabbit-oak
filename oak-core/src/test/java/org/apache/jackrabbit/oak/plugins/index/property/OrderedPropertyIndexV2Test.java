@@ -26,14 +26,18 @@ import static org.junit.Assert.fail;
 import java.util.List;
 
 import org.apache.jackrabbit.JcrConstants;
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
+import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.QueryEngineSettings;
 import org.apache.jackrabbit.oak.query.ast.Operator;
 import org.apache.jackrabbit.oak.query.ast.SelectorImpl;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
+import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.AdvancedQueryIndex;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
@@ -43,16 +47,22 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
+
 import com.google.common.collect.ImmutableList;
 
 public class OrderedPropertyIndexV2Test {
-    
+    private static final EditorHook HOOK = new EditorHook(new IndexUpdateProvider(
+        new OrderedPropertyIndexEditorProvider()));
+
     /**
      * test the returned plans. <b>Does not cover the {@code estimatedEntryCount}</b>
+     * @throws CommitFailedException 
      */
-    @Test @Ignore("Still WIP")
-    public void getPlans() {
+    @Test @Ignore("WIP")
+    public void getPlans() throws CommitFailedException {
         final String indexedProperty = "foo";
+        final String indexDefName = "theIndex";
         final AdvancedQueryIndex index = new OrderedPropertyIndexV2();
         final NodeState indexDefV1 = EmptyNodeState.EMPTY_NODE.builder()
             .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
@@ -70,6 +80,7 @@ public class OrderedPropertyIndexV2Test {
             .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
             .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
         NodeBuilder root;
+        NodeState indexed, before, after;
         List<QueryIndex.OrderEntry> sortOrder;
         FilterImpl filter;
         List<IndexPlan> plans;
@@ -83,22 +94,36 @@ public class OrderedPropertyIndexV2Test {
         root = InitialContent.INITIAL_CONTENT.builder();
         root.child(IndexConstants.INDEX_DEFINITIONS_NAME).setChildNode("theIndex", indexDefV1);
 
+        // we have to index at least one node for having the isIndexed to work
+        before = root.getNodeState();
+        root.child("anode").setProperty(indexedProperty, "avalue");
+        after = root.getNodeState();
+        indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
+        
         statement = "SELECT * FROM [nt:base] WHERE bazbaz IS NOT NULL ORDER BY " + indexedProperty;
         sortOrder = createOrderEntry(indexedProperty, Order.ASCENDING);
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
         filter.restrictProperty("bazbaz", Operator.EQUAL, null);
-        plans = index.getPlans(filter, sortOrder, root.getNodeState());
+        plans = index.getPlans(filter, sortOrder, indexed);
         assertNotNull(plans);
         assertTrue("The V1 version of the index should not apply to us", plans.isEmpty());
 
         // defining the index V2
         root = InitialContent.INITIAL_CONTENT.builder();
-        root.child(IndexConstants.INDEX_DEFINITIONS_NAME).setChildNode("theIndex", indexDefV2);
+        root.child(IndexConstants.INDEX_DEFINITIONS_NAME).setChildNode(indexDefName, indexDefV2);
+        before = root.getNodeState();
+        root.child("anode").setProperty(indexedProperty, "avalue");
+        after = root.getNodeState();
+        indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
+        
+        // asserting the index definition being there
+        assertEquals(indexDefV2,
+            indexed.getChildNode(INDEX_DEFINITIONS_NAME).getChildNode(indexDefName));
         
         statement = "SELECT * FROM [nt:base] WHERE bazbaz IS NOT NULL";
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
         filter.restrictProperty("bazbaz", Operator.EQUAL, null);
-        plans = index.getPlans(filter, null, root.getNodeState());
+        plans = index.getPlans(filter, null, indexed);
         assertNotNull(plans);
         assertTrue("if we don't index WHERE or ORDER then empty is expected", plans.isEmpty());
 
@@ -106,7 +131,7 @@ public class OrderedPropertyIndexV2Test {
         sortOrder = createOrderEntry("bazbaz", Order.ASCENDING);
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
         filter.restrictProperty("bazbaz", Operator.EQUAL, null);
-        plans = index.getPlans(filter, sortOrder, root.getNodeState());
+        plans = index.getPlans(filter, sortOrder, indexed);
         assertNotNull(plans);
         assertTrue("if we don't index WHERE or ORDER then empty is expected", plans.isEmpty());
 
@@ -114,7 +139,7 @@ public class OrderedPropertyIndexV2Test {
         sortOrder = createOrderEntry(indexedProperty, Order.ASCENDING);
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
         filter.restrictProperty("bazbaz", Operator.EQUAL, null);
-        plans = index.getPlans(filter, sortOrder, root.getNodeState());
+        plans = index.getPlans(filter, sortOrder, indexed);
         assertNotNull(plans);
         assertEquals(1, plans.size());
         plan = plans.get(0);

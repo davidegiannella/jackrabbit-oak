@@ -20,7 +20,9 @@ import java.util.List;
 
 import javax.annotation.Nonnull;
 
-import org.apache.jackrabbit.oak.commons.PathUtils;
+import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
+import org.apache.jackrabbit.oak.spi.commit.Editor;
+import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.query.Cursor;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex;
@@ -29,11 +31,18 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
-public class OrderedPropertyIndexV2 implements QueryIndex, AdvancedQueryIndex {
+public class OrderedPropertyIndexV2 extends AbstractOrderedIndex implements QueryIndex, AdvancedQueryIndex {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexV2.class);
     private static final String NAME = OrderedPropertyIndexV2.class.getSimpleName();
+
+    /**
+     * all the ORDER BY the current index can provide
+     */
+    private static final Iterable<OrderEntry.Order> ORDERS = ImmutableList.of(
+        OrderEntry.Order.ASCENDING, OrderEntry.Order.DESCENDING);
     
     @Override
     public List<IndexPlan> getPlans(Filter filter, List<OrderEntry> sortOrder, NodeState rootState) {
@@ -46,13 +55,7 @@ public class OrderedPropertyIndexV2 implements QueryIndex, AdvancedQueryIndex {
         List<IndexPlan> plans = Lists.newArrayList();
         
         if (sortOrder != null) {
-            // let's consider any eventual sorting we could do
-            for (OrderEntry order : sortOrder) {
-                String propertyName = PathUtils.getName(order.getPropertyName());
-                if (lookup.isIndexed(propertyName, "/", filter)) {
-                    
-                }
-            }
+            // plans.addAll(processSortOrder(sortOrder, lookup, filter, rootState, ORDERS));
         }
         return plans; 
     }

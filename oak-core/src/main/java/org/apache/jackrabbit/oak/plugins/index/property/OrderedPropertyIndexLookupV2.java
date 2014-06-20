@@ -18,6 +18,9 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.oak.api.PropertyValue;
+import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
 public class OrderedPropertyIndexLookupV2 extends AbstractPropertyIndexLookup {
@@ -35,5 +38,14 @@ public class OrderedPropertyIndexLookupV2 extends AbstractPropertyIndexLookup {
     @Override
     String getType() {
         return OrderedIndex.TYPE;
+    }
+
+    @Override
+    public long getEstimatedEntryCount(final String propertyName, 
+                                       final PropertyValue value, 
+                                       final Filter filter,
+                                       final PropertyRestriction pr) {
+        // TODO Auto-generated method stub
+        return 0;
     }
 }
