@@ -47,42 +47,19 @@ public class OrderedPropertyIndexEditorProviderTest {
         
         
         indexDefinition = Mockito.mock(NodeBuilder.class);
+        Mockito.when(indexDefinition.getProperty(IndexConstants.PROPERTY_NAMES)).thenReturn(
+            propertyNames);
+
         editor = iep.getIndexEditor("foobar", indexDefinition, null, null);
         assertNull("With wrong index type a null is expected", editor);
         
-        indexDefinition = Mockito.mock(NodeBuilder.class);
-        Mockito.when(indexDefinition.getString(OrderedIndex.PROPERTY_VERSION)).thenReturn(null);
-        Mockito.when(indexDefinition.getProperty(IndexConstants.PROPERTY_NAMES)).thenReturn(
-            propertyNames);
-        editor = iep.getIndexEditor(OrderedIndex.TYPE, indexDefinition, null, null);
-        assertTrue("Without a version not specified the first implementation is expected",
-            editor instanceof OrderedPropertyIndexEditor);
+        editor = iep.getIndexEditor("foobar", indexDefinition, null, null);
+        assertNull(editor);
 
-        indexDefinition = Mockito.mock(NodeBuilder.class);
-        Mockito.when(indexDefinition.getString(OrderedIndex.PROPERTY_VERSION)).thenReturn(
-            String.valueOf(Integer.MAX_VALUE));
-        Mockito.when(indexDefinition.getProperty(IndexConstants.PROPERTY_NAMES)).thenReturn(
-            propertyNames);
         editor = iep.getIndexEditor(OrderedIndex.TYPE, indexDefinition, null, null);
-        assertTrue("Without a wrong version specified the first implementation is expected",
-            editor instanceof OrderedPropertyIndexEditor);
+        assertTrue(editor instanceof OrderedPropertyIndexEditor);
 
-        indexDefinition = Mockito.mock(NodeBuilder.class);
-        Mockito.when(indexDefinition.getString(OrderedIndex.PROPERTY_VERSION)).thenReturn(
-            OrderedIndex.Version.V1.toString());
-        Mockito.when(indexDefinition.getProperty(IndexConstants.PROPERTY_NAMES)).thenReturn(
-            propertyNames);
-        editor = iep.getIndexEditor(OrderedIndex.TYPE, indexDefinition, null, null);
-        assertTrue("the v1 of the algorithm was expected as by definition",
-            editor instanceof OrderedPropertyIndexEditor);
-
-        indexDefinition = Mockito.mock(NodeBuilder.class);
-        Mockito.when(indexDefinition.getString(OrderedIndex.PROPERTY_VERSION)).thenReturn(
-            OrderedIndex.Version.V2.toString());
-        Mockito.when(indexDefinition.getProperty(IndexConstants.PROPERTY_NAMES)).thenReturn(
-            propertyNames);
-        editor = iep.getIndexEditor(OrderedIndex.TYPE, indexDefinition, null, null);
-        assertTrue("the v2 of the algorithm was expected as by definition",
-            editor instanceof OrderedPropertyIndexEditorV2);
+        editor = iep.getIndexEditor(OrderedIndex.TYPE_2, indexDefinition, null, null);
+        assertTrue(editor instanceof OrderedPropertyIndexEditorV2);
     }
 }

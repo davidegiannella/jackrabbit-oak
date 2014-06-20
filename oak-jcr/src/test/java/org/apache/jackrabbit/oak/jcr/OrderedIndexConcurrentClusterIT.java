@@ -62,8 +62,7 @@ public class OrderedIndexConcurrentClusterIT {
     private static final CreateNodesWorker.IndexDefinition INDEX_DEFINITION = new CreateNodesWorker.IndexDefinition(
         INDEX_NODE_NAME, OrderedIndex.TYPE, new String[] { INDEX_PROPERTY });
     private static final CreateNodesWorker.IndexDefinition INDEX_DEFINITION_V2 = new CreateNodesWorker.IndexDefinition(
-        INDEX_NODE_NAME, OrderedIndex.TYPE, new String[] { INDEX_PROPERTY }, ImmutableMap.of(
-            OrderedIndex.PROPERTY_VERSION, new StringValue("2"),
+        INDEX_NODE_NAME, OrderedIndex.TYPE_2, new String[] { INDEX_PROPERTY }, ImmutableMap.of(
             OrderedIndex.PROPERTY_SPLIT,
             new NodesWorker.MultiValue(new LongValue[] { new LongValue(4), new LongValue(6),
                                                         new LongValue(6), new LongValue(3) })));

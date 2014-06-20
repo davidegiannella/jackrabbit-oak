@@ -75,8 +75,7 @@ public class OrderedPropertyIndexV2Test {
             .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
                 Type.NAME)
             .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(indexedProperty), Type.NAMES)
-            .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE)
-            .setProperty(OrderedIndex.PROPERTY_VERSION, OrderedIndex.Version.V2.toString())
+            .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE_2)
             .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
             .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
         NodeBuilder root;
@@ -115,11 +114,7 @@ public class OrderedPropertyIndexV2Test {
         root.child("anode").setProperty(indexedProperty, "avalue");
         after = root.getNodeState();
         indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
-        
-        // asserting the index definition being there
-        assertEquals(indexDefV2,
-            indexed.getChildNode(INDEX_DEFINITIONS_NAME).getChildNode(indexDefName));
-        
+                
         statement = "SELECT * FROM [nt:base] WHERE bazbaz IS NOT NULL";
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
         filter.restrictProperty("bazbaz", Operator.EQUAL, null);

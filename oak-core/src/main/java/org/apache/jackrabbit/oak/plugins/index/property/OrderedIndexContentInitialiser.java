@@ -41,9 +41,7 @@ public class OrderedIndexContentInitialiser implements RepositoryInitializer {
             indexDef = oakIndex.child(indexDefNode);
             indexDef.setProperty(JcrConstants.JCR_PRIMARYTYPE,
                 IndexConstants.INDEX_DEFINITIONS_NODE_TYPE, Type.NAME);
-            indexDef.setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE, Type.STRING);
-            indexDef.setProperty(OrderedIndex.PROPERTY_VERSION, OrderedIndex.Version.V2.toString(),
-                Type.STRING);
+            indexDef.setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE_2, Type.STRING);
             indexDef.setProperty(PropertyStates.createProperty(IndexConstants.PROPERTY_NAMES,
                 ImmutableList.of("author"), Type.NAMES));
             indexDef.setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN);

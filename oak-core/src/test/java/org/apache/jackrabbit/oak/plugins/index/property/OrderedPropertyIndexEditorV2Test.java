@@ -242,8 +242,7 @@ public class OrderedPropertyIndexEditorV2Test {
             .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(propertyNames), Type.NAMES)
             .setProperty(IndexConstants.DECLARING_NODE_TYPES, ImmutableList.of(nodeType),
                 Type.NAMES)
-            .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE)
-            .setProperty(OrderedIndex.PROPERTY_VERSION, OrderedIndex.Version.V2.toString())
+            .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE_2)
             .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
             .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN);
         NodeState before, after, indexed, ns, bookmark;
@@ -391,8 +390,7 @@ public class OrderedPropertyIndexEditorV2Test {
             .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
                 Type.NAME)
             .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(indexedProperty), Type.NAMES)
-            .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE)
-            .setProperty(OrderedIndex.PROPERTY_VERSION, OrderedIndex.Version.V2.toString())
+            .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE_2)
             .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
             .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
         NodeBuilder node;

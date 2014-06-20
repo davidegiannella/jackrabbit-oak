@@ -116,42 +116,14 @@ public interface OrderedIndex {
     };
     
     /**
-     * used for discerning the correct implementation to use
+     * the first generation ordered index
      */
-    enum Version {
-        V1("1"), V2("2");
-        
-        private String v;
-        private Version(@Nonnull final String v) {
-            this.v = v;
-        }
-        
-        @Override
-        public String toString() {
-            return v;
-        }
-        
-        
-        private static final Map<String, Version> MAP = Collections
-            .synchronizedMap(new HashMap<String, Version>());
-        static {
-            for (Version v : values()) {
-                MAP.put(v.toString(), v);
-            }
-        }
-        
-        /**
-         * retrieve the proper Version from a String. if not found {@code null} will be returned
-         * 
-         * @param v
-         * @return
-         */
-        @Nullable public static Version fromString(final String v) {
-            return (v == null) ? null : MAP.get(v);
-        }
-    };
-    
     String TYPE = "ordered";
+    
+    /**
+     * the 2nd generation ordered index
+     */
+    String TYPE_2 = "ordered2";
     
     /**
      * the 'key' used for specifying the direction of the index when providing the configuration
@@ -165,16 +137,6 @@ public interface OrderedIndex {
      */
     OrderDirection DEFAULT_DIRECTION = OrderDirection.ASC;
     
-    /**
-     * default index algorithm
-     */
-    Version DEFAULT_VERSION = Version.V1;
-    
-    /**
-     * property that identify the implementation version of the index.
-     */
-    String PROPERTY_VERSION = "version";
-
     /**
      * property used for specifying the desired sort logic
      */

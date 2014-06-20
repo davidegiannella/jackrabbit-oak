@@ -36,7 +36,6 @@ import com.google.common.collect.Lists;
 
 public class OrderedPropertyIndexV2 extends AbstractOrderedIndex implements QueryIndex, AdvancedQueryIndex {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexV2.class);
-    private static final String NAME = OrderedPropertyIndexV2.class.getSimpleName();
 
     /**
      * all the ORDER BY the current index can provide
@@ -85,7 +84,7 @@ public class OrderedPropertyIndexV2 extends AbstractOrderedIndex implements Quer
 
     @Override
     public String getIndexName() {
-        return NAME;
+        return OrderedIndex.TYPE_2;
     }
 
     // ------------------------------------------------------------------------- QueryIndex methods
