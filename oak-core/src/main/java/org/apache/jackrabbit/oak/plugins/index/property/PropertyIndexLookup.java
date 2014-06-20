@@ -25,6 +25,7 @@ import org.apache.jackrabbit.oak.plugins.index.property.strategy.ContentMirrorSt
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.UniqueEntryStoreStrategy;
 import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
 /**
@@ -101,5 +102,13 @@ public class PropertyIndexLookup extends AbstractPropertyIndexLookup {
     @Override
     NodeState getRoot() {
         return root;
+    }
+
+    @Override
+    public long getEstimatedEntryCount(final String propertyName, 
+                                       final PropertyValue value,
+                                       final Filter filter,
+                                       final PropertyRestriction pr) {
+        throw new UnsupportedOperationException("Not Implemented");
     }
 }

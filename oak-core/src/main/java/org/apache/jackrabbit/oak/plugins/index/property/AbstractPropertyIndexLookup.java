@@ -25,12 +25,15 @@ import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.TYPE_PROPER
 
 import java.util.Set;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
@@ -48,6 +51,20 @@ public abstract class AbstractPropertyIndexLookup {
      * @return the type
      */
     abstract String getType();
+    
+    /**
+     * retrieve the estimated entry count for the current filter
+     * 
+     * @param propertyName
+     * @param value
+     * @param filter
+     * @param pr
+     * @return
+     */
+    public abstract long getEstimatedEntryCount(@Nonnull final String propertyName, 
+                                                @Nonnull final PropertyValue value,
+                                                @Nonnull final Filter filter, 
+                                                @Nonnull final PropertyRestriction pr);
     
     static Set<String> getSuperTypes(Filter filter) {
         if (filter != null && !filter.matchesAllTypes()) {
@@ -131,5 +148,4 @@ public abstract class AbstractPropertyIndexLookup {
         }
         return fallback;
     }
-
 }
