@@ -54,7 +54,7 @@ public class OrderedPropertyIndexV2 extends AbstractOrderedIndex implements Quer
         List<IndexPlan> plans = Lists.newArrayList();
         
         if (sortOrder != null) {
-            // plans.addAll(processSortOrder(sortOrder, lookup, filter, rootState, ORDERS));
+            plans.addAll(processSortOrder(sortOrder, lookup, filter, rootState, ORDERS));
         }
         return plans; 
     }

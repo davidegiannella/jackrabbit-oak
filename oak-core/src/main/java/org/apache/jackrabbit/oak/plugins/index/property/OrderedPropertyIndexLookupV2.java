@@ -37,7 +37,7 @@ public class OrderedPropertyIndexLookupV2 extends AbstractPropertyIndexLookup {
 
     @Override
     String getType() {
-        return OrderedIndex.TYPE;
+        return OrderedIndex.TYPE_2;
     }
 
     @Override
@@ -46,6 +46,7 @@ public class OrderedPropertyIndexLookupV2 extends AbstractPropertyIndexLookup {
                                        final Filter filter,
                                        final PropertyRestriction pr) {
         // TODO Auto-generated method stub
-        return 0;
+        // setting to MAX for avoiding the query engine to pick it up for now.
+        return Long.MAX_VALUE;
     }
 }
