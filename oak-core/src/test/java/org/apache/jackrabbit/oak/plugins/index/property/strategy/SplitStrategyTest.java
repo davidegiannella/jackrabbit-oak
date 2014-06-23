@@ -16,6 +16,8 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -23,16 +25,35 @@ import static org.junit.Assert.assertTrue;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.jackrabbit.JcrConstants;
+import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy.AdvancedIndexStoreStrategy;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
+import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.junit.Test;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 
 public class SplitStrategyTest {
-    
+    private static final String INDEXED_PROPERTY = "foo";
+
+    private static final AdvancedIndexStoreStrategy STRATEGY = new SplitStrategy();
+
+    private static final NodeState INDEX_DEF_V2 = EmptyNodeState.EMPTY_NODE.builder()
+        .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
+            Type.NAME)
+        .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(INDEXED_PROPERTY), Type.NAMES)
+        .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE_2)
+        .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
+        .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
+
     /**
      * adding of a new document
      */
@@ -211,5 +232,24 @@ public class SplitStrategyTest {
         assertTrue(node.exists());
         node = node.getChildNode(sha1);
         assertTrue(node.exists());
+    }
+    
+    @Test
+    public void count() {
+        final String indexDefName = "theIndex";
+        NodeBuilder root;
+        NodeState indexMeta;
+        PropertyRestriction pr;
+        
+        // creating a structure with entryCount specified but no content in there actually
+        root = InitialContent.INITIAL_CONTENT.builder();
+        root.child(INDEX_DEFINITIONS_NAME).setChildNode(indexDefName, INDEX_DEF_V2)
+            .setProperty(ENTRY_COUNT_PROPERTY_NAME, 1L, Type.LONG);
+        indexMeta = root.getChildNode(INDEX_DEFINITIONS_NAME).getChildNode(indexDefName)
+            .getNodeState();
+        pr = new PropertyRestriction();
+        pr.propertyName = INDEXED_PROPERTY;
+        assertEquals("if we don't have the :index node no query", Long.MAX_VALUE,
+            STRATEGY.count(indexMeta, pr, 10));
     }
 }

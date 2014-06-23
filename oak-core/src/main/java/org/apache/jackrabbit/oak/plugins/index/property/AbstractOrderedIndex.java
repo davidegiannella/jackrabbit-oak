@@ -18,6 +18,7 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.PropertyResourceBundle;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -30,10 +31,13 @@ import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry.Order;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Lists;
+
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 
 /**
  * holders for common methos for the OrderedIndexes
@@ -85,6 +89,7 @@ public abstract class AbstractOrderedIndex {
             for (OrderEntry oe : sortOrder) {
                 String propertyName = PathUtils.getName(oe.getPropertyName());
                 if (lookup.isIndexed(propertyName, "/", filter)) {
+                    NodeState indexMeta = lookup.getIndexNode(propertyName, filter);
                     IndexPlan.Builder b = getIndexPlanBuilder(filter);
                     List<OrderEntry> orders = Lists.newArrayList();
                     for (OrderEntry.Order order : availableSorting) {
@@ -96,8 +101,12 @@ public abstract class AbstractOrderedIndex {
                             );
                     }
                     b.setSortOrder(orders);
-                    b.setEstimatedEntryCount(lookup.getEstimatedEntryCount(propertyName, null,
-                        filter, null));
+                    
+                    // the cost is estimated as `property IS NOT NULL`
+                    PropertyRestriction pr = new PropertyRestriction();
+                    pr.propertyName = propertyName;                    
+                    b.setEstimatedEntryCount(lookup.getEstimatedEntryCount(indexMeta, pr));
+                    
                     IndexPlan plan = b.build();
                     LOG.debug("plan: {}", plan);
                     plans.add(plan);
@@ -132,6 +141,7 @@ public abstract class AbstractOrderedIndex {
         for (Filter.PropertyRestriction pr : restrictions) {
             String propertyName = PathUtils.getName(pr.propertyName);
             if (lookup.isIndexed(propertyName, "/", filter)) {
+                NodeState indexMeta = lookup.getIndexNode(propertyName, filter);
                 PropertyValue value = null;
                 boolean createPlan = false;
                 if (pr.first == null && pr.last == null) {
@@ -171,7 +181,9 @@ public abstract class AbstractOrderedIndex {
                         
                     }
                     b.setSortOrder(o);
-                    long count = lookup.getEstimatedEntryCount(propertyName, value, filter, pr);
+                    
+                    // TODO implement the proper PropertyRestriction encoding
+                    long count = lookup.getEstimatedEntryCount(indexMeta, null);
                     b.setEstimatedEntryCount(count);
                     LOG.debug("estimatedCount: {}", count);
 

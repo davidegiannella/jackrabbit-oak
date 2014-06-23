@@ -100,10 +100,7 @@ public class PropertyIndexLookup extends AbstractPropertyIndexLookup {
     }
 
     @Override
-    public long getEstimatedEntryCount(final String propertyName, 
-                                       final PropertyValue value,
-                                       final Filter filter,
-                                       final PropertyRestriction pr) {
-        throw new UnsupportedOperationException("Not Implemented");
+    public long getEstimatedEntryCount(NodeState indexMeta, PropertyRestriction pr) {
+        throw new UnsupportedOperationException(); 
     }
 }

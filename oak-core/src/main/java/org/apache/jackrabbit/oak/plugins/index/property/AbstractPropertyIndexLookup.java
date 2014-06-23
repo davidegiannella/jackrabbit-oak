@@ -66,19 +66,7 @@ public abstract class AbstractPropertyIndexLookup {
      */
     abstract IndexStoreStrategy getStrategy(@Nonnull final NodeState indexMeta);
     
-    /**
-     * retrieve the estimated entry count for the current filter
-     * 
-     * @param propertyName
-     * @param value
-     * @param filter
-     * @param pr
-     * @return
-     */
-    public abstract long getEstimatedEntryCount(@Nonnull final String propertyName, 
-                                                @Nonnull final PropertyValue value,
-                                                @Nonnull final Filter filter, 
-                                                @Nonnull final PropertyRestriction pr);
+    public abstract long getEstimatedEntryCount(NodeState indexMeta, Filter.PropertyRestriction pr);
     
     static Set<String> getSuperTypes(Filter filter) {
         if (filter != null && !filter.matchesAllTypes()) {
@@ -113,6 +101,17 @@ public abstract class AbstractPropertyIndexLookup {
         return false;
     }
 
+    /**
+     * retrieve the index node starting from root
+     * 
+     * @param propertyName
+     * @param filter
+     * @return
+     */
+    protected NodeState getIndexNode(final String propertyName, final Filter filter) {
+        return getIndexNode(getRoot(),  propertyName, filter);
+    }
+    
     /**
      * Get the node with the index definition for the given property, if there
      * is an applicable index with data.

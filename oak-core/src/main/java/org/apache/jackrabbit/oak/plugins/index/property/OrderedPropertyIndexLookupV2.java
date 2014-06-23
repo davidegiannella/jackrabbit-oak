@@ -49,16 +49,17 @@ public class OrderedPropertyIndexLookupV2 extends AbstractPropertyIndexLookup {
     }
 
     @Override
-    public long getEstimatedEntryCount(final String propertyName, 
-                                       final PropertyValue value, 
-                                       final Filter filter,
-                                       final PropertyRestriction pr) {
-        NodeState indexMeta = getIndexNode(root, propertyName, filter);
-        if (indexMeta == null) {
-            LOG.debug("No index definition found for '{}'. Returning MAX_VALUE", propertyName);
+    IndexStoreStrategy getStrategy(final NodeState indexMeta) {
+        return SPLIT_STRATEGY;
+    }
+
+    @Override
+    public long getEstimatedEntryCount(final NodeState indexMeta, final PropertyRestriction pr) {
+        if (pr == null) {
+            LOG.debug("PropertyRestriction is null. returning MAX_VALUE");
             return Long.MAX_VALUE;
-        }
-        
+            
+        }        
         IndexStoreStrategy strategy = getStrategy(indexMeta);
         
         if (strategy instanceof AdvancedIndexStoreStrategy) {
@@ -67,10 +68,5 @@ public class OrderedPropertyIndexLookupV2 extends AbstractPropertyIndexLookup {
             LOG.debug("Wrong strategy instance. Returning MAX_VALUE");
             return Long.MAX_VALUE;
         }
-    }
-
-    @Override
-    IndexStoreStrategy getStrategy(final NodeState indexMeta) {
-        return SPLIT_STRATEGY;
     }
 }
