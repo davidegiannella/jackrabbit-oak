@@ -42,7 +42,16 @@ public abstract class AbstractOrderedIndex {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractOrderedIndex.class);
     
     /**
-     * @return an builder with some initial common settings
+     * create a builder with some initial common settings
+     * 
+     * * {@code costPerExecution: 1}
+     * * {@code costPerEntry: 1.1}
+     * * {@code fulltextIndex: false}
+     * * {@code includeNodesData: false}
+     * * {@code filter: as the incoming one}
+     * 
+     * @param filter
+     * @return 
      */
     static IndexPlan.Builder getIndexPlanBuilder(final Filter filter) {
         IndexPlan.Builder b = new IndexPlan.Builder();
@@ -97,16 +106,6 @@ public abstract class AbstractOrderedIndex {
         }
         return plans;
     }
-
-    //TODO we should be able to generalise this aspect 
-//    private static List<OrderEntry> buildOrders(@Nonnull final String propertyName, 
-//                                                @Nonnull final Iterable<Order> availableSorting) {
-//        List<OrderEntry> orders = Lists.newArrayList();
-//        for (OrderEntry.Order order : availableSorting) {
-//            orders.add(new OrderEntry(propertyName, Type.UNDEFINED, order));
-//        }
-//        return orders;
-//    }
     
     /**
      * process the {@code PropertyRestriction}s according to generic OrderedIndex rules such as:
@@ -115,6 +114,7 @@ public abstract class AbstractOrderedIndex {
      * * {@code property is not null}
      * * {@code property = value}
      * * {@code range queries}
+     * * {@code sorting}
      * 
      * @param restrictions
      * @param lookup
@@ -126,7 +126,7 @@ public abstract class AbstractOrderedIndex {
                     @Nonnull final Collection<PropertyRestriction> restrictions,
                     @Nonnull final AbstractPropertyIndexLookup lookup,
                     @Nonnull final Filter filter,
-//                    @Nullable final List<OrderEntry> sortOrder,
+                    @Nullable final List<OrderEntry> sortOrder,
                     @Nonnull final Iterable<Order> availableSorting) {
         List<IndexPlan> plans = Lists.newArrayList();
         for (Filter.PropertyRestriction pr : restrictions) {
@@ -155,13 +155,22 @@ public abstract class AbstractOrderedIndex {
                 if (createPlan) {
                     // we can return a sorted as well as unsorted set
                     IndexPlan.Builder b = getIndexPlanBuilder(filter);
-                    // TODO we have count that we could return a sorted set or not depending of the
-                    // ORDER BY clause could be indexed or not
-//                    b.setSortOrder(ImmutableList.of(new OrderEntry(
-//                        propertyName,
-//                        Type.UNDEFINED,
-//                        lookup.isAscending(root, propertyName, filter) ? OrderEntry.Order.ASCENDING
-//                                                                       : OrderEntry.Order.DESCENDING)));
+                    List<OrderEntry> o;
+                    
+                    // we have to reprocess the sort condition as we could apply on it as well
+                    // with different costs
+                    List<IndexPlan> orders = processSortOrder(sortOrder, lookup, filter,
+                        availableSorting);
+                    if (orders.isEmpty()) {
+                        o = null;
+                    } else {
+                        o = Lists.newArrayList();
+                        for (IndexPlan order : orders) {
+                            o.addAll(order.getSortOrder());
+                        }
+                        
+                    }
+                    b.setSortOrder(o);
                     long count = lookup.getEstimatedEntryCount(propertyName, value, filter, pr);
                     b.setEstimatedEntryCount(count);
                     LOG.debug("estimatedCount: {}", count);

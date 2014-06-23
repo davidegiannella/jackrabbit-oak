@@ -58,7 +58,7 @@ public class OrderedPropertyIndexV2 extends AbstractOrderedIndex implements Quer
         
         Collection<PropertyRestriction> restrictions = filter.getPropertyRestrictions();
         if (restrictions != null) {
-            plans.addAll(processRestrictions(restrictions, lookup, filter, ORDERS));
+            plans.addAll(processRestrictions(restrictions, lookup, filter, sortOrder, ORDERS));
         }
         return plans; 
     }

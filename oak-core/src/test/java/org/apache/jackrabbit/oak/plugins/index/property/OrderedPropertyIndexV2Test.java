@@ -17,6 +17,7 @@
 package org.apache.jackrabbit.oak.plugins.index.property;
 
 import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -45,10 +46,7 @@ import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry.Order;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.junit.Ignore;
 import org.junit.Test;
-
-import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
 
 import com.google.common.collect.ImmutableList;
 
@@ -56,27 +54,30 @@ public class OrderedPropertyIndexV2Test {
     private static final EditorHook HOOK = new EditorHook(new IndexUpdateProvider(
         new OrderedPropertyIndexEditorProvider()));
 
+    private static final String INDEXED_PROPERTY = "foo";
+
+    private static final AdvancedQueryIndex INDEX = new OrderedPropertyIndexV2();
+
+    private static final NodeState INDEX_DEF_V2 = EmptyNodeState.EMPTY_NODE.builder()
+        .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
+            Type.NAME)
+        .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(INDEXED_PROPERTY), Type.NAMES)
+        .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE_2)
+        .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
+        .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
+
     /**
      * test the returned plans. <b>Does not cover the {@code estimatedEntryCount}</b>
      * @throws CommitFailedException 
      */
     @Test
     public void getPlans() throws CommitFailedException {
-        final String indexedProperty = "foo";
         final String indexDefName = "theIndex";
-        final AdvancedQueryIndex index = new OrderedPropertyIndexV2();
         final NodeState indexDefV1 = EmptyNodeState.EMPTY_NODE.builder()
             .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
                 Type.NAME)
-            .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(indexedProperty), Type.NAMES)
+            .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(INDEXED_PROPERTY), Type.NAMES)
             .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE)
-            .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
-            .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
-        final NodeState indexDefV2 = EmptyNodeState.EMPTY_NODE.builder()
-            .setProperty(JcrConstants.JCR_PRIMARYTYPE, IndexConstants.INDEX_DEFINITIONS_NODE_TYPE,
-                Type.NAME)
-            .setProperty(IndexConstants.PROPERTY_NAMES, ImmutableList.of(indexedProperty), Type.NAMES)
-            .setProperty(IndexConstants.TYPE_PROPERTY_NAME, OrderedIndex.TYPE_2)
             .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
             .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
         NodeBuilder root;
@@ -87,39 +88,39 @@ public class OrderedPropertyIndexV2Test {
         IndexPlan plan;
         String statement;
 
-        plans = index.getPlans(new FilterImpl(), null, EmptyNodeState.EMPTY_NODE);
+        plans = INDEX.getPlans(new FilterImpl(), null, EmptyNodeState.EMPTY_NODE);
         assertNotNull("it doesn't matter we should always return something", plans);
 
         // defining the index V1
         root = InitialContent.INITIAL_CONTENT.builder();
-        root.child(IndexConstants.INDEX_DEFINITIONS_NAME).setChildNode("theIndex", indexDefV1);
+        root.child(INDEX_DEFINITIONS_NAME).setChildNode("theIndex", indexDefV1);
 
         // we have to index at least one node for having the isIndexed to work
         before = root.getNodeState();
-        root.child("anode").setProperty(indexedProperty, "avalue");
+        root.child("anode").setProperty(INDEXED_PROPERTY, "avalue");
         after = root.getNodeState();
         indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
         
-        statement = "SELECT * FROM [nt:base] WHERE bazbaz IS NOT NULL ORDER BY " + indexedProperty;
-        sortOrder = createOrderEntry(indexedProperty, Order.ASCENDING);
+        statement = "SELECT * FROM [nt:base] WHERE bazbaz IS NOT NULL ORDER BY " + INDEXED_PROPERTY;
+        sortOrder = createOrderEntry(INDEXED_PROPERTY, Order.ASCENDING);
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
         filter.restrictProperty("bazbaz", Operator.EQUAL, null);
-        plans = index.getPlans(filter, sortOrder, indexed);
+        plans = INDEX.getPlans(filter, sortOrder, indexed);
         assertNotNull(plans);
         assertTrue("The V1 version of the index should not apply to us", plans.isEmpty());
 
         // defining the index V2
         root = InitialContent.INITIAL_CONTENT.builder();
-        root.child(IndexConstants.INDEX_DEFINITIONS_NAME).setChildNode(indexDefName, indexDefV2);
+        root.child(IndexConstants.INDEX_DEFINITIONS_NAME).setChildNode(indexDefName, INDEX_DEF_V2);
         before = root.getNodeState();
-        root.child("anode").setProperty(indexedProperty, "avalue");
+        root.child("anode").setProperty(INDEXED_PROPERTY, "avalue");
         after = root.getNodeState();
         indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
                 
         statement = "SELECT * FROM [nt:base] WHERE bazbaz IS NOT NULL";
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
         filter.restrictProperty("bazbaz", Operator.EQUAL, null);
-        plans = index.getPlans(filter, null, indexed);
+        plans = INDEX.getPlans(filter, null, indexed);
         assertNotNull(plans);
         assertTrue("if we don't index WHERE or ORDER then empty is expected", plans.isEmpty());
 
@@ -127,15 +128,15 @@ public class OrderedPropertyIndexV2Test {
         sortOrder = createOrderEntry("bazbaz", Order.ASCENDING);
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
         filter.restrictProperty("bazbaz", Operator.EQUAL, null);
-        plans = index.getPlans(filter, sortOrder, indexed);
+        plans = INDEX.getPlans(filter, sortOrder, indexed);
         assertNotNull(plans);
         assertTrue("if we don't index WHERE or ORDER then empty is expected", plans.isEmpty());
 
-        statement = "SELECT * FROM [nt:base] WHERE bazbaz IS NOT NULL ORDER BY " + indexedProperty;
-        sortOrder = createOrderEntry(indexedProperty, Order.ASCENDING);
+        statement = "SELECT * FROM [nt:base] WHERE bazbaz IS NOT NULL ORDER BY " + INDEXED_PROPERTY;
+        sortOrder = createOrderEntry(INDEXED_PROPERTY, Order.ASCENDING);
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
         filter.restrictProperty("bazbaz", Operator.EQUAL, null);
-        plans = index.getPlans(filter, sortOrder, indexed);
+        plans = INDEX.getPlans(filter, sortOrder, indexed);
         assertNotNull(plans);
         assertEquals(1, plans.size());
         plan = plans.get(0);
@@ -143,16 +144,16 @@ public class OrderedPropertyIndexV2Test {
         sortOrder = plan.getSortOrder(); 
         assertNotNull(sortOrder);
         assertEquals(2, plan.getSortOrder().size());
-        assertTrue(sortOrder.containsAll(createOrderEntry(indexedProperty, Order.ASCENDING)));
-        assertTrue(sortOrder.containsAll(createOrderEntry(indexedProperty, Order.DESCENDING)));
+        assertTrue(sortOrder.containsAll(createOrderEntry(INDEXED_PROPERTY, Order.ASCENDING)));
+        assertTrue(sortOrder.containsAll(createOrderEntry(INDEXED_PROPERTY, Order.DESCENDING)));
 
         statement = String.format(
              "SELECT * FROM [nt:base] WHERE %s IS NOT NULL",
-             indexedProperty);
+             INDEXED_PROPERTY);
         sortOrder = null;
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
-        filter.restrictProperty(indexedProperty, Operator.EQUAL, null);
-        plans = index.getPlans(filter, sortOrder, indexed);
+        filter.restrictProperty(INDEXED_PROPERTY, Operator.EQUAL, null);
+        plans = INDEX.getPlans(filter, sortOrder, indexed);
         assertNotNull(plans);
         assertEquals(1, plans.size());
         plan = plans.get(0);
@@ -160,24 +161,30 @@ public class OrderedPropertyIndexV2Test {
         sortOrder = plan.getSortOrder(); 
         assertNull(sortOrder);
 
-        // TODO what do we expect in this case?
         statement = String.format("SELECT * FROM [nt:base] WHERE %s IS NOT NULL ORDER BY %s",
-            indexedProperty, indexedProperty);
-        sortOrder = createOrderEntry(indexedProperty, Order.ASCENDING);
+            INDEXED_PROPERTY, INDEXED_PROPERTY);
+        sortOrder = createOrderEntry(INDEXED_PROPERTY, Order.ASCENDING);
         filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
-        filter.restrictProperty(indexedProperty, Operator.EQUAL, null);
-        plans = index.getPlans(filter, sortOrder, indexed);
+        filter.restrictProperty(INDEXED_PROPERTY, Operator.EQUAL, null);
+        plans = INDEX.getPlans(filter, sortOrder, indexed);
         assertNotNull(plans);
         assertEquals(2, plans.size());
+        // we have two plans. One with for the sole order and another one for the filte and the
+        // order combined. They will differentiate (if any) in costs
         plan = plans.get(0);
         assertNotNull(plan);
         sortOrder = plan.getSortOrder();
         assertNotNull(sortOrder);
-        assertEquals(2, plan.getSortOrder().size());
-        assertTrue(sortOrder.containsAll(createOrderEntry(indexedProperty, Order.ASCENDING)));
-        assertTrue(sortOrder.containsAll(createOrderEntry(indexedProperty, Order.DESCENDING)));
+        assertTrue(sortOrder.containsAll(createOrderEntry(INDEXED_PROPERTY, Order.ASCENDING)));
+        assertTrue(sortOrder.containsAll(createOrderEntry(INDEXED_PROPERTY, Order.DESCENDING)));
+        plan = plans.get(1);
+        assertNotNull(plan);
+        sortOrder = plan.getSortOrder();
+        assertNotNull(sortOrder);
+        assertTrue(sortOrder.containsAll(createOrderEntry(INDEXED_PROPERTY, Order.ASCENDING)));
+        assertTrue(sortOrder.containsAll(createOrderEntry(INDEXED_PROPERTY, Order.DESCENDING)));
     }
-    
+        
     private static FilterImpl createFilter(NodeState indexed, String nodeTypeName, String statement) {
         NodeState system = indexed.getChildNode(JCR_SYSTEM);
         NodeState types = system.getChildNode(JCR_NODE_TYPES);
