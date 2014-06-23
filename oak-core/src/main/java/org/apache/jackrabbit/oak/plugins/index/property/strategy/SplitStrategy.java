@@ -24,6 +24,7 @@ import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
@@ -33,11 +34,13 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
 import com.google.common.hash.Hashing;
 
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy.AdvancedIndexStoreStrategy;
+
 /**
  * Implements the split strategy for the ordered indexes
  */
 //TODO improve javadoc
-public class SplitStrategy implements IndexStoreStrategy {
+public class SplitStrategy implements AdvancedIndexStoreStrategy {
     private static final Logger LOG = LoggerFactory.getLogger(SplitStrategy.class);
 
     /**
@@ -179,8 +182,12 @@ public class SplitStrategy implements IndexStoreStrategy {
 
     @Override
     public long count(NodeState indexMeta, Set<String> values, int max) {
-        LOG.debug("count()");
-        // TODO Auto-generated method stub
-        return 0;
+        throw new UnsupportedOperationException(
+            "Unsupported as implementing AdvancedIndexStoreStrategy");
+    }
+
+    @Override
+    public long count(NodeState indexMeta, PropertyRestriction pr, int max) {
+        return Long.MAX_VALUE;
     }
 }

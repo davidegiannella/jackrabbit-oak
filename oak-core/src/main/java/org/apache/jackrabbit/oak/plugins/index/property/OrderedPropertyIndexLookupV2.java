@@ -19,11 +19,19 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.PropertyValue;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy.AdvancedIndexStoreStrategy;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.SplitStrategy;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class OrderedPropertyIndexLookupV2 extends AbstractPropertyIndexLookup {
+    private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexLookupV2.class);
+    private static final IndexStoreStrategy SPLIT_STRATEGY = new SplitStrategy();
+    
     private final NodeState root;
     
     public OrderedPropertyIndexLookupV2(@Nonnull final NodeState root) {
@@ -45,8 +53,24 @@ public class OrderedPropertyIndexLookupV2 extends AbstractPropertyIndexLookup {
                                        final PropertyValue value, 
                                        final Filter filter,
                                        final PropertyRestriction pr) {
-        // TODO Auto-generated method stub
-        // setting to MAX for avoiding the query engine to pick it up for now.
-        return Long.MAX_VALUE;
+        NodeState indexMeta = getIndexNode(root, propertyName, filter);
+        if (indexMeta == null) {
+            LOG.debug("No index definition found for '{}'. Returning MAX_VALUE", propertyName);
+            return Long.MAX_VALUE;
+        }
+        
+        IndexStoreStrategy strategy = getStrategy(indexMeta);
+        
+        if (strategy instanceof AdvancedIndexStoreStrategy) {
+            return ((AdvancedIndexStoreStrategy) strategy).count(indexMeta, pr, MAX_COST);
+        } else {
+            LOG.debug("Wrong strategy instance. Returning MAX_VALUE");
+            return Long.MAX_VALUE;
+        }
+    }
+
+    @Override
+    IndexStoreStrategy getStrategy(NodeState indexMeta) {
+        return SPLIT_STRATEGY;
     }
 }
