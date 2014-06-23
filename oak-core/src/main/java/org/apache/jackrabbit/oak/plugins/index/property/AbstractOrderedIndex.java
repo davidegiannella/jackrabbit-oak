@@ -16,17 +16,20 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import java.util.Collection;
 import java.util.List;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry;
-import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry.Order;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,8 +69,7 @@ public abstract class AbstractOrderedIndex {
     static List<IndexPlan> processSortOrder(@Nullable final List<OrderEntry> sortOrder, 
                                             @Nonnull final AbstractPropertyIndexLookup lookup, 
                                             @Nonnull final Filter filter, 
-                                            @Nonnull final NodeState root,
-                                            @Nonnull final Iterable<OrderEntry.Order> availableSorting) {
+                                            @Nonnull final Iterable<Order> availableSorting) {
         List<IndexPlan> plans = Lists.newArrayList();
         
         if (sortOrder != null) {
@@ -93,6 +95,84 @@ public abstract class AbstractOrderedIndex {
                 }
             }
         }
+        return plans;
+    }
+
+    //TODO we should be able to generalise this aspect 
+//    private static List<OrderEntry> buildOrders(@Nonnull final String propertyName, 
+//                                                @Nonnull final Iterable<Order> availableSorting) {
+//        List<OrderEntry> orders = Lists.newArrayList();
+//        for (OrderEntry.Order order : availableSorting) {
+//            orders.add(new OrderEntry(propertyName, Type.UNDEFINED, order));
+//        }
+//        return orders;
+//    }
+    
+    /**
+     * process the {@code PropertyRestriction}s according to generic OrderedIndex rules such as:
+     * 
+     * we process 
+     * * {@code property is not null}
+     * * {@code property = value}
+     * * {@code range queries}
+     * 
+     * @param restrictions
+     * @param lookup
+     * @param filter
+     * @param availableSorting
+     * @return
+     */
+    static List<IndexPlan> processRestrictions(
+                    @Nonnull final Collection<PropertyRestriction> restrictions,
+                    @Nonnull final AbstractPropertyIndexLookup lookup,
+                    @Nonnull final Filter filter,
+//                    @Nullable final List<OrderEntry> sortOrder,
+                    @Nonnull final Iterable<Order> availableSorting) {
+        List<IndexPlan> plans = Lists.newArrayList();
+        for (Filter.PropertyRestriction pr : restrictions) {
+            String propertyName = PathUtils.getName(pr.propertyName);
+            if (lookup.isIndexed(propertyName, "/", filter)) {
+                PropertyValue value = null;
+                boolean createPlan = false;
+                if (pr.first == null && pr.last == null) {
+                    // open query: [property] is not null
+                    value = null;
+                    createPlan = true;
+                } else if (pr.first != null && pr.first.equals(pr.last) && pr.firstIncluding
+                           && pr.lastIncluding) {
+                    // [property]=[value]
+                    value = pr.first;
+                    createPlan = true;
+                } else if (pr.first != null && !pr.first.equals(pr.last)) {
+                    // '>' & '>=' use cases
+                    value = pr.first;
+                    createPlan = true;
+                } else if (pr.last != null && !pr.last.equals(pr.first)) {
+                    // '<' & '<='
+                    value = pr.last;
+                    createPlan = true;
+                }
+                if (createPlan) {
+                    // we can return a sorted as well as unsorted set
+                    IndexPlan.Builder b = getIndexPlanBuilder(filter);
+                    // TODO we have count that we could return a sorted set or not depending of the
+                    // ORDER BY clause could be indexed or not
+//                    b.setSortOrder(ImmutableList.of(new OrderEntry(
+//                        propertyName,
+//                        Type.UNDEFINED,
+//                        lookup.isAscending(root, propertyName, filter) ? OrderEntry.Order.ASCENDING
+//                                                                       : OrderEntry.Order.DESCENDING)));
+                    long count = lookup.getEstimatedEntryCount(propertyName, value, filter, pr);
+                    b.setEstimatedEntryCount(count);
+                    LOG.debug("estimatedCount: {}", count);
+
+                    IndexPlan plan = b.build();
+                    LOG.debug("plan: {}", plan);
+                    plans.add(plan);
+                }
+            }
+        }
+
         return plans;
     }
 }

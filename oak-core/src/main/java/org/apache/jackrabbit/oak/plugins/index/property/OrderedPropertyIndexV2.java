@@ -16,13 +16,11 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import java.util.Collection;
 import java.util.List;
 
 import javax.annotation.Nonnull;
 
-import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
-import org.apache.jackrabbit.oak.spi.commit.Editor;
-import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.query.Cursor;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex;
@@ -33,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 
 public class OrderedPropertyIndexV2 extends AbstractOrderedIndex implements QueryIndex, AdvancedQueryIndex {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexV2.class);
@@ -54,7 +53,12 @@ public class OrderedPropertyIndexV2 extends AbstractOrderedIndex implements Quer
         List<IndexPlan> plans = Lists.newArrayList();
         
         if (sortOrder != null) {
-            plans.addAll(processSortOrder(sortOrder, lookup, filter, rootState, ORDERS));
+            plans.addAll(processSortOrder(sortOrder, lookup, filter, ORDERS));
+        }
+        
+        Collection<PropertyRestriction> restrictions = filter.getPropertyRestrictions();
+        if (restrictions != null) {
+            plans.addAll(processRestrictions(restrictions, lookup, filter, ORDERS));
         }
         return plans; 
     }

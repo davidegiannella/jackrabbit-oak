@@ -20,6 +20,7 @@ import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -142,7 +143,37 @@ public class OrderedPropertyIndexV2Test {
         sortOrder = plan.getSortOrder(); 
         assertNotNull(sortOrder);
         assertEquals(2, plan.getSortOrder().size());
-        System.out.println(sortOrder);
+        assertTrue(sortOrder.containsAll(createOrderEntry(indexedProperty, Order.ASCENDING)));
+        assertTrue(sortOrder.containsAll(createOrderEntry(indexedProperty, Order.DESCENDING)));
+
+        statement = String.format(
+             "SELECT * FROM [nt:base] WHERE %s IS NOT NULL",
+             indexedProperty);
+        sortOrder = null;
+        filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
+        filter.restrictProperty(indexedProperty, Operator.EQUAL, null);
+        plans = index.getPlans(filter, sortOrder, indexed);
+        assertNotNull(plans);
+        assertEquals(1, plans.size());
+        plan = plans.get(0);
+        assertNotNull(plan);
+        sortOrder = plan.getSortOrder(); 
+        assertNull(sortOrder);
+
+        // TODO what do we expect in this case?
+        statement = String.format("SELECT * FROM [nt:base] WHERE %s IS NOT NULL ORDER BY %s",
+            indexedProperty, indexedProperty);
+        sortOrder = createOrderEntry(indexedProperty, Order.ASCENDING);
+        filter = createFilter(root.getNodeState(), JcrConstants.NT_BASE, statement);
+        filter.restrictProperty(indexedProperty, Operator.EQUAL, null);
+        plans = index.getPlans(filter, sortOrder, indexed);
+        assertNotNull(plans);
+        assertEquals(2, plans.size());
+        plan = plans.get(0);
+        assertNotNull(plan);
+        sortOrder = plan.getSortOrder();
+        assertNotNull(sortOrder);
+        assertEquals(2, plan.getSortOrder().size());
         assertTrue(sortOrder.containsAll(createOrderEntry(indexedProperty, Order.ASCENDING)));
         assertTrue(sortOrder.containsAll(createOrderEntry(indexedProperty, Order.DESCENDING)));
     }
