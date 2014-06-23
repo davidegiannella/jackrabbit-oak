@@ -59,7 +59,7 @@ public class OrderedPropertyIndexV2Test {
      * test the returned plans. <b>Does not cover the {@code estimatedEntryCount}</b>
      * @throws CommitFailedException 
      */
-    @Test //@Ignore("WIP")
+    @Test
     public void getPlans() throws CommitFailedException {
         final String indexedProperty = "foo";
         final String indexDefName = "theIndex";
@@ -139,8 +139,12 @@ public class OrderedPropertyIndexV2Test {
         assertEquals(1, plans.size());
         plan = plans.get(0);
         assertNotNull(plan);
-        assertNotNull(plan.getSortOrder());
+        sortOrder = plan.getSortOrder(); 
+        assertNotNull(sortOrder);
         assertEquals(2, plan.getSortOrder().size());
+        System.out.println(sortOrder);
+        assertTrue(sortOrder.containsAll(createOrderEntry(indexedProperty, Order.ASCENDING)));
+        assertTrue(sortOrder.containsAll(createOrderEntry(indexedProperty, Order.DESCENDING)));
     }
     
     private static FilterImpl createFilter(NodeState indexed, String nodeTypeName, String statement) {
