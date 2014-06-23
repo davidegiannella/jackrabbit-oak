@@ -32,12 +32,18 @@ import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
 public abstract class AbstractPropertyIndexLookup {
+    /**
+     * The maximum cost when the index can be used.
+     */
+    protected static final int MAX_COST = 100;
+
     /**
      * retrieve the {@code root} from the instantiated class
      * 
@@ -51,6 +57,14 @@ public abstract class AbstractPropertyIndexLookup {
      * @return the type
      */
     abstract String getType();
+    
+    /**
+     * return the store strategy perfoming any additional analysis on the provided index definition
+     * 
+     * @param indexMeta
+     * @return
+     */
+    abstract IndexStoreStrategy getStrategy(@Nonnull final NodeState indexMeta);
     
     /**
      * retrieve the estimated entry count for the current filter

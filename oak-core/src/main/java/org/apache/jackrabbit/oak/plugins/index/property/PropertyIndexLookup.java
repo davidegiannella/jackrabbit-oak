@@ -51,11 +51,6 @@ public class PropertyIndexLookup extends AbstractPropertyIndexLookup {
      */
     private static final double COST_OVERHEAD = 2;
     
-    /**
-     * The maximum cost when the index can be used.
-     */
-    static final int MAX_COST = 100;
-
     /** Index storage strategy */
     private static final IndexStoreStrategy MIRROR =
             new ContentMirrorStoreStrategy();
