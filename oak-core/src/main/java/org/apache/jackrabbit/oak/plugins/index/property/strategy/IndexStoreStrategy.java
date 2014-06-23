@@ -62,4 +62,15 @@ public interface IndexStoreStrategy {
      */
     long count(NodeState indexMeta, Set<String> values, int max);
 
+    public interface AdvancedIndexStoreStrategy extends IndexStoreStrategy {
+        /**
+         * count the number of nodes for the given {@code PropertyRetriction}
+         * 
+         * @param indexMeta
+         * @param pr
+         * @param max
+         * @return
+         */
+        long count(NodeState indexMeta, Filter.PropertyRestriction pr, int max);
+    }
 }
