@@ -60,6 +60,7 @@ public class OrderedPropertyIndexV2 extends AbstractOrderedIndex implements Quer
         if (restrictions != null) {
             plans.addAll(processRestrictions(restrictions, lookup, filter, sortOrder, ORDERS));
         }
+        
         return plans; 
     }
 
