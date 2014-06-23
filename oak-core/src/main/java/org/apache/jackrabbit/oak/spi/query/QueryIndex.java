@@ -448,6 +448,48 @@ public interface QueryIndex {
                 propertyType,
                 order);
         }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((order == null) ? 0 : order.hashCode());
+            result = prime * result + ((propertyName == null) ? 0 : propertyName.hashCode());
+            result = prime * result + ((propertyType == null) ? 0 : propertyType.hashCode());
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            OrderEntry other = (OrderEntry) obj;
+            if (order != other.order) {
+                return false;
+            }
+            if (propertyName == null) {
+                if (other.propertyName != null) {
+                    return false;
+                }
+            } else if (!propertyName.equals(other.propertyName)) {
+                return false;
+            }
+            if (propertyType == null) {
+                if (other.propertyType != null) {
+                    return false;
+                }
+            } else if (!propertyType.equals(other.propertyType)) {
+                return false;
+            }
+            return true;
+        }
     }
 
 }
