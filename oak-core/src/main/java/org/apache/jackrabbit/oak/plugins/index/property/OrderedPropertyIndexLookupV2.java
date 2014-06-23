@@ -70,7 +70,7 @@ public class OrderedPropertyIndexLookupV2 extends AbstractPropertyIndexLookup {
     }
 
     @Override
-    IndexStoreStrategy getStrategy(NodeState indexMeta) {
+    IndexStoreStrategy getStrategy(final NodeState indexMeta) {
         return SPLIT_STRATEGY;
     }
 }
