@@ -23,6 +23,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import javax.jcr.Node;
+import javax.jcr.PropertyType;
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
@@ -44,7 +46,167 @@ public class QueryPlanTest extends AbstractRepositoryTest {
     }
     
     @Test
-    @Ignore("OAK-1155")
+    // OAK-1902
+    public void propertyIndexVersusNodeTypeIndex() throws Exception {
+        Session session = getAdminSession();
+        Node nt = session.getRootNode().getNode("oak:index").getNode("nodetype");
+        nt.setProperty("entryCount", Long.MAX_VALUE);
+        QueryManager qm = session.getWorkspace().getQueryManager();
+        Node testRootNode = session.getRootNode().addNode("testroot");
+        for (int i = 0; i < 100; i++) {
+            Node n = testRootNode.addNode("n" + i, "oak:Unstructured");
+            n.addMixin("mix:referenceable");
+        }
+        session.save();
+       
+        Query q;
+        QueryResult result;
+        RowIterator it;
+
+        String xpath = "/jcr:root/a/b/c/d/e/f/g/h/i/j/k/element(*, oak:Unstructured)";
+        q = qm.createQuery("explain " + xpath, "xpath");
+        result = q.execute();
+        it = result.getRows();
+        assertTrue(it.hasNext());
+        String plan = it.nextRow().getValue("plan").getString();
+        // System.out.println("plan: " + plan);
+        // should use the node type index
+        assertEquals("[oak:Unstructured] as [a] " + 
+                "/* Filter(query=explain select [jcr:path], [jcr:score], * " + 
+                "from [oak:Unstructured] as a " + 
+                "where ischildnode(a, '/a/b/c/d/e/f/g/h/i/j/k') " + 
+                "/* xpath: /jcr:root/a/b/c/d/e/f/g/h/i/j/k/element(*, oak:Unstructured) */" + 
+                ", path=/a/b/c/d/e/f/g/h/i/j/k/*) where " + 
+                "ischildnode([a], [/a/b/c/d/e/f/g/h/i/j/k]) */", 
+                plan);
+
+        String xpath2 = "/jcr:root/a/b/c/d/e/f/g/h/i/j/k/element(*, oak:Unstructured)[@jcr:uuid]";
+        q = qm.createQuery("explain " + xpath2 + "", "xpath");
+        result = q.execute();
+        it = result.getRows();
+        assertTrue(it.hasNext());
+        plan = it.nextRow().getValue("plan").getString();
+        // System.out.println("plan: " + plan);
+        // should use the index on "jcr:uuid"
+        assertEquals("[oak:Unstructured] as [a] " + 
+                "/* property jcr:uuid where ([a].[jcr:uuid] is not null) " + 
+                "and (ischildnode([a], [/a/b/c/d/e/f/g/h/i/j/k])) */", 
+                plan);
+    }     
+    
+    @Test
+    // OAK-1903
+    public void propertyEqualsVersusPropertyNotNull() throws Exception {
+        Session session = getAdminSession();
+        QueryManager qm = session.getWorkspace().getQueryManager();
+        Node testRootNode = session.getRootNode().addNode("testroot");
+        createPropertyIndex(session, "notNull");
+        createPropertyIndex(session, "equals");
+        for (int i = 0; i < 100; i++) {
+            Node n = testRootNode.addNode("n" + i, "oak:Unstructured");
+            if (i % 2 == 0) {
+                n.setProperty("notNull", i);
+            }
+            n.setProperty("equals", 1);
+        }
+        session.save();
+       
+        String xpath = "/jcr:root//*[@notNull and @equals=1]";
+        
+        Query q;
+        QueryResult result;
+        RowIterator it;
+        
+        q = qm.createQuery("explain " + xpath, "xpath");
+        result = q.execute();
+        it = result.getRows();
+        assertTrue(it.hasNext());
+        String plan = it.nextRow().getValue("plan").getString();
+        // System.out.println("plan: " + plan);
+        // should not use the index on "jcr:uuid"
+        assertEquals("[nt:base] as [a] /* property notNull " + 
+                "where (([a].[notNull] is not null) " + 
+                "and ([a].[equals] = cast('1' as long))) " + 
+                "and (isdescendantnode([a], [/])) */", 
+                plan);
+    }           
+
+    @Test
+    // OAK-1898
+    public void correctPropertyIndexUsage() throws Exception {
+        Session session = getAdminSession();
+        QueryManager qm = session.getWorkspace().getQueryManager();
+        Node testRootNode = session.getRootNode().addNode("testroot");
+        createPropertyIndex(session, "fiftyPercent");
+        createPropertyIndex(session, "tenPercent");
+        createPropertyIndex(session, "hundredPercent");
+        for (int i = 0; i < 300; i++) {
+            Node n = testRootNode.addNode("n" + i, "oak:Unstructured");
+            if (i % 10 == 0) {
+                n.setProperty("tenPercent", i);
+            }
+            if (i % 2 == 0) {
+                n.setProperty("fiftyPercent", i);
+            }
+            n.setProperty("hundredPercent", i);
+        }
+        session.save();
+       
+        String xpath = "/jcr:root//*[@tenPercent and @fiftyPercent and @hundredPercent]";
+        
+        Query q;
+        QueryResult result;
+        RowIterator it;
+        
+        q = qm.createQuery("explain " + xpath, "xpath");
+        result = q.execute();
+        it = result.getRows();
+        assertTrue(it.hasNext());
+        String plan = it.nextRow().getValue("plan").getString();
+        // System.out.println("plan: " + plan);
+        // should not use the index on "jcr:uuid"
+        assertEquals("[nt:base] as [a] /* property tenPercent " + 
+                "where ((([a].[tenPercent] is not null) " + 
+                "and ([a].[fiftyPercent] is not null)) " + 
+                "and ([a].[hundredPercent] is not null)) " + 
+                "and (isdescendantnode([a], [/])) */", 
+                plan);
+    }           
+
+    @Test
+    // OAK-1898
+    public void traversalVersusPropertyIndex() throws Exception {
+        Session session = getAdminSession();
+        QueryManager qm = session.getWorkspace().getQueryManager();
+        Node testRootNode = session.getRootNode().addNode("testroot");
+        Node n = testRootNode;
+        for (int i = 0; i < 20; i++) {
+            n.setProperty("depth", i + 2);
+            n = n.addNode("n", "oak:Unstructured");
+            n.addMixin("mix:referenceable");
+        }
+        session.save();
+       
+        String xpath = "/jcr:root/testroot/n/n/n/n/n/n/n//*[jcr:uuid]";
+        
+        Query q;
+        QueryResult result;
+        RowIterator it;
+        
+        q = qm.createQuery("explain " + xpath, "xpath");
+        result = q.execute();
+        it = result.getRows();
+        assertTrue(it.hasNext());
+        String plan = it.nextRow().getValue("plan").getString();
+        // System.out.println("plan: " + plan);
+        // should not use the index on "jcr:uuid"
+        assertEquals("[nt:base] as [a] /* property jcr:uuid " + 
+                "where ([a].[jcr:uuid] is not null) and " + 
+                "(isdescendantnode([a], [/testroot/n/n/n/n/n/n/n])) */", 
+                plan);
+    }        
+    
+    @Test
     public void nodeType() throws Exception {
         Session session = getAdminSession();
         QueryManager qm = session.getWorkspace().getQueryManager();
@@ -217,4 +379,13 @@ public class QueryPlanTest extends AbstractRepositoryTest {
         assertEquals("/testroot/b/c/d/e2", path);
         assertFalse(it.hasNext());
     }
+    
+    private static void createPropertyIndex(Session s, String propertyName) throws RepositoryException {
+        Node n = s.getRootNode().getNode("oak:index").
+                addNode(propertyName, "oak:QueryIndexDefinition");
+        n.setProperty("type", "property");
+        n.setProperty("propertyNames", new String[]{propertyName}, PropertyType.NAME);
+        s.save();
+    }
+    
 }

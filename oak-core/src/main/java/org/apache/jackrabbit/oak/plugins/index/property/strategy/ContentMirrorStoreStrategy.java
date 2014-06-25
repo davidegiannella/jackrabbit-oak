@@ -19,6 +19,7 @@ package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 import static com.google.common.collect.Queues.newArrayDeque;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.KEY_COUNT_PROPERTY_NAME;
 
 import java.util.Deque;
 import java.util.Iterator;
@@ -168,12 +169,30 @@ public class ContentMirrorStoreStrategy implements IndexStoreStrategy {
             CountingNodeVisitor v = new CountingNodeVisitor(max);
             v.visit(index);
             count = v.getEstimatedCount();
-            // "is not null" queries typically read more data
-            count *= 10;
+            if (count >= max) {
+                // "is not null" queries typically read more data
+                count *= 10;
+            }
         } else {
             int size = values.size();
             if (size == 0) {
                 return 0;
+            }
+            PropertyState ec = indexMeta.getProperty(ENTRY_COUNT_PROPERTY_NAME);       
+            if (ec != null) {
+                long entryCount = ec.getValue(Type.LONG);
+                // assume 10000 entries per key, so that this index is used
+                // instead of traversal, but not instead of a regular property index
+                long keyCount = entryCount / 10000;
+                ec = indexMeta.getProperty(KEY_COUNT_PROPERTY_NAME);
+                if (ec != null) {
+                    keyCount = ec.getValue(Type.LONG);
+                }
+                // cast to double to avoid overflow 
+                // (entryCount could be Long.MAX_VALUE)
+                // the cost is not multiplied by the size, 
+                // otherwise the traversing index might be used
+                return (long) ((double) entryCount / keyCount) + size;
             }
             max = Math.max(10, max / size);
             int i = 0;
