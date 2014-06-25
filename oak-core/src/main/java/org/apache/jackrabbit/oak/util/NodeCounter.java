@@ -35,7 +35,7 @@ public class NodeCounter {
     /**
      * value returned if during the count no properties has been found
      */
-    public static final long NO_PROPERTIES = Long.MIN_VALUE;
+    public static final long NO_PROPERTIES = 0;
     
     /**
      * Same as {@link #getApproxAdded(NodeBuilder, String)} providing {@link #PREFIX} as
@@ -49,11 +49,13 @@ public class NodeCounter {
     }
 
     /**
-     * retrieve the approximate count of the provided node.
-     *
+     * retrieve the approximate count of the provided node. Check for the return value if
+     * {@link #NO_PROPERTIES} some actions will have to be taken by the caller.
+     * 
      * @param node the node to analyse
      * @param prefix the prefix of the property to inspect
-     * @return
+     * @return the approximate count of nodes or {@link #NO_PROPERTIES} in case it was not possible
+     *         to compute it.
      */
     public static final long getApproxAdded(@Nonnull final NodeBuilder node,
                                             @Nonnull final String prefix) {
