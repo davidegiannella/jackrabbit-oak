@@ -16,9 +16,16 @@
  */
 package org.apache.jackrabbit.oak.util;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Iterables.isEmpty;
+
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
+
+import com.google.common.collect.Iterables;
 
 
 public class NodeCounter {
@@ -30,7 +37,7 @@ public class NodeCounter {
     /**
      * the standard approximation count resolution
      */
-    public static final long APPROX_RESOLUTION = 1000L;
+    public static final long APPROX_MIN_RESOLUTION = 1000L;
     
     /**
      * value returned if during the count no properties has been found
@@ -59,6 +66,27 @@ public class NodeCounter {
      */
     public static final long getApproxAdded(@Nonnull final NodeBuilder node,
                                             @Nonnull final String prefix) {
-        return NO_PROPERTIES;
+        long count, value;
+        Iterable<? extends PropertyState> properties;
+        
+        checkNotNull(node);
+        checkNotNull(prefix);
+        
+        properties = node.getProperties();
+        if (isEmpty(properties)) {
+            count = NO_PROPERTIES;
+        } else {
+            count = 0;
+            for (PropertyState p : properties) {
+                if (p.getName().startsWith(prefix)) {
+                    value = p.getValue(Type.LONG);
+                    if (value > 0) {
+                        count += value;
+                    }
+                }
+            }
+        }
+        
+        return count;
     }
 }

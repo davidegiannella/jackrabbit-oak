@@ -20,9 +20,13 @@ import static org.junit.Assert.assertEquals;
 
 import java.util.Random;
 
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.junit.Test;
+
+import static org.apache.jackrabbit.oak.util.NodeCounter.PREFIX;
+import static org.apache.jackrabbit.oak.util.NodeCounter.APPROX_MIN_RESOLUTION;
 
 public class NodeCounterTest {
     public static class MockRandom extends Random {
@@ -62,10 +66,16 @@ public class NodeCounterTest {
     public void getApproxAdded() {
         NodeBuilder node; 
         
-        // building the expected structure
         node = EmptyNodeState.EMPTY_NODE.builder();
-        
         assertEquals("if the node has no properties for counting NO_PROPERTIES is expected",
             NodeCounter.NO_PROPERTIES, NodeCounter.getApproxAdded(node));
+        
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        node.setProperty(PREFIX + "1", APPROX_MIN_RESOLUTION, Type.LONG);
+        assertEquals(APPROX_MIN_RESOLUTION, NodeCounter.getApproxAdded(node));
+        node.setProperty(PREFIX + "2", APPROX_MIN_RESOLUTION, Type.LONG);
+        assertEquals(2000L, NodeCounter.getApproxAdded(node));
+        node.setProperty(PREFIX + "3", 2000L, Type.LONG);
+        assertEquals(4000L, NodeCounter.getApproxAdded(node));
     }
 }
