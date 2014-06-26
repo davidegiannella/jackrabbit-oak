@@ -16,8 +16,12 @@
  */
 package org.apache.jackrabbit.oak.util;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Iterables.isEmpty;
+
+import java.util.Random;
+import java.util.UUID;
 
 import javax.annotation.Nonnull;
 
@@ -43,7 +47,7 @@ public class NodeCounter {
      * value returned if during the count no properties has been found
      */
     public static final long NO_PROPERTIES = 0;
-    
+        
     /**
      * Same as {@link #getApproxAdded(NodeBuilder, String)} providing {@link #PREFIX} as
      * {@code prefix}
@@ -88,5 +92,48 @@ public class NodeCounter {
         }
         
         return count;
+    }
+    
+    /**
+     * as {@link #nodeAdded(Random, NodeBuilder, String, long)} by providing {@link #PREFIX} as
+     * {@code prefix} and {@link #APPROX_MIN_RESOLUTION} as {@code minResolution}
+     * 
+     * @param rnd
+     * @param node
+     * @return
+     */
+    public static NodeBuilder nodeAdded(@Nonnull final Random rnd,
+                                        @Nonnull final NodeBuilder node) {
+        return nodeAdded(rnd, node, PREFIX, APPROX_MIN_RESOLUTION);
+    }
+    
+    /**
+     * Issue the NodeCounter algorithm on the provided node telling that a new Child has been added.
+     * 
+     * @param rnd the random generator to be used
+     * @param node the node under which the child has been added
+     * @param prefix the prefix for the count property
+     * @param minResolution the minimum resolution to be used. Must be greater than 0.
+     * @return the updated parent node.
+     */
+    public static NodeBuilder nodeAdded(@Nonnull final Random rnd,
+                                        @Nonnull final NodeBuilder node,
+                                        @Nonnull final String prefix,
+                                        final long minResolution) {
+        checkNotNull(rnd, "Random generator cannot be null");
+        checkNotNull(node, "NodeBuilder cannot be null");
+        checkNotNull(prefix, "Prefix cannot be null");
+        checkArgument(minResolution > 0, "minResolution must be greater than 0");
+        
+        long count = Math.max(minResolution, getApproxAdded(node, prefix));
+        // TODO casting down to int for now. What can we do to achieve a more precise range?
+        // somewhere around
+        // http://stackoverflow.com/questions/2546078/java-random-long-number-in-0-x-n-range could
+        // work.
+        if (rnd.nextInt((int) count) == 0) {
+            String propertyName = prefix + UUID.randomUUID();
+            node.setProperty(propertyName, count, Type.LONG);
+        }
+        return node;
     }
 }

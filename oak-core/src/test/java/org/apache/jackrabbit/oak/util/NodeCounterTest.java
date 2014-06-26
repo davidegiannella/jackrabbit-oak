@@ -16,14 +16,29 @@
  */
 package org.apache.jackrabbit.oak.util;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import java.util.Deque;
+import java.util.Iterator;
 import java.util.Random;
 
+import javax.annotation.Nonnull;
+
+import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.junit.Test;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 
 import static org.apache.jackrabbit.oak.util.NodeCounter.PREFIX;
 import static org.apache.jackrabbit.oak.util.NodeCounter.APPROX_MIN_RESOLUTION;
@@ -40,6 +55,10 @@ public class NodeCounterTest {
         
         private int nextInt = SUPER;
         
+        public MockRandom() {
+            super(37);
+        }
+        
         /**
          * if previously set to {@link #SUPER} using the {@link #setNextInt(int)} it will work as
          * {@code Random.nextInt(int)} otherwise it will return the previous value set via
@@ -55,12 +74,22 @@ public class NodeCounterTest {
             
         }
         
+        /**
+         * set what value should be returned with future calls of {@link #nextInt(int)}. See
+         * {@link #nextInt(int)} for details.
+         * 
+         * @param nextInt
+         */
         public void setNextInt(int nextInt) {
             this.nextInt = nextInt;
         }
     }
     
-    static final MockRandom RND = new MockRandom();
+    /**
+     * used to mock the behaviour and being sure about the results. Refer to {@link MockRandom} for
+     * details and reset according to needs at every use
+     */
+    private static final MockRandom RND = new MockRandom();
     
     @Test
     public void getApproxAdded() {
@@ -78,4 +107,75 @@ public class NodeCounterTest {
         node.setProperty(PREFIX + "3", 2000L, Type.LONG);
         assertEquals(4000L, NodeCounter.getApproxAdded(node));
     }
+    
+    @Test
+    public void nodeAdded() {
+        NodeBuilder node;
+        
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        node = NodeCounter.nodeAdded(RND, node);
+        assertNotNull(node);
+        assertProperties(node, ImmutableList.of(1000L), PREFIX);
+
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        node = NodeCounter.nodeAdded(RND, node);
+        assertNotNull(node);
+        node = NodeCounter.nodeAdded(RND, node);
+        assertNotNull(node);
+        RND.setNextInt(1);
+        node = NodeCounter.nodeAdded(RND, node);
+        assertNotNull(node);
+        assertProperties(node, ImmutableList.of(1000L, 1000L), PREFIX);
+        
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        node = NodeCounter.nodeAdded(RND, node);
+        assertNotNull(node);
+        node = NodeCounter.nodeAdded(RND, node);
+        assertNotNull(node);
+        node = NodeCounter.nodeAdded(RND, node);
+        assertNotNull(node);
+        node = NodeCounter.nodeAdded(RND, node);
+        assertNotNull(node);
+        RND.setNextInt(1);
+        node = NodeCounter.nodeAdded(RND, node);
+        assertNotNull(node);
+        node = NodeCounter.nodeAdded(RND, node);
+        assertNotNull(node);
+        assertProperties(node, ImmutableList.of(1000L, 1000L, 2000L, 4000L), PREFIX);
+    }
+    
+    /**
+     * assert the correctness of the properties in the provided node towards the expected values.
+     *  
+     * @param node
+     * @param expected
+     */
+    private static void assertProperties(final NodeBuilder node, final Iterable<Long> expected,
+                                         final String prefix) {
+        
+        checkNotNull(node);
+        checkNotNull(expected);
+        checkNotNull(prefix);
+        
+        Iterable<? extends PropertyState> properties = node.getProperties();
+        Deque<Long> exp = Lists.newLinkedList(expected);
+        // asserting the results
+        assertFalse("We should have some properties for count", Iterables.isEmpty(properties));
+        for (PropertyState p : properties) {
+            if (p.getName().startsWith(prefix)) {
+                long v = p.getValue(Type.LONG);
+                if (exp.contains(v)) {
+                    exp.remove(v);
+                } else {
+                    fail("A count has been found that was not expected: " + v);
+                }
+            }
+        }
+        assertTrue("by now we should have cleared all the expected values", exp.isEmpty());
+        
+    }
+    
 }
