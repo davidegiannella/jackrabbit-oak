@@ -71,6 +71,6 @@ public interface IndexStoreStrategy {
          * @param max
          * @return
          */
-        long count(NodeState indexMeta, Filter.PropertyRestriction pr, int max);
+        long count(NodeState indexMeta, Filter.PropertyRestriction pr, long max);
     }
 }
