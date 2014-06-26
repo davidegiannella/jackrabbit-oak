@@ -32,7 +32,18 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 
 
 public class NodeCounter {
-    private static enum Operation {ADDED, REMOVED};
+    private static class CountResult {
+        long added;
+        long removed;
+        
+        public CountResult() {
+        }
+        
+        public CountResult(final long added, final long removed) {
+            this.added = added;
+            this.removed = removed;
+        }
+    }
     
     /**
      * standard prefix for the count property
@@ -60,42 +71,34 @@ public class NodeCounter {
         return getApproxAdded(node, PREFIX);
     }
 
-    private static long getApprox(@Nonnull final NodeBuilder node,
-                                  @Nonnull final String prefix,
-                                  @Nonnull final Operation op) {
-        long count, value;
+    private static CountResult getApprox(@Nonnull final NodeBuilder node,
+                                         @Nonnull final String prefix) {
+        long value;
         Iterable<? extends PropertyState> properties;
-        
+        CountResult result;
+
         checkNotNull(node);
         checkNotNull(prefix);
-        checkNotNull(op);
-        
+
         properties = node.getProperties();
         if (isEmpty(properties)) {
-            count = NO_PROPERTIES;
+            result = new CountResult(NO_PROPERTIES, NO_PROPERTIES);
         } else {
-            count = 0;
+            result = new CountResult();
             for (PropertyState p : properties) {
                 if (p.getName().startsWith(prefix)) {
                     value = p.getValue(Type.LONG);
-                    switch (op) {
-                    case ADDED: 
-                        if (value > 0) {
-                            count += value;
-                        }
-                        break;
-                    case REMOVED:
-                        if (value < 0) {
-                            count += -value;
-                        }
-                        break;
+                    if (value > 0) {
+                        result.added += value;
+                    }
+                    if (value < 0) {
+                        result.removed += -value;
                     }
                 }
             }
         }
-        
-        return count;
-        
+
+        return result;
     }
     
     /**
@@ -108,7 +111,7 @@ public class NodeCounter {
      */
     public static long getApproxAdded(@Nonnull final NodeBuilder node, 
                                       @Nonnull final String prefix) {
-        return getApprox(node, prefix, Operation.ADDED);
+        return getApprox(node, prefix).added;
     }
     
     /**
@@ -131,7 +134,7 @@ public class NodeCounter {
      */
     public static long getApproxRemoved(@Nonnull final NodeBuilder node, 
                                         @Nonnull final String prefix) {
-        return getApprox(node, prefix, Operation.REMOVED);
+        return getApprox(node, prefix).removed;
     }
     
     /**
@@ -242,15 +245,18 @@ public class NodeCounter {
         checkNotNull(node, "NodeBuilder cannot be null");
         checkNotNull(prefix, "Predix cannot be null");
         
-        long added = getApproxAdded(node, prefix);
-        long removed = getApproxRemoved(node, prefix);
-        
-        if (added == NO_PROPERTIES && removed == NO_PROPERTIES) {
+        CountResult result = getApprox(node, prefix);
+                
+        if (result.added == NO_PROPERTIES && result.removed == NO_PROPERTIES) {
             return NO_PROPERTIES; 
         } else {
-            added = (added == NO_PROPERTIES) ? 0 : added;
-            removed = (removed == NO_PROPERTIES) ? 0 : removed;
-            return Math.max(added / 2, added - removed);
+            if (result.added == NO_PROPERTIES) {
+                result.added = 0;
+            }
+            if (result.removed == NO_PROPERTIES) {
+                result.removed = 0;
+            }
+            return Math.max(result.added / 2, result.added - result.removed);
         }
     }
     
