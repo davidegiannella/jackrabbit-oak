@@ -16,17 +16,27 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
+
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Random;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy.AdvancedIndexStoreStrategy;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
+import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.util.NodeCounter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,14 +44,38 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
 import com.google.common.hash.Hashing;
 
-import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy.AdvancedIndexStoreStrategy;
-
 /**
  * Implements the split strategy for the ordered indexes
  */
 //TODO improve javadoc
 public class SplitStrategy implements AdvancedIndexStoreStrategy {
     private static final Logger LOG = LoggerFactory.getLogger(SplitStrategy.class);
+
+    /**
+     * used inside {@link #traverseAndCount(NodeState)} for debugging purposes
+     */
+    private static enum CountedFrom {NODE_COUNTER, CHILD_NODE_COUNT, ESTIMATED_FAIL};
+    
+    /**
+     * limit used for the approximation algorithm as well as limit for the
+     * {@link NodeState#getChildNodeCount(long)}
+     */
+    public static final long COUNT_LIMIT = 100L;
+    
+    
+    /**
+     * <p>
+     * value returned when there's no estimated count from
+     * {@link NodeCounter#getApproxCount(NodeState)} and the
+     * {@link NodeState#getChildNodeCount(long)} exceed {@link #COUNT_LIMIT}
+     * </p>
+     * <p>
+     * Based on the {@link NodeCounter} algorithm it's difficult we could skip more than 3 times
+     * {@link #COUNT_LIMIT} {@link NodeCounter#nodeAdded(Random, NodeBuilder, String, long)} so it
+     * will be {@code COUNT_LIMIT * 3 / 2}
+     * </p>
+     */
+    public static final long ESTIMATED_COUNT_ON_FAIL = COUNT_LIMIT * 3 / 2;
 
     /**
      * simple pojo for encoding the path.
@@ -71,10 +105,17 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
      * @param key
      * @param path
      */
-    private static void insert(final NodeBuilder index, final String key, final String path) {
+    private static void insert(final NodeBuilder index, final String key, final String path,
+                               final Random rnd) {
+        
+        checkNotNull(index);
+        checkNotNull(key);
+        checkNotNull(path);
+        checkNotNull(rnd);
+        
         LOG.debug("insert()");
         Iterable<String> tokens;
-        NodeBuilder node;
+        NodeBuilder node, parent;
         
         // 1. tokenise
         tokens = Splitter.on(OrderedIndex.SPLITTER).split(key);
@@ -88,12 +129,13 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
         // let's add a special node that will be treated specially for the sortin
         // putting it as first or last depending on the order by.
         // here we'll put our paths
-        node = node.child(OrderedIndex.FILLER);
+        parent = node.child(OrderedIndex.FILLER);
         
         // 3. hash and store the path
         Sha1Path sp = new Sha1Path(path);
-        node = node.child(sp.getSha1());
+        node = parent.child(sp.getSha1());
         node.setProperty(OrderedIndex.PROPERTY_PATH, sp.getPath());
+        NodeCounter.nodeAdded(rnd, parent, NodeCounter.PREFIX, COUNT_LIMIT);
     }
 
     /**
@@ -103,11 +145,17 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
      * @param key
      * @param path
      */
-    private static void remove(final NodeBuilder index, final String key, final String path) {
+    private static void remove(final NodeBuilder index, final String key, final String path,
+                               final Random rnd) {
+        checkNotNull(index);
+        checkNotNull(key);
+        checkNotNull(path);
+        checkNotNull(rnd);
+        
         LOG.debug("remove()");
         Deque<NodeBuilder> nodes;
         Iterable<String> tokens;
-        NodeBuilder node;
+        NodeBuilder node, parent;
 
         // each node will have a ':' as leaf for keeping the paths. Let's add it
         String k = key + OrderedIndex.SPLITTER + OrderedIndex.FILLER;
@@ -134,10 +182,12 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
 
         if (node != null) {
             // 2. delete the node
+            parent = node;
             Sha1Path sp = new Sha1Path(path);
-            node = node.getChildNode(sp.getSha1());
+            node = parent.getChildNode(sp.getSha1());
             if (node.exists()) {
                 node.remove();
+                NodeCounter.nodeRemoved(rnd, parent, NodeCounter.PREFIX, COUNT_LIMIT);
             }
 
             // 3. walking up the tree and delete nodes if no children
@@ -153,7 +203,23 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
     }
 
     @Override
-    public void update(NodeBuilder index, String path, Set<String> beforeKeys, Set<String> afterKeys) {
+    public void update(final NodeBuilder index, final String path, final Set<String> beforeKeys,
+                       final Set<String> afterKeys) {
+        update(index, path, beforeKeys, afterKeys, null);
+    }
+    
+    /**
+     * is the one doing the behind-the-scene work of {@link #update(NodeBuilder, String, Set, Set)}
+     * using the provided Random instance.
+     * 
+     * @param index
+     * @param path
+     * @param beforeKeys
+     * @param afterKeys
+     * @param rnd the Random instance to be used. If nullit will generate a new as
+     *            {@code new Random()}
+     */
+    public void update(NodeBuilder index, String path, Set<String> beforeKeys, Set<String> afterKeys, Random rnd) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("update() - path: {}", path);
             LOG.debug("update() - beforeKeys: {}", beforeKeys);
@@ -162,12 +228,12 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
         
         // remove all the beforeKeys
         for (String key : beforeKeys) {
-            remove(index, key, path);
+            remove(index, key, path, rnd == null ? new Random() : rnd);
         }
         
         // add all the afterKeys
         for (String key : afterKeys) {
-            insert(index, key, path);
+            insert(index, key, path, rnd == null ? new Random() : rnd);
         }
     }
 
@@ -187,7 +253,65 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
     }
 
     @Override
-    public long count(NodeState indexMeta, PropertyRestriction pr, int max) {
-        return Long.MAX_VALUE;
+    public long count(final NodeState indexMeta, final PropertyRestriction pr, final long max) {
+        
+        checkNotNull(indexMeta, "IndexMeta cannot be null");
+        checkNotNull(pr, "PropertyRestriction cannot be null");
+        
+        long count = Long.MAX_VALUE;
+        NodeState content = indexMeta.getChildNode(INDEX_CONTENT_NODE_NAME);
+        
+        if (content.exists()) {
+            // entryCount property
+            PropertyState entryCount = indexMeta.getProperty(ENTRY_COUNT_PROPERTY_NAME);
+            if (entryCount != null && Type.LONG.equals(entryCount.getType())) {
+                count = entryCount.getValue(Type.LONG);
+            } else {
+                LOG.debug(
+                    "count() - entryCount property not set or not valid type. entryCount: {}",
+                    entryCount);
+                if (pr.first == null && pr.last == null) {
+                    // property IS NOT NULL case (open query)
+                    LOG.debug("count() - property is not null case");
+                    count = traverseAndCount(content);
+                }
+            }
+        }
+        
+        LOG.debug("count() -  total count: {}", count);
+        return count;
+    }
+    
+    private static long traverseAndCount(@Nonnull final NodeState root) {
+        checkNotNull(root, "NodeState cannot be null");
+                
+        long count = 0;
+        CountedFrom cf;
+        
+        for (ChildNodeEntry child : root.getChildNodeEntries()) {
+            NodeState state = child.getNodeState();
+            String name = child.getName();
+            if (OrderedIndex.FILLER.equals(name)) {
+                // it's where the paths are stored
+                long c = NodeCounter.getApproxCount(state);
+                cf = CountedFrom.NODE_COUNTER;
+                if (c == NodeCounter.NO_PROPERTIES) {
+                    // there was no estimation. trying to count the exact match
+                    c = state.getChildNodeCount(COUNT_LIMIT);
+                    cf = CountedFrom.CHILD_NODE_COUNT;
+                    if (c == Long.MAX_VALUE) {
+                        // we have more than COUNT_LIMIT. Approximate the number
+                        c = ESTIMATED_COUNT_ON_FAIL;
+                        cf = CountedFrom.ESTIMATED_FAIL;
+                    }
+                }
+                LOG.debug("traverseAndCount() - c: {} got from: {}", c, cf);
+                count += c;
+            } else {
+                count += traverseAndCount(state);
+            }
+        }
+        
+        return count;
     }
 }

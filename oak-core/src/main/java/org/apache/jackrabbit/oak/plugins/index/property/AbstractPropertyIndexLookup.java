@@ -42,7 +42,12 @@ public abstract class AbstractPropertyIndexLookup {
     /**
      * The maximum cost when the index can be used.
      */
-    protected static final int MAX_COST = 100;
+    public static final int MAX_COST = 100;
+    
+    /**
+     * used to put a virtual no limits on costs for the estimated entry count during lookups.
+     */
+    public static final long NO_LIMITS_COST = Long.MAX_VALUE;
 
     /**
      * retrieve the {@code root} from the instantiated class
