@@ -28,8 +28,7 @@ import javax.annotation.Nonnull;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
-
-import com.google.common.collect.Iterables;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
 
 
 public class NodeCounter {
@@ -210,5 +209,72 @@ public class NodeCounter {
         }
         
         return node;
+    }
+    
+    /**
+     * as {@link #getApproxCount(NodeBuilder, String)} by passing {@link #PREFIX} as prefix;
+     * 
+     * @param node
+     * @return
+     */
+    public static long getApproxCount(@Nonnull final NodeBuilder node) {
+        return getApproxCount(node, PREFIX);
+    }
+    
+    /**
+     * <p>
+     * retrieve the approximate child node count for the provided node inspecting by the provided
+     * prefix properties.
+     * </p>
+     * 
+     * <p>
+     * In case no properties will be found, {@link #NO_PROPERTIES} will be returned. To be used the
+     * caller to act after it.
+     * </p>
+     * 
+     * @param node
+     * @param prefix
+     * @return
+     */
+    public static long getApproxCount(@Nonnull final NodeBuilder node,
+                                      @Nonnull final String prefix) {
+        
+        checkNotNull(node, "NodeBuilder cannot be null");
+        checkNotNull(prefix, "Predix cannot be null");
+        
+        long added = getApproxAdded(node, prefix);
+        long removed = getApproxRemoved(node, prefix);
+        
+        if (added == NO_PROPERTIES && removed == NO_PROPERTIES) {
+            return NO_PROPERTIES; 
+        } else {
+            added = (added == NO_PROPERTIES) ? 0 : added;
+            removed = (removed == NO_PROPERTIES) ? 0 : removed;
+            return Math.max(added / 2, added - removed);
+        }
+    }
+    
+    /**
+     * same as {@link #getApproxCount(NodeBuilder, String)} by passing {@code node.builder()} as
+     * node.
+     * 
+     * @param node
+     * @param prefix
+     * @return
+     */
+    public static long getApproxCount(@Nonnull final NodeState node,
+                                      @Nonnull final String prefix) {
+        checkNotNull(node, "NodeState cannot be null");
+        return getApproxCount(node.builder(), prefix);
+    }
+    
+    /**
+     * same as {@link #getApproxCount(NodeState, String)} by passing {@link #PREFIX} as prefix.
+     * 
+     * @param node
+     * @return
+     */
+    public static long getApproxCount(@Nonnull final NodeState node) {
+        return getApproxCount(node, PREFIX);
     }
 }

@@ -17,6 +17,8 @@
 package org.apache.jackrabbit.oak.util;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.jackrabbit.oak.util.NodeCounter.APPROX_MIN_RESOLUTION;
+import static org.apache.jackrabbit.oak.util.NodeCounter.PREFIX;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -24,10 +26,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.util.Deque;
-import java.util.Iterator;
 import java.util.Random;
-
-import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
@@ -36,12 +35,8 @@ import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-
-import static org.apache.jackrabbit.oak.util.NodeCounter.PREFIX;
-import static org.apache.jackrabbit.oak.util.NodeCounter.APPROX_MIN_RESOLUTION;
 
 public class NodeCounterTest {
     public static class MockRandom extends Random {
@@ -234,4 +229,86 @@ public class NodeCounterTest {
         
     }
     
+    @Test
+    public void getApproxCount() {
+        NodeBuilder node;
+        
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        assertEquals("With no properties for estimation a NO_PROPERTIES is expected",
+            NodeCounter.NO_PROPERTIES, NodeCounter.getApproxCount(node));
+
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        NodeCounter.nodeAdded(RND, node);
+        assertEquals(APPROX_MIN_RESOLUTION, NodeCounter.getApproxCount(node));
+
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        NodeCounter.nodeAdded(RND, node);
+        NodeCounter.nodeAdded(RND, node);
+        assertEquals(2000L, NodeCounter.getApproxCount(node));
+
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        NodeCounter.nodeAdded(RND, node);
+        NodeCounter.nodeAdded(RND, node);
+        NodeCounter.nodeRemoved(RND, node);
+        assertEquals(APPROX_MIN_RESOLUTION, NodeCounter.getApproxCount(node));
+
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        NodeCounter.nodeAdded(RND, node);
+        NodeCounter.nodeAdded(RND, node);
+        NodeCounter.nodeRemoved(RND, node);
+        NodeCounter.nodeRemoved(RND, node);
+        assertEquals(APPROX_MIN_RESOLUTION, NodeCounter.getApproxCount(node));
+
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        NodeCounter.nodeAdded(RND, node);
+        NodeCounter.nodeAdded(RND, node);
+        NodeCounter.nodeAdded(RND, node);
+        NodeCounter.nodeRemoved(RND, node);
+        assertEquals(3000L, NodeCounter.getApproxCount(node));
+        
+        // double-checking in case we have more removed than added
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        NodeCounter.nodeAdded(RND, node);
+        NodeCounter.nodeRemoved(RND, node);
+        NodeCounter.nodeRemoved(RND, node);
+        NodeCounter.nodeRemoved(RND, node);
+        assertEquals(500L, NodeCounter.getApproxCount(node));
+
+        // checking with a custom resolution
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        long resolution = 100L;
+        NodeCounter.nodeAdded(RND, node, PREFIX, resolution);
+        assertEquals(100L, NodeCounter.getApproxCount(node));
+
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        resolution = 100L;
+        NodeCounter.nodeAdded(RND, node, PREFIX, resolution);
+        NodeCounter.nodeAdded(RND, node, PREFIX, resolution);
+        assertEquals(200L, NodeCounter.getApproxCount(node));
+
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        resolution = 100L;
+        NodeCounter.nodeAdded(RND, node, PREFIX, resolution);
+        NodeCounter.nodeAdded(RND, node, PREFIX, resolution);
+        NodeCounter.nodeRemoved(RND, node, PREFIX, resolution);
+        assertEquals(100L, NodeCounter.getApproxCount(node));
+        
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        resolution = 100L;
+        NodeCounter.nodeAdded(RND, node, PREFIX, resolution);
+        NodeCounter.nodeAdded(RND, node, PREFIX, resolution);
+        NodeCounter.nodeAdded(RND, node, PREFIX, resolution);
+        NodeCounter.nodeRemoved(RND, node, PREFIX, resolution);
+        assertEquals(300L, NodeCounter.getApproxCount(node));
+    }
 }
