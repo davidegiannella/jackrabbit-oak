@@ -30,7 +30,44 @@ import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
-
+/**
+ * <p>
+ * Utility class that uses an approach like Approximate Counting Algorithm ({@linkplain http
+ * ://en.wikipedia.org/wiki/Approximate_counting_algorithm}) to compute an estimate of the child
+ * nodes.
+ * </p>
+ * <p>
+ * Additional discussions in {@linkplain https://issues.apache.org/jira/browse/OAK-1907}.
+ * </p>
+ * <p>
+ * Whenever you add a node under a child issue a {@link #nodeAdded(Random, NodeBuilder)}. If you
+ * deleted a node issue a {@link #nodeRemoved(Random, NodeBuilder)}. By default it uses an
+ * approximation of {@link #APPROX_MIN_RESOLUTION} storing the results in properties with prefix
+ * {@link #PREFIX}.
+ * </p>
+ * <p>
+ * The estimated count of node can be obtained by using {@link #getApproxCount(NodeBuilder)} or
+ * {@link #getApproxCount(NodeState)}
+ * </p>
+ * <p>
+ * Sample usage
+ * </p>
+ * 
+ * <code>
+ *  Random rnd = new Random();
+ *  NodeBuilder parent, child;
+ *  long estimatedCount;
+ *  ...
+ *  child = parent.child("foobar");
+ *  NodeCounter.nodeAdded(rnd, parent);
+ *  ...
+ *  child.remove();
+ *  NodeCounter.nodeRemoved(rnd, parent);
+ *  ...
+ *  estimatedCount = NodeCounter.getApproxCount(parent);
+ * <code>
+ * 
+ */
 public class NodeCounter {
     private static class CountResult {
         long added;
