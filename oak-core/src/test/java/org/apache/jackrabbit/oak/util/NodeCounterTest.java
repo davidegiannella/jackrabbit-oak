@@ -164,6 +164,45 @@ public class NodeCounterTest {
         assertProperties(node, ImmutableList.of(1000L, 1000L, 2000L, 4000L), PREFIX);
     }
     
+    @Test
+    public void nodeRemoved() {
+        NodeBuilder node;
+        
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        node = NodeCounter.nodeRemoved(RND, node);
+        assertNotNull(node);
+        assertProperties(node, ImmutableList.of(-1000L), PREFIX);
+
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        node = NodeCounter.nodeRemoved(RND, node);
+        assertNotNull(node);
+        node = NodeCounter.nodeRemoved(RND, node);
+        assertNotNull(node);
+        RND.setNextInt(1);
+        node = NodeCounter.nodeRemoved(RND, node);
+        assertNotNull(node);
+        assertProperties(node, ImmutableList.of(-1000L, -1000L), PREFIX);
+        
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        RND.setNextInt(0);
+        node = NodeCounter.nodeRemoved(RND, node);
+        assertNotNull(node);
+        node = NodeCounter.nodeRemoved(RND, node);
+        assertNotNull(node);
+        node = NodeCounter.nodeRemoved(RND, node);
+        assertNotNull(node);
+        node = NodeCounter.nodeRemoved(RND, node);
+        assertNotNull(node);
+        RND.setNextInt(1);
+        node = NodeCounter.nodeRemoved(RND, node);
+        assertNotNull(node);
+        node = NodeCounter.nodeRemoved(RND, node);
+        assertNotNull(node);
+        assertProperties(node, ImmutableList.of(-1000L, -1000L, -2000L, -4000L), PREFIX);
+    }
+    
     /**
      * assert the correctness of the properties in the provided node towards the expected values.
      *  

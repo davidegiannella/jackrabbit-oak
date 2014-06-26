@@ -177,4 +177,38 @@ public class NodeCounter {
         }
         return node;
     }
+
+    public static NodeBuilder nodeRemoved(@Nonnull final Random rnd,
+                                          @Nonnull final NodeBuilder node) {
+        return nodeRemoved(rnd, node, PREFIX, APPROX_MIN_RESOLUTION);
+    }
+    
+    /**
+     * Issue the NodeCounter algorithm on the provided node telling that a child has been deleted.
+     * 
+     * @param rnd the random generator to be used
+     * @param node the node under which the child has been deleted
+     * @param prefix the prefix for the count property
+     * @param minResolution the minimum resolution to be used. Must be greater than 0.
+     * @return the updated parent node.
+     */
+    public static NodeBuilder nodeRemoved(@Nonnull final Random rnd,
+                                          @Nonnull final NodeBuilder node,
+                                          @Nonnull final String prefix,
+                                          final long minResolution) {
+        checkNotNull(rnd, "Random generator cannot be null");
+        checkNotNull(node, "NodeBuilder cannot be null");
+        checkNotNull(prefix, "Prefix cannot be null");
+        checkArgument(minResolution > 0, "minResolution must be greater than 0");
+
+        long count = Math.max(minResolution, getApproxRemoved(node, prefix));
+        // TODO casting down to int for now. What can we do to achieve a more precise range?
+        // see http://stackoverflow.com/questions/2546078/java-random-long-number-in-0-x-n-range
+        if (rnd.nextInt((int) count) == 0) {
+            String propertyName = prefix + UUID.randomUUID();
+            node.setProperty(propertyName, -count, Type.LONG);
+        }
+        
+        return node;
+    }
 }
