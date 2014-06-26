@@ -109,6 +109,23 @@ public class NodeCounterTest {
     }
     
     @Test
+    public void getApproxRemoved() {
+        NodeBuilder node; 
+        
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        assertEquals("if the node has no properties for counting NO_PROPERTIES is expected",
+            NodeCounter.NO_PROPERTIES, NodeCounter.getApproxRemoved(node));
+        
+        node = EmptyNodeState.EMPTY_NODE.builder();
+        node.setProperty(PREFIX + "1", -APPROX_MIN_RESOLUTION, Type.LONG);
+        assertEquals(APPROX_MIN_RESOLUTION, NodeCounter.getApproxRemoved(node));
+        node.setProperty(PREFIX + "2", -APPROX_MIN_RESOLUTION, Type.LONG);
+        assertEquals(2000L, NodeCounter.getApproxRemoved(node));
+        node.setProperty(PREFIX + "3", -2000L, Type.LONG);
+        assertEquals(4000L, NodeCounter.getApproxRemoved(node));
+    }
+    
+    @Test
     public void nodeAdded() {
         NodeBuilder node;
         
