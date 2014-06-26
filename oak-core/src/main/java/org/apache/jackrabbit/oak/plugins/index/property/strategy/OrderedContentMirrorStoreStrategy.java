@@ -22,7 +22,6 @@ import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 
 import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.Collections;
 import java.util.Deque;
@@ -39,7 +38,6 @@ import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.Predicate;
-import org.apache.jackrabbit.oak.plugins.index.property.jmx.PropertyIndexAsyncReindex;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
@@ -355,10 +353,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             return query(filter, indexName, indexMeta, values);
         }
     }
-
-    private static String convert(String value) {
-        return value.replaceAll("%3A", ":");
-    }
     
     private static String encode(@Nonnull final String value) {
         checkNotNull(value);
@@ -371,19 +365,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
         return v;
     }
-    
-    private static String decode(@Nonnull final String value) {
-        checkNotNull(value);
-        String v;
-        try {
-            v =  URLDecoder.decode(value, Charsets.UTF_8.name());
-        } catch (UnsupportedEncodingException e) {
-            LOG.error("Error while encoding value.");
-            v = value;
-        }
-        return v;
-    }
-    
+        
     static class OrderedChildNodeEntry extends AbstractChildNodeEntry {
         private final String name;
         private final NodeState state;
@@ -451,7 +433,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             } else if (lpr.first != null && !lpr.first.equals(lpr.last)) {
                 // > & >= in ascending index
                 value = lpr.first.getValue(Type.STRING);
-                final String vv = value;
+                final String vv = encode(value);
                 final boolean include = lpr.firstIncluding;
                 final OrderDirection dd = direction;
 
@@ -486,7 +468,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 int depthTotal = 0;
                 // seeking the right starting point
                 for (ChildNodeEntry child : children) {
-                    String converted = convert(child.getName());
+                    String converted = child.getName();
                     if (predicate.apply(converted)) {
                         // here we are let's start counting
                         v = new CountingNodeVisitor(max);
@@ -506,7 +488,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             } else if (lpr.last != null && !lpr.last.equals(lpr.first)) {
                 // < & <= 
                 value = lpr.last.getValue(Type.STRING);
-                final String vv = value;
+                final String vv = encode(value);
                 final boolean include = lpr.lastIncluding;
                 final OrderDirection dd = direction;
                 
@@ -541,7 +523,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 int depthTotal = 0;
                 // seeking the right starting point
                 for (ChildNodeEntry child : children) {
-                    String converted = convert(child.getName());
+                    String converted = child.getName();
                     if (predicate.apply(converted)) {
                         // here we are let's start counting
                         v = new CountingNodeVisitor(max);
