@@ -17,9 +17,13 @@
 
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
@@ -35,6 +39,7 @@ import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.Predicate;
+import org.apache.jackrabbit.oak.plugins.index.property.jmx.PropertyIndexAsyncReindex;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
@@ -45,6 +50,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -352,6 +358,30 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 
     private static String convert(String value) {
         return value.replaceAll("%3A", ":");
+    }
+    
+    private static String encode(@Nonnull final String value) {
+        checkNotNull(value);
+        String v;
+        try {
+            v = URLEncoder.encode(value, Charsets.UTF_8.name());
+        } catch (UnsupportedEncodingException e) {
+            LOG.error("Error while encoding value.");
+            v = value;
+        }
+        return v;
+    }
+    
+    private static String decode(@Nonnull final String value) {
+        checkNotNull(value);
+        String v;
+        try {
+            v =  URLDecoder.decode(value, Charsets.UTF_8.name());
+        } catch (UnsupportedEncodingException e) {
+            LOG.error("Error while encoding value.");
+            v = value;
+        }
+        return v;
     }
     
     static class OrderedChildNodeEntry extends AbstractChildNodeEntry {
@@ -840,7 +870,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * {@code searchfor}
      */
     static class PredicateGreaterThan implements Predicate<ChildNodeEntry> {
-        private String searchfor;
+        private String searchforEncoded;
+        private String searchforDecoded;
         private boolean include;
         
         public PredicateGreaterThan(@Nonnull String searchfor) {
@@ -848,7 +879,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
         
         public PredicateGreaterThan(@Nonnull String searchfor, boolean include) {
-            this.searchfor = searchfor;
+            this.searchforEncoded = encode(searchfor);
+            this.searchforDecoded = searchfor;
             this.include = include;
         }
 
@@ -856,8 +888,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         public boolean apply(ChildNodeEntry arg0) {
             boolean b = false;
             if (arg0 != null) {
-                String name = convert(arg0.getName());
-                b = searchfor.compareTo(name) < 0 || (include && searchfor
+                String name = arg0.getName();
+                b = searchforEncoded.compareTo(name) < 0 || (include && searchforEncoded
                         .equals(name));
             }
             
@@ -866,7 +898,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         
         @Override
         public String getSearchFor() {
-            return searchfor;
+            return searchforDecoded;
         }
     }
 
@@ -874,7 +906,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * evaluates when the current element is less than (<) and less than equal {@code searchfor}
      */
     static class PredicateLessThan implements Predicate<ChildNodeEntry> {
-        private String searchfor;
+        private String searchforEncoded;
+        private String searchforOriginal;
         private boolean include;
 
         public PredicateLessThan(@Nonnull String searchfor) {
@@ -882,7 +915,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
 
         public PredicateLessThan(@Nonnull String searchfor, boolean include) {
-            this.searchfor = searchfor;
+            this.searchforEncoded = encode(searchfor);
+            this.searchforOriginal = searchfor;
             this.include = include;
         }
 
@@ -890,8 +924,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         public boolean apply(ChildNodeEntry arg0) {
             boolean b = false;
             if (arg0 != null) {
-                String name = convert(arg0.getName());
-                b = searchfor.compareTo(name) > 0 || (include && searchfor.equals(name));
+                String name = arg0.getName();
+                b = searchforEncoded.compareTo(name) > 0
+                    || (include && searchforEncoded.equals(name));
             }
 
             return b;
@@ -899,7 +934,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         
         @Override
         public String getSearchFor() {
-            return searchfor;
+            return searchforOriginal;
         }
     }
     
