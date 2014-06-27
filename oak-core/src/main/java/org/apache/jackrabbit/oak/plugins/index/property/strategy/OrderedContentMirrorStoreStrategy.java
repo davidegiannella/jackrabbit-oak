@@ -130,8 +130,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         
         // we use the seek for seeking the right spot. The walkedLanes will have all our
         // predecessors
-        ChildNodeEntry entry = seek(index.getNodeState(), condition, walked);
-        if (entry != null && entry.getName().equals(key)) {
+        String entry = seek(index.getNodeState(), condition, walked);
+        if (entry != null && entry.equals(key)) {
             // it's an existing node. We should not need to update anything around pointers
             node = index.getChildNode(key);
         } else {
@@ -162,7 +162,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             } else if (node.exists()) {
                 if (node.hasProperty(NEXT)) {
                     ChildNodeEntry[] walkedLanes = new ChildNodeEntry[OrderedIndex.LANES];
-                    ChildNodeEntry entry;
+                    String entry;
                     String lane0Next, prevNext, currNext;
                     
                     // for as long as we have the an entry and we didn't update the lane0 we have
@@ -273,14 +273,17 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         if (pr.first != null && !pr.first.equals(pr.last)) {
             // '>' & '>=' and between use case
             ChildNodeEntry firstValueableItem;
+            String firstValuableItemKey;
             Iterable<String> it = Collections.emptyList();
             Iterable<ChildNodeEntry> childrenIterable;
             
             if (pr.last == null) {
                 LOG.debug("> & >= case.");
-                firstValueableItem = seek(index,
+                firstValuableItemKey = seek(index,
                     new PredicateGreaterThan(pr.first.getValue(Type.STRING), pr.firstIncluding));
-                if (firstValueableItem != null) {
+                if (firstValuableItemKey != null) {
+                    firstValueableItem = new OrderedChildNodeEntry(firstValuableItemKey,
+                        index.getChildNode(firstValuableItemKey));
                     if (direction.isAscending()) {
                         childrenIterable = new SeekedIterable(index, firstValueableItem);
                         it = new QueryResultsWrapper(filter, indexName, childrenIterable);
@@ -306,16 +309,18 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 }
 
                 if (direction.equals(OrderDirection.ASC)) {
-                    firstValueableItem = seek(index,
+                    firstValuableItemKey = seek(index,
                         new PredicateGreaterThan(first, includeFirst));
                 } else {
-                    firstValueableItem = seek(index,
+                    firstValuableItemKey = seek(index,
                         new PredicateLessThan(last, includeLast));
                 }
                 
-                LOG.debug("firstValueableItem: {}", firstValueableItem);
+                LOG.debug("firstValueableItem: {}", firstValuableItemKey);
                 
-                if (firstValueableItem != null) {
+                if (firstValuableItemKey != null) {
+                    firstValueableItem = new OrderedChildNodeEntry(firstValuableItemKey,
+                        index.getChildNode(firstValuableItemKey));
                     childrenIterable = new BetweenIterable(index, firstValueableItem, last,
                         includeLast, direction);
                     it = new QueryResultsWrapper(filter, indexName, childrenIterable);
@@ -332,12 +337,15 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             LOG.debug("< & <= case. - searchfor: {} - include: {} - predicate: {}",
                 new Object[] { searchfor, include, predicate });
 
-            ChildNodeEntry firstValueableItem = seek(index, predicate);
+            ChildNodeEntry firstValueableItem;
+            String firstValueableItemKey =  seek(index, predicate);
             
-            LOG.debug("firstValuableItem: {}", firstValueableItem);
+            LOG.debug("firstValuableItem: {}", firstValueableItemKey);
             
             Iterable<String> it = Collections.emptyList();
-            if (firstValueableItem != null) {
+            if (firstValueableItemKey != null) {
+                firstValueableItem = new OrderedChildNodeEntry(firstValueableItemKey,
+                    index.getChildNode(firstValueableItemKey));
                 if (direction.isAscending()) {
                     it = new QueryResultsWrapper(filter, indexName, new BetweenIterable(index,
                         firstValueableItem, searchfor, include, direction));
@@ -719,7 +727,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * see {@link #seek(NodeState, Predicate<ChildNodeEntry>, ChildNodeEntry[])} passing null as
      * last argument
      */
-    ChildNodeEntry seek(@Nonnull NodeState index,
+    String seek(@Nonnull NodeState index,
                                       @Nonnull Predicate<ChildNodeEntry> condition) {
         return seek(index, condition, null);
     }
@@ -737,7 +745,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      *            {@link IllegalArgumentException} will be raised
      * @return the entry or null if not found
      */
-    ChildNodeEntry seek(@Nonnull final NodeState index,
+    String seek(@Nonnull final NodeState index,
                                @Nonnull final Predicate<ChildNodeEntry> condition,
                                @Nullable final ChildNodeEntry[] walkedLanes) {
         boolean keepWalked = false;
