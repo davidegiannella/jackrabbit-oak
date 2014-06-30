@@ -45,6 +45,7 @@ import org.apache.jackrabbit.oak.spi.state.AbstractChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.state.ReadOnlyBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -130,7 +131,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         
         // we use the seek for seeking the right spot. The walkedLanes will have all our
         // predecessors
-        String entry = seek(index.getNodeState(), condition, walked);
+        String entry = seek(index, condition, walked);
         if (entry != null && entry.equals(key)) {
             // it's an existing node. We should not need to update anything around pointers
             node = index.getChildNode(key);
@@ -168,7 +169,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     // for as long as we have the an entry and we didn't update the lane0 we have
                     // to keep searching and update
                     do {
-                        entry = seek(index.getNodeState(),
+                        entry = seek(index,
                             new PredicateEquals(key),
                             walkedLanes
                             );
@@ -268,7 +269,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                                   final NodeState indexMeta, final String indexStorageNodeName,
                                   final PropertyRestriction pr) {
         
-        final NodeState index = indexMeta.getChildNode(indexStorageNodeName);
+        final NodeState indexState = indexMeta.getChildNode(indexStorageNodeName);
+        final NodeBuilder index = new ReadOnlyBuilder(indexState);
 
         if (pr.first != null && !pr.first.equals(pr.last)) {
             // '>' & '>=' and between use case
@@ -283,14 +285,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     new PredicateGreaterThan(pr.first.getValue(Type.STRING), pr.firstIncluding));
                 if (firstValuableItemKey != null) {
                     firstValueableItem = new OrderedChildNodeEntry(firstValuableItemKey,
-                        index.getChildNode(firstValuableItemKey));
+                        indexState.getChildNode(firstValuableItemKey));
                     if (direction.isAscending()) {
-                        childrenIterable = new SeekedIterable(index, firstValueableItem);
+                        childrenIterable = new SeekedIterable(indexState, firstValueableItem);
                         it = new QueryResultsWrapper(filter, indexName, childrenIterable);
                     } else {
-                        it = new QueryResultsWrapper(filter, indexName, new BetweenIterable(index,
-                            firstValueableItem, pr.first.getValue(Type.STRING), pr.firstIncluding,
-                            direction));
+                        it = new QueryResultsWrapper(filter, indexName, new BetweenIterable(
+                            indexState, firstValueableItem, pr.first.getValue(Type.STRING),
+                            pr.firstIncluding, direction));
                     }
                 }
             } else {
@@ -320,8 +322,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 
                 if (firstValuableItemKey != null) {
                     firstValueableItem = new OrderedChildNodeEntry(firstValuableItemKey,
-                        index.getChildNode(firstValuableItemKey));
-                    childrenIterable = new BetweenIterable(index, firstValueableItem, last,
+                        indexState.getChildNode(firstValuableItemKey));
+                    childrenIterable = new BetweenIterable(indexState, firstValueableItem, last,
                         includeLast, direction);
                     it = new QueryResultsWrapper(filter, indexName, childrenIterable);
                 }
@@ -345,12 +347,12 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             Iterable<String> it = Collections.emptyList();
             if (firstValueableItemKey != null) {
                 firstValueableItem = new OrderedChildNodeEntry(firstValueableItemKey,
-                    index.getChildNode(firstValueableItemKey));
+                    indexState.getChildNode(firstValueableItemKey));
                 if (direction.isAscending()) {
-                    it = new QueryResultsWrapper(filter, indexName, new BetweenIterable(index,
+                    it = new QueryResultsWrapper(filter, indexName, new BetweenIterable(indexState,
                         firstValueableItem, searchfor, include, direction));
                 } else {
-                    it = new QueryResultsWrapper(filter, indexName, new SeekedIterable(index,
+                    it = new QueryResultsWrapper(filter, indexName, new SeekedIterable(indexState,
                         firstValueableItem));
                 }
             }
@@ -727,7 +729,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * see {@link #seek(NodeState, Predicate<ChildNodeEntry>, ChildNodeEntry[])} passing null as
      * last argument
      */
-    String seek(@Nonnull NodeState index, @Nonnull Predicate<String> condition) {
+    String seek(@Nonnull NodeBuilder index, @Nonnull Predicate<String> condition) {
         return seek(index, condition, null);
     }
     
@@ -744,7 +746,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      *            {@link IllegalArgumentException} will be raised
      * @return the entry or null if not found
      */
-    String seek(@Nonnull final NodeState index,
+    String seek(@Nonnull final NodeBuilder index,
                                @Nonnull final Predicate<String> condition,
                                @Nullable final ChildNodeEntry[] walkedLanes) {
         boolean keepWalked = false;
@@ -754,7 +756,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                                                              ? new PredicateLessThan(searchfor, true)
                                                              : new PredicateGreaterThan(searchfor, true);
         // we always begin with :start
-        ChildNodeEntry current = new OrderedChildNodeEntry(START, index.getChildNode(START));
+        ChildNodeEntry current = new OrderedChildNodeEntry(START, index.getChildNode(START).getNodeState());
         ChildNodeEntry found = null;
         
         if (walkedLanes != null) {
@@ -786,7 +788,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 nextkey = getPropertyNext(current, lane);
                 next = (Strings.isNullOrEmpty(nextkey)) 
                     ? null 
-                    : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
+                    : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey).getNodeState());
                 if ((next == null || !walkingPredicate.apply(nextkey)) && lane < OrderedIndex.LANES) {
                     // if we're currently pointing to NIL or the next element does not fit the search
                     // but we still have lanes left
@@ -810,7 +812,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 nextkey = getPropertyNext(current, lane);
                 next = (Strings.isNullOrEmpty(nextkey)) 
                     ? null 
-                    : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
+                    : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey).getNodeState());
                 if ((next == null || !walkingPredicate.apply(nextkey)) && lane > 0) {
                     // if we're currently pointing to NIL or the next element does not fit the search
                     // but we still have lanes left, let's lower the lane;
