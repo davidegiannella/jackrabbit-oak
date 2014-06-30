@@ -3372,18 +3372,18 @@ public class OrderedContentMirrorStorageStrategyTest {
     
     @Test
     public void predicateLessThan() { 
-        Predicate<ChildNodeEntry> predicate;
+        Predicate<String> predicate;
         String searchfor;
-        ChildNodeEntry entry;
+        String entry;
         
         searchfor = "b";
         predicate = new PredicateLessThan(searchfor, true);
-        entry = new OrderedChildNodeEntry("a", EmptyNodeState.EMPTY_NODE);
+        entry = "a";
         assertTrue(predicate.apply(entry));
 
         searchfor = "a";
         predicate = new PredicateLessThan(searchfor, true);
-        entry = new OrderedChildNodeEntry("b", EmptyNodeState.EMPTY_NODE);
+        entry = "b";
         assertFalse(predicate.apply(entry));
 
         searchfor = "a";

@@ -118,7 +118,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         // this is where the actual adding and maintenance of index's keys happen
         NodeBuilder node = null;
         NodeBuilder start = index.child(START);
-        Predicate<ChildNodeEntry> condition = direction.isAscending() 
+        Predicate<String> condition = direction.isAscending() 
             ? new PredicateGreaterThan(key, true)
             : new PredicateLessThan(key, true);
         ChildNodeEntry[] walked = new ChildNodeEntry[OrderedIndex.LANES];
@@ -332,7 +332,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             // '<' & '<=' use case
             final String searchfor = pr.last.getValue(Type.STRING);
             final boolean include = pr.lastIncluding;
-            Predicate<ChildNodeEntry> predicate = new PredicateLessThan(searchfor, include);
+            Predicate<String> predicate = new PredicateLessThan(searchfor, include);
             
             LOG.debug("< & <= case. - searchfor: {} - include: {} - predicate: {}",
                 new Object[] { searchfor, include, predicate });
@@ -727,8 +727,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * see {@link #seek(NodeState, Predicate<ChildNodeEntry>, ChildNodeEntry[])} passing null as
      * last argument
      */
-    String seek(@Nonnull NodeState index,
-                                      @Nonnull Predicate<ChildNodeEntry> condition) {
+    String seek(@Nonnull NodeState index, @Nonnull Predicate<String> condition) {
         return seek(index, condition, null);
     }
     
@@ -746,12 +745,12 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @return the entry or null if not found
      */
     String seek(@Nonnull final NodeState index,
-                               @Nonnull final Predicate<ChildNodeEntry> condition,
+                               @Nonnull final Predicate<String> condition,
                                @Nullable final ChildNodeEntry[] walkedLanes) {
         boolean keepWalked = false;
         String searchfor = condition.getSearchFor();
         LOG.debug("seek() - Searching for: {}", condition.getSearchFor());        
-        Predicate<ChildNodeEntry> walkingPredicate = direction.isAscending() 
+        Predicate<String> walkingPredicate = direction.isAscending() 
                                                              ? new PredicateLessThan(searchfor, true)
                                                              : new PredicateGreaterThan(searchfor, true);
         // we always begin with :start
@@ -788,12 +787,12 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 next = (Strings.isNullOrEmpty(nextkey)) 
                     ? null 
                     : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
-                if ((next == null || !walkingPredicate.apply(next)) && lane < OrderedIndex.LANES) {
+                if ((next == null || !walkingPredicate.apply(nextkey)) && lane < OrderedIndex.LANES) {
                     // if we're currently pointing to NIL or the next element does not fit the search
                     // but we still have lanes left
                     lane++;
                 } else {
-                    if (condition.apply(next)) {
+                    if (condition.apply(nextkey)) {
                         found = next;
                     } else {
                         current = next;
@@ -802,7 +801,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                         }
                     }
                 }
-            } while (((next != null && walkingPredicate.apply(next)) || stillLaning) && (found == null));
+            } while (((next != null && walkingPredicate.apply(nextkey)) || stillLaning) && (found == null));
         } else {
             lane = OrderedIndex.LANES - 1;
             
@@ -812,12 +811,12 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 next = (Strings.isNullOrEmpty(nextkey)) 
                     ? null 
                     : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey));
-                if ((next == null || !walkingPredicate.apply(next)) && lane > 0) {
+                if ((next == null || !walkingPredicate.apply(nextkey)) && lane > 0) {
                     // if we're currently pointing to NIL or the next element does not fit the search
                     // but we still have lanes left, let's lower the lane;
                     lane--;
                 } else {
-                    if (condition.apply(next)) {
+                    if (condition.apply(nextkey)) {
                         found = next;
                     } else {
                         current = next;
@@ -828,7 +827,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                         }
                     }
                 }
-            } while (((next != null && walkingPredicate.apply(next)) || stillLaning) && (found == null));
+            } while (((next != null && walkingPredicate.apply(nextkey)) || stillLaning) && (found == null));
         }
         
         return (found == null) ? null : found.getName();
@@ -837,7 +836,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     /**
      * predicate for evaluating 'key' equality across index 
      */
-    static class PredicateEquals implements Predicate<ChildNodeEntry> {
+    static class PredicateEquals implements Predicate<String> {
         private String searchfor;
 
         public PredicateEquals(@Nonnull String searchfor) {
@@ -845,8 +844,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
 
         @Override
-        public boolean apply(ChildNodeEntry arg0) {
-            return arg0 != null && searchfor.equals(arg0.getName());
+        public boolean apply(String arg0) {
+            return arg0 != null && searchfor.equals(arg0);
         }
 
         @Override
@@ -859,7 +858,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * evaluates when the current element is greater than (>) and greater than equal
      * {@code searchfor}
      */
-    static class PredicateGreaterThan implements Predicate<ChildNodeEntry> {
+    static class PredicateGreaterThan implements Predicate<String> {
         private String searchforEncoded;
         private String searchforDecoded;
         private boolean include;
@@ -875,10 +874,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
 
         @Override
-        public boolean apply(ChildNodeEntry arg0) {
+        public boolean apply(String arg0) {
             boolean b = false;
             if (arg0 != null) {
-                String name = arg0.getName();
+                String name = arg0;
                 b = searchforEncoded.compareTo(name) < 0 || (include && searchforEncoded
                         .equals(name));
             }
@@ -895,7 +894,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     /**
      * evaluates when the current element is less than (<) and less than equal {@code searchfor}
      */
-    static class PredicateLessThan implements Predicate<ChildNodeEntry> {
+    static class PredicateLessThan implements Predicate<String> {
         private String searchforEncoded;
         private String searchforOriginal;
         private boolean include;
@@ -911,10 +910,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
 
         @Override
-        public boolean apply(ChildNodeEntry arg0) {
+        public boolean apply(String arg0) {
             boolean b = false;
             if (arg0 != null) {
-                String name = arg0.getName();
+                String name = arg0;
                 b = searchforEncoded.compareTo(name) > 0
                     || (include && searchforEncoded.equals(name));
             }
