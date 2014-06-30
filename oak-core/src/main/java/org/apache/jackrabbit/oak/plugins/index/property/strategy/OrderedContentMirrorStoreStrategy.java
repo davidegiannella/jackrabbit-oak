@@ -831,7 +831,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             } while (((next != null && walkingPredicate.apply(next)) || stillLaning) && (found == null));
         }
         
-        return found;
+        return (found == null) ? null : found.getName();
     }
     
     /**
