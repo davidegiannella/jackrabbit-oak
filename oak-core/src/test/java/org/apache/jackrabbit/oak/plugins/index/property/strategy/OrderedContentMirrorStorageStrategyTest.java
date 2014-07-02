@@ -1517,7 +1517,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         String item = store.seek(index,
             new OrderedContentMirrorStoreStrategy.PredicateLessThan(searchFor));
 
-        assertNull("we should have not found an item", item);
+        assertNull("we should have not found an item. '" + item + "'", item);
     }
 
     @Test

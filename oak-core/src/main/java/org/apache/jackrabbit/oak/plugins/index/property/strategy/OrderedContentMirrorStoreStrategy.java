@@ -756,9 +756,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                                                              ? new PredicateLessThan(searchfor, true)
                                                              : new PredicateGreaterThan(searchfor, true);
         // we always begin with :start
-        ChildNodeEntry currentEntry = new OrderedChildNodeEntry(START, index.getChildNode(START).getNodeState());
         String currentKey = START;
-        ChildNodeEntry found = null;
+        String found = null;
         
         if (walkedLanes != null) {
             if (walkedLanes.length != OrderedIndex.LANES) {
@@ -776,7 +775,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         int lane;
         boolean stillLaning;
         String nextkey; 
-        ChildNodeEntry next;
 
         if ((direction.isAscending() && condition instanceof PredicateLessThan)
             || (direction.isDescending() && condition instanceof PredicateGreaterThan)) {
@@ -786,56 +784,48 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             lane = 0;
             do {
                 stillLaning = lane < OrderedIndex.LANES;
-                nextkey = getPropertyNext(currentEntry, lane);
-                next = (Strings.isNullOrEmpty(nextkey)) 
-                    ? null 
-                    : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey).getNodeState());
-                if ((next == null || !walkingPredicate.apply(nextkey)) && lane < OrderedIndex.LANES) {
+                nextkey = getPropertyNext(index.getChildNode(currentKey), lane);
+                if ((Strings.isNullOrEmpty(nextkey) || !walkingPredicate.apply(nextkey)) && lane < OrderedIndex.LANES) {
                     // if we're currently pointing to NIL or the next element does not fit the search
                     // but we still have lanes left
                     lane++;
                 } else {
                     if (condition.apply(nextkey)) {
-                        found = next;
+                        found = nextkey;
                     } else {
-                        currentEntry = next;
                         currentKey = nextkey;
-                        if (keepWalked && currentEntry != null) {
+                        if (keepWalked && !Strings.isNullOrEmpty(currentKey)) {
                             walkedLanes[lane] = currentKey;
                         }
                     }
                 }
-            } while (((next != null && walkingPredicate.apply(nextkey)) || stillLaning) && (found == null));
+            } while (((!Strings.isNullOrEmpty(nextkey) && walkingPredicate.apply(nextkey)) || stillLaning) && (found == null));
         } else {
             lane = OrderedIndex.LANES - 1;
             
             do {
                 stillLaning = lane > 0;
-                nextkey = getPropertyNext(currentEntry, lane);
-                next = (Strings.isNullOrEmpty(nextkey)) 
-                    ? null 
-                    : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey).getNodeState());
-                if ((next == null || !walkingPredicate.apply(nextkey)) && lane > 0) {
+                nextkey = getPropertyNext(index.getChildNode(currentKey), lane);
+                if ((Strings.isNullOrEmpty(nextkey) || !walkingPredicate.apply(nextkey)) && lane > 0) {
                     // if we're currently pointing to NIL or the next element does not fit the search
                     // but we still have lanes left, let's lower the lane;
                     lane--;
                 } else {
                     if (condition.apply(nextkey)) {
-                        found = next;
+                        found = nextkey;
                     } else {
-                        currentEntry = next;
                         currentKey = nextkey;
-                        if (keepWalked && currentEntry != null) {
+                        if (keepWalked && !Strings.isNullOrEmpty(currentKey)) {
                             for (int l = lane; l >= 0; l--) {
                                 walkedLanes[l] = currentKey;
                             }
                         }
                     }
                 }
-            } while (((next != null && walkingPredicate.apply(nextkey)) || stillLaning) && (found == null));
+            } while (((!Strings.isNullOrEmpty(nextkey) && walkingPredicate.apply(nextkey)) || stillLaning) && (found == null));
         }
         
-        return (found == null) ? null : found.getName();
+        return found;
     }
     
     /**
@@ -850,7 +840,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
 
         @Override
         public boolean apply(String arg0) {
-            return arg0 != null && searchfor.equals(arg0);
+            return !Strings.isNullOrEmpty(arg0) && searchfor.equals(arg0);
         }
 
         @Override
@@ -881,7 +871,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         @Override
         public boolean apply(String arg0) {
             boolean b = false;
-            if (arg0 != null) {
+            if (!Strings.isNullOrEmpty(arg0)) {
                 String name = arg0;
                 b = searchforEncoded.compareTo(name) < 0 || (include && searchforEncoded
                         .equals(name));
@@ -917,7 +907,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         @Override
         public boolean apply(String arg0) {
             boolean b = false;
-            if (arg0 != null) {
+            if (!Strings.isNullOrEmpty(arg0)) {
                 String name = arg0;
                 b = searchforEncoded.compareTo(name) > 0
                     || (include && searchforEncoded.equals(name));
