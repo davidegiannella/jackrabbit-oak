@@ -122,7 +122,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         Predicate<String> condition = direction.isAscending() 
             ? new PredicateGreaterThan(key, true)
             : new PredicateLessThan(key, true);
-        ChildNodeEntry[] walked = new ChildNodeEntry[OrderedIndex.LANES];
+        String[] walked = new String[OrderedIndex.LANES];
         
         if (Strings.isNullOrEmpty(getPropertyNext(start))) {
             // it means we're in an empty/new index. Setting properly the :start's :next
@@ -145,7 +145,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             NodeBuilder predecessor;
             for (int l = lane; l >= 0; l--) {
                 // let's update the predecessors starting from the coin-flip lane
-                predecessor = index.getChildNode(walked[l].getName());
+                predecessor = index.getChildNode(walked[l]);
                 next = getPropertyNext(predecessor, l);
                 setPropertyNext(predecessor, key, l);
                 setPropertyNext(node, next, l);
@@ -162,7 +162,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 return;
             } else if (node.exists()) {
                 if (node.hasProperty(NEXT)) {
-                    ChildNodeEntry[] walkedLanes = new ChildNodeEntry[OrderedIndex.LANES];
+                    String[] walkedLanes = new String[OrderedIndex.LANES];
                     String entry;
                     String lane0Next, prevNext, currNext;
                     
@@ -173,15 +173,15 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                             new PredicateEquals(key),
                             walkedLanes
                             );
-                        lane0Next = getPropertyNext(walkedLanes[0]);
+                        lane0Next = getPropertyNext(index.getChildNode(walkedLanes[0]));
                         if (LOG.isDebugEnabled()) {
                             for (int i = 0; i < walkedLanes.length; i++) {
                                 LOG.debug("prune() - walkedLanes[{}]: {}", i,
-                                    walkedLanes[i].getName());
+                                    walkedLanes[i]);
                             }
                         }
                         for (int lane = walkedLanes.length - 1; lane >= 0; lane--) {
-                            prevNext = getPropertyNext(walkedLanes[lane], lane);
+                            prevNext = getPropertyNext(index.getChildNode(walkedLanes[lane]), lane);
                             if (key.equals(prevNext)) {
                                 // if it's actually pointing to us let's deal with it
                                 currNext = getPropertyNext(node, lane);
@@ -189,11 +189,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                                     LOG.debug(
                                         "prune() - setting next for '{}' on lane '{}' with '{}'",
                                         new Object[] {
-                                        walkedLanes[lane].getName(),
+                                        walkedLanes[lane],
                                         lane,
                                         currNext});
                                 }
-                                setPropertyNext(index.getChildNode(walkedLanes[lane].getName()),
+                                setPropertyNext(index.getChildNode(walkedLanes[lane]),
                                     currNext, lane);
                             }
                         }
@@ -748,7 +748,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      */
     String seek(@Nonnull final NodeBuilder index,
                                @Nonnull final Predicate<String> condition,
-                               @Nullable final ChildNodeEntry[] walkedLanes) {
+                               @Nullable final String[] walkedLanes) {
         boolean keepWalked = false;
         String searchfor = condition.getSearchFor();
         LOG.debug("seek() - Searching for: {}", condition.getSearchFor());        
@@ -756,7 +756,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                                                              ? new PredicateLessThan(searchfor, true)
                                                              : new PredicateGreaterThan(searchfor, true);
         // we always begin with :start
-        ChildNodeEntry current = new OrderedChildNodeEntry(START, index.getChildNode(START).getNodeState());
+        ChildNodeEntry currentEntry = new OrderedChildNodeEntry(START, index.getChildNode(START).getNodeState());
+        String currentKey = START;
         ChildNodeEntry found = null;
         
         if (walkedLanes != null) {
@@ -767,7 +768,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             }
             // ensuring the right data
             for (int i = 0; i < walkedLanes.length; i++) {
-                walkedLanes[i] = current;
+                walkedLanes[i] = currentKey;
             }
             keepWalked = true;
         }
@@ -785,7 +786,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             lane = 0;
             do {
                 stillLaning = lane < OrderedIndex.LANES;
-                nextkey = getPropertyNext(current, lane);
+                nextkey = getPropertyNext(currentEntry, lane);
                 next = (Strings.isNullOrEmpty(nextkey)) 
                     ? null 
                     : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey).getNodeState());
@@ -797,9 +798,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     if (condition.apply(nextkey)) {
                         found = next;
                     } else {
-                        current = next;
-                        if (keepWalked && current != null) {
-                            walkedLanes[lane] = current;
+                        currentEntry = next;
+                        currentKey = nextkey;
+                        if (keepWalked && currentEntry != null) {
+                            walkedLanes[lane] = currentKey;
                         }
                     }
                 }
@@ -809,7 +811,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             
             do {
                 stillLaning = lane > 0;
-                nextkey = getPropertyNext(current, lane);
+                nextkey = getPropertyNext(currentEntry, lane);
                 next = (Strings.isNullOrEmpty(nextkey)) 
                     ? null 
                     : new OrderedChildNodeEntry(nextkey, index.getChildNode(nextkey).getNodeState());
@@ -821,10 +823,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     if (condition.apply(nextkey)) {
                         found = next;
                     } else {
-                        current = next;
-                        if (keepWalked && current != null) {
+                        currentEntry = next;
+                        currentKey = nextkey;
+                        if (keepWalked && currentEntry != null) {
                             for (int l = lane; l >= 0; l--) {
-                                walkedLanes[l] = current;
+                                walkedLanes[l] = currentKey;
                             }
                         }
                     }
