@@ -1070,8 +1070,24 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @return the next value
      */
     static String getPropertyNext(@Nonnull final NodeState state, final int lane) {
+        return getPropertyNext(new ReadOnlyBuilder(state), lane);
+    }
+    
+    /**
+     * short-cut for using NodeBuilder. See {@code getNext(NodeState)}
+     */
+    static String getPropertyNext(@Nonnull final NodeBuilder node) {
+        return getPropertyNext(node, 0);
+    }
+
+    /**
+     * short-cut for using NodeBuilder. See {@code getNext(NodeState)}
+     */
+    static String getPropertyNext(@Nonnull final NodeBuilder node, final int lane) {
+        checkNotNull(node);
+        
         String next = "";
-        PropertyState ps = state.getProperty(NEXT);
+        PropertyState ps = node.getProperty(NEXT);
         if (ps != null) {
             if (ps.isArray()) {
                 next = ps.getValue(Type.STRING, Math.min(ps.count() - 1, lane));
@@ -1080,20 +1096,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             }
         }
         return next;
-    }
-    
-    /**
-     * short-cut for using NodeBuilder. See {@code getNext(NodeState)}
-     */
-    static String getPropertyNext(@Nonnull final NodeBuilder node) {
-        return getPropertyNext(node.getNodeState());
-    }
-
-    /**
-     * short-cut for using NodeBuilder. See {@code getNext(NodeState)}
-     */
-    static String getPropertyNext(@Nonnull final NodeBuilder node, final int lane) {
-        return getPropertyNext(node.getNodeState(), lane);
     }
 
     /**
