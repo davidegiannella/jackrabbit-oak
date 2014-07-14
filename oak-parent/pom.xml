@@ -35,8 +35,9 @@
 
   <properties>
     <test.opts.memory>-Xmx512m -XX:MaxPermSize=64m</test.opts.memory>
-    <test.opts>${test.opts.memory} -XX:+HeapDumpOnOutOfMemoryError -Dupdate.limit=100 -Djava.awt.headless=true</test.opts>
+    <test.opts>${test.opts.coverage} ${test.opts.memory} -XX:+HeapDumpOnOutOfMemoryError -Dupdate.limit=100 -Djava.awt.headless=true</test.opts>
     <skip.deployment>false</skip.deployment>
+    <skip.coverage>true</skip.coverage>
     <known.issues />
     <project.reporting.outputEncoding>
       ${project.build.sourceEncoding}
@@ -96,7 +97,7 @@
         <plugin>
           <groupId>org.apache.felix</groupId>
           <artifactId>maven-bundle-plugin</artifactId>
-          <version>2.4.0</version>
+          <version>2.5.0</version>
           <extensions>true</extensions>
           <inherited>true</inherited>
           <configuration>
@@ -109,6 +110,19 @@
               <Bundle-Vendor>The Apache Software Foundation</Bundle-Vendor>
             </instructions>
           </configuration>
+          <executions>
+            <execution>
+              <id>baseline</id>
+              <goals>
+                <goal>baseline</goal>
+              </goals>
+              <configuration>
+                <logResults>false</logResults>
+                <failOnWarning>false</failOnWarning>
+                <failOnError>false</failOnError>
+              </configuration>
+            </execution>
+          </executions>
         </plugin>
         <plugin>
           <groupId>org.apache.felix</groupId>
@@ -248,8 +262,44 @@
           <artifactId>maven-project-info-reports-plugin</artifactId>
           <version>2.4</version>
         </plugin>
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>0.7.1.201405082137</version>
+        </plugin>
       </plugins>
     </pluginManagement>
+    <plugins>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>pre-unit-test</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+            <configuration>
+              <skip>${skip.coverage}</skip>
+              <destFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</destFile>
+              <propertyName>test.opts.coverage</propertyName>
+            </configuration>
+          </execution>
+          <execution>
+            <id>post-unit-test</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+            <configuration>
+              <skip>${skip.coverage}</skip>
+              <dataFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</dataFile>
+              <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
   </build>
 
   <reporting>
@@ -490,23 +540,24 @@
       </dependencies>
     </profile>
     <profile>
-      <!-- requires local copy of DB2 JDBC drivers -->
-      <!-- run with -Ddb2.jdbc=foldername where foldername contains the 2 JARs-->
+      <!-- requires local copy of IBM DB2 JDBC drivers deployed to Maven repo-->
+      <!-- for instance:
+        mvn install:install-file -Dfile=db2jcc4.jar -Dpackaging=jar\
+          -DgroupId=com.ibm.db2 -DartifactId=db2 -Dversion=4.16.53
+        mvn install:install-file -Dfile=db2jcc_license_cu.jar -Dpackaging=jar\
+          -DgroupId=com.ibm.db2 -DartifactId=db2-license -Dversion=4.16.53
+       -->
       <id>rdb-db2</id>
       <dependencies>
         <dependency>
-          <groupId>com.ibm.db2.jcc</groupId>
+          <groupId>com.ibm.db2</groupId>
           <artifactId>db2</artifactId>
-          <version>1.0</version>
-          <scope>system</scope>
-          <systemPath>${db2.jdbc}/db2jcc4.jar</systemPath>
+          <version>4.16.53</version>
         </dependency>
         <dependency>
-          <groupId>com.ibm.db2.jcc</groupId>
+          <groupId>com.ibm.db2</groupId>
           <artifactId>db2-license</artifactId>
-          <version>1.0</version>
-          <scope>system</scope>
-          <systemPath>${db2.jdbc}/db2jcc_license_cu.jar</systemPath>
+          <version>4.16.53</version>
         </dependency>
       </dependencies>
     </profile>
@@ -517,6 +568,12 @@
       </activation>
       <properties>
         <test.opts.memory>-Xmx512m</test.opts.memory>
+      </properties>
+    </profile>
+    <profile>
+      <id>coverage</id>
+      <properties>
+        <skip.coverage>false</skip.coverage>
       </properties>
     </profile>
   </profiles>

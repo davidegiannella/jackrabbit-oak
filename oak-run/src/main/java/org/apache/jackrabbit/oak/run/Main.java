@@ -16,9 +16,15 @@
  */
 package org.apache.jackrabbit.oak.run;
 
+import static com.google.common.collect.Sets.newHashSet;
+import static java.util.Arrays.asList;
+
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetAddress;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -34,19 +40,19 @@ import java.util.regex.Pattern;
 
 import javax.jcr.Repository;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
+import com.google.common.io.Closer;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientURI;
-
+import com.mongodb.MongoURI;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
-
 import org.apache.jackrabbit.core.RepositoryContext;
 import org.apache.jackrabbit.core.config.RepositoryConfig;
 import org.apache.jackrabbit.oak.Oak;
-import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.benchmark.BenchmarkRunner;
 import org.apache.jackrabbit.oak.commons.PathUtils;
@@ -61,6 +67,7 @@ import org.apache.jackrabbit.oak.plugins.backup.FileStoreBackup;
 import org.apache.jackrabbit.oak.plugins.backup.FileStoreRestore;
 import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
 import org.apache.jackrabbit.oak.plugins.document.DocumentNodeStore;
+import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
 import org.apache.jackrabbit.oak.plugins.segment.RecordId;
 import org.apache.jackrabbit.oak.plugins.segment.Segment;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentId;
@@ -79,9 +86,6 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 
-import static com.google.common.collect.Sets.newHashSet;
-import static java.util.Arrays.asList;
-
 public class Main {
 
     public static final int PORT = 8080;
@@ -97,7 +101,12 @@ public class Main {
 
         Mode mode = Mode.SERVER;
         if (args.length > 0) {
-            mode = Mode.valueOf(args[0].toUpperCase(Locale.ENGLISH));
+            try {
+                mode = Mode.valueOf(args[0].toUpperCase(Locale.ENGLISH));
+            } catch (IllegalArgumentException e) {
+                System.err.println("Unknown run mode: " + args[0]);
+                mode = Mode.HELP;
+            }
             String[] tail = new String[args.length - 1];
             System.arraycopy(args, 1, tail, 0, tail.length);
             args = tail;
@@ -133,8 +142,10 @@ public class Main {
             case EXPLORE:
                 Explorer.main(args);
                 break;
+            case HELP:
             default:
-                System.err.println("Unknown command: " + mode);
+                System.err.print("Available run modes: ");
+                System.err.println(Joiner.on(',').join(Mode.values()));
                 System.exit(1);
 
         }
@@ -175,32 +186,106 @@ public class Main {
     }
 
     private static void backup(String[] args) throws IOException {
-        if (args.length == 2) {
-            // TODO: enable backup for other node store implementations
-            FileStore store = new FileStore(new File(args[0]), 256, false);
-            FileStoreBackup.backup(new SegmentNodeStore(store), new File(args[1]));
-            store.close();
-        } else {
-            System.err.println("usage: backup <repository> <backup>");
-            System.exit(1);
+        Closer closer = Closer.create();
+        String h = "backup { /path/to/oak/repository | mongodb://host:port/database } <path/to/backup>";
+        try {
+            NodeStore store = bootstrapNodeStore(args, closer, h);
+            FileStoreBackup.backup(store, new File(args[1]));
+        } catch (Throwable e) {
+            throw closer.rethrow(e);
+        } finally {
+            closer.close();
         }
     }
 
     private static void restore(String[] args) throws IOException {
-        if (args.length == 2) {
-            // TODO: enable restore for other node store implementations
-            FileStore store = new FileStore(new File(args[0]), 256, false);
-            File target = new File(args[1]);
-            try {
-                FileStoreRestore.restore(target, new SegmentNodeStore(store));
-            } catch (CommitFailedException e) {
-                throw new IOException(e);
-            }
-            store.close();
-        } else {
-            System.err.println("usage: restore <repository> <backup>");
+        Closer closer = Closer.create();
+        String h = "restore { /path/to/oak/repository | mongodb://host:port/database } <path/to/backup>";
+        try {
+            NodeStore store = bootstrapNodeStore(args, closer, h);
+            FileStoreRestore.restore(new File(args[1]), store);
+        } catch (Throwable e) {
+            throw closer.rethrow(e);
+        } finally {
+            closer.close();
+        }
+    }
+
+    public static NodeStore bootstrapNodeStore(String[] args, Closer closer,
+            String h) throws IOException {
+        //TODO add support for other NodeStore flags
+        OptionParser parser = new OptionParser();
+        OptionSpec<Integer> clusterId = parser
+                .accepts("clusterId", "MongoMK clusterId").withRequiredArg()
+                .ofType(Integer.class).defaultsTo(0);
+        OptionSpec<?> help = parser.acceptsAll(asList("h", "?", "help"),
+                "show help").forHelp();
+        OptionSpec<String> nonOption = parser
+                .nonOptions(h);
+
+        OptionSet options = parser.parse(args);
+        List<String> nonOptions = nonOption.values(options);
+
+        if (options.has(help)) {
+            parser.printHelpOn(System.out);
+            System.exit(0);
+        }
+
+        if (nonOptions.isEmpty()) {
+            parser.printHelpOn(System.err);
             System.exit(1);
         }
+
+        String src = nonOptions.get(0);
+        if (src.startsWith(MongoURI.MONGODB_PREFIX)) {
+            MongoClientURI uri = new MongoClientURI(src);
+            if (uri.getDatabase() == null) {
+                System.err.println("Database missing in MongoDB URI: "
+                        + uri.getURI());
+                System.exit(1);
+            }
+            MongoConnection mongo = new MongoConnection(uri.getURI());
+            closer.register(asCloseable(mongo));
+            DocumentNodeStore store = new DocumentMK.Builder()
+                    .setMongoDB(mongo.getDB())
+                    .setClusterId(clusterId.value(options)).getNodeStore();
+            closer.register(asCloseable(store));
+            return store;
+        } else {
+            FileStore fs = new FileStore(new File(src), 256, false);
+            closer.register(asCloseable(fs));
+            return new SegmentNodeStore(fs);
+        }
+    }
+
+    private static Closeable asCloseable(final FileStore fs) {
+        return new Closeable() {
+
+            @Override
+            public void close() throws IOException {
+                fs.close();
+            }
+        };
+    }
+
+    private static Closeable asCloseable(final DocumentNodeStore dns) {
+        return new Closeable() {
+
+            @Override
+            public void close() throws IOException {
+                dns.dispose();
+            }
+        };
+    }
+
+    private static Closeable asCloseable(final MongoConnection con) {
+        return new Closeable() {
+
+            @Override
+            public void close() throws IOException {
+                con.close();
+            }
+        };
     }
 
     private static void compact(String[] args) throws IOException {
@@ -223,8 +308,7 @@ public class Main {
             System.out.println("    -> cleaning up");
             store = new FileStore(directory, 256, false);
             try {
-                store.gc();
-                store.flush();
+                store.cleanup();
             } finally {
                 store.close();
             }
@@ -422,6 +506,7 @@ public class Main {
     private static void server(String defaultUri, String[] args) throws Exception {
         OptionParser parser = new OptionParser();
 
+        OptionSpec<Void> mkServer = parser.accepts("mk", "MicroKernel server");
         OptionSpec<Integer> cache = parser.accepts("cache", "cache size (MB)").withRequiredArg().ofType(Integer.class).defaultsTo(100);
 
         // tar/h2 specific option
@@ -453,8 +538,6 @@ public class Main {
         if (fix.startsWith(OakFixture.OAK_MEMORY)) {
             if (OakFixture.OAK_MEMORY_NS.equals(fix)) {
                 oakFixture = OakFixture.getMemoryNS(cacheSize * MB);
-            } else if (OakFixture.OAK_MEMORY_MK.equals(fix)) {
-                oakFixture = OakFixture.getMemoryMK(cacheSize * MB);
             } else {
                 oakFixture = OakFixture.getMemory(cacheSize * MB);
             }
@@ -485,16 +568,21 @@ public class Main {
                 throw new IllegalArgumentException("Required argument base missing.");
             }
             oakFixture = OakFixture.getTar(OakFixture.OAK_TAR, baseFile, 256, cacheSize, mmap.value(options), false);
-        } else if (fix.equals(OakFixture.OAK_H2)) {
-            File baseFile = base.value(options);
-            if (baseFile == null) {
-                throw new IllegalArgumentException("Required argument base missing.");
-            }
-            oakFixture = OakFixture.getH2MK(baseFile, cacheSize * MB);
         } else {
             throw new IllegalArgumentException("Unsupported repository setup " + fix);
         }
 
+        if (options.has(mkServer)) {
+            if (!cIds.isEmpty()) {
+                System.out.println("WARNING: clusterIds option is ignored when mk option is specified");
+            }
+            startMkServer(oakFixture, uri);
+        } else {
+            startOakServer(oakFixture, uri, cIds);
+        }
+    }
+
+    private static void startOakServer(OakFixture oakFixture, String uri, List<Integer> cIds) throws Exception {
         Map<Oak, String> m;
         if (cIds.isEmpty()) {
             System.out.println("Starting " + oakFixture.toString() + " repository -> " + uri);
@@ -508,6 +596,20 @@ public class Main {
             }
         }
         new HttpServer(uri, m);
+    }
+
+    private static void startMkServer(OakFixture oakFixture, String uri) throws Exception {
+        org.apache.jackrabbit.mk.server.Server server =
+            new org.apache.jackrabbit.mk.server.Server(oakFixture.getMicroKernel());
+
+        URL url = new URL(uri);
+        server.setBindAddress(InetAddress.getByName(url.getHost()));
+        if (url.getPort() > 0) {
+            server.setPort(url.getPort());
+        } else {
+            server.setPort(28080);
+        }
+        server.start();
     }
 
     public static class HttpServer {
@@ -586,13 +688,14 @@ public class Main {
         BACKUP("backup"),
         RESTORE("restore"),
         BENCHMARK("benchmark"),
-        CONSOLE("debug"),
+        CONSOLE("console"),
         DEBUG("debug"),
         COMPACT("compact"),
         SERVER("server"),
         UPGRADE("upgrade"),
         SCALABILITY("scalability"),
-        EXPLORE("explore");
+        EXPLORE("explore"),
+        HELP("help");
 
         private final String name;
 

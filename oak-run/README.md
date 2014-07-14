@@ -4,13 +4,17 @@ Oak Runnable Jar
 This jar contains everything you need for a simple Oak installation.
 The following runmodes are currently available:
 
-    * backup    : Backup an existing Oak repository
-    * benchmark : Run benchmark tests against different Oak repository fixtures.
-    * debug     : Print status information about an Oak repository.
-    * upgrade   : Upgrade from Jackrabbit 2.x repository to Oak.
-    * server    : Run the Oak Server
-    * console   : Start an interactive console
-    * explore   : Starts a GUI browser based on java swing
+    * backup      : Backup an existing Oak repository.
+    * restore     : Restore a backup of an Oak repository.
+    * benchmark   : Run benchmark tests against different Oak repository fixtures.
+    * debug       : Print status information about an Oak repository.
+    * compact     : Segment compaction on a TarMK repository.
+    * upgrade     : Upgrade from Jackrabbit 2.x repository to Oak.
+    * server      : Run the Oak Server.
+    * console     : Start an interactive console.
+    * explore     : Starts a GUI browser based on java swing.
+    * scalability : Run scalability tests against different Oak repository fixtures.
+    * help        : Print a list of available runmodes
 
 See the subsections below for more details on how to use these modes.
 
@@ -19,14 +23,16 @@ Backup
 
 The 'backup' mode creates a backup from an existing oak repository. To start this mode, use:
 
-    $ java -jar oak-run-*.jar backup /path/to/repository /path/to/backup
+    $ java -jar oak-run-*.jar backup \
+          { /path/to/oak/repository | mongodb://host:port/database } /path/to/backup
 
 Restore
 -------
 
 The 'restore' mode imports a backup of an existing oak repository. To start this mode, use:
 
-    $ java -jar oak-run-*.jar restore /path/to/repository /path/to/backup
+    $ java -jar oak-run-*.jar restore \
+          { /path/to/oak/repository | mongodb://host:port/database } /path/to/backup
 
 Debug
 -----
@@ -120,9 +126,10 @@ See the relevant documentation for more details.
 Oak server mode
 ---------------
 
-The Oak server mode starts a full Oak instance with the standard JCR plugins
-and makes it available over a simple HTTP mapping defined in the `oak-http`
-component. To start this mode, use:
+The Oak server mode starts a MicroKernel or full Oak instance with the 
+standard JCR plugins and makes it available over a simple HTTP mapping 
+defined in the `oak-http` and `oak-mk-remote` components. To start this 
+mode, use:
 
     $ java -jar oak-run-*.jar server [uri] [fixture] [options]
 
@@ -139,14 +146,12 @@ to be used. The following fixtures are currently supported:
 | Jackrabbit    | Jackrabbit with the default embedded Derby  bundle PM |
 | Oak-Memory    | Oak with default in-memory storage                    |
 | Oak-MemoryNS  | Oak with default in-memory NodeStore                  |
-| Oak-MemoryMK  | Oak with default in-memory MicroKernel                |
 | Oak-Mongo     | Oak with the default Mongo backend                    |
 | Oak-Mongo-FDS | Oak with the default Mongo backend and FileDataStore  |
 | Oak-MongoNS   | Oak with the Mongo NodeStore                          |
 | Oak-MongoMK   | Oak with the Mongo MicroKernel                        |
 | Oak-Tar       | Oak with the Tar backend (aka Segment NodeStore)      |
 | Oak-Tar-FDS   | Oak with the Tar backend and FileDataStore            |
-| Oak-H2        | Oak with the MK using embedded H2 database            |
 
 
 Depending on the fixture the following options are available:
@@ -156,17 +161,19 @@ Depending on the fixture the following options are available:
     --port 27101           - MongoDB port
     --db <name>            - MongoDB database (default is a generated name)
     --clusterIds           - Cluster Ids for the Mongo setup: a comma separated list of integers
-    --base <file>          - Tar and H2: Path to the base file
+    --base <file>          - Tar: Path to the base file
     --mmap <64bit?>        - TarMK memory mapping (the default on 64 bit JVMs)
+    --mk                   - Start in MicroKernel mode exposing the MicroKernel API 
 
 Examples:
 
     $ java -jar oak-run-*.jar server
+    $ java -jar oak-run-*.jar server -mk
     $ java -jar oak-run-*.jar server http://localhost:4503 Oak-Tar --base myOak
     $ java -jar oak-run-*.jar server http://localhost:4502 Oak-Mongo --db myOak --clusterIds c1,c2,c3
 
-See the documentation in the `oak-http` component for details about the
-available functionality.
+See the documentation in the `oak-http` and `oak-mk-remote` components for details 
+about the available functionality.
 
 
 Benchmark mode
@@ -183,7 +190,7 @@ The following benchmark options (with default values) are currently supported:
     --port 27101           - MongoDB port
     --db <name>            - MongoDB database (default is a generated name)
     --dropDBAfterTest true - Whether to drop the MongoDB database after the test
-    --base target          - Path to the base file (Tar and H2 setup),
+    --base target          - Path to the base file (Tar setup),
     --mmap <64bit?>        - TarMK memory mapping (the default on 64 bit JVMs)
     --cache 100            - cache size (in MB)
     --wikipedia <file>     - Wikipedia dump
@@ -201,8 +208,7 @@ that need them. For example the Wikipedia dump option is needed by the
 WikipediaImport test case and the MongoDB address information by the
 MongoMK and SegmentMK -based repository fixtures. The cache setting
 controls the bundle cache size in Jackrabbit, the KernelNodeState
-cache size in MongoMK and the default H2 MK, and the segment cache
-size in SegmentMK.
+cache size in MongoMK, and the segment cache size in SegmentMK.
 
 The `--concurrency` levels can be specified as comma separated list of values,
 eg: `--concurrency 1,4,8`, which will execute the same test with the number of
@@ -245,13 +251,11 @@ Finally the benchmark runner supports the following repository fixtures:
 | Jackrabbit    | Jackrabbit with the default embedded Derby  bundle PM |
 | Oak-Memory    | Oak with default in-memory storage                    |
 | Oak-MemoryNS  | Oak with default in-memory NodeStore                  |
-| Oak-MemoryMK  | Oak with default in-memory MicroKernel                |
 | Oak-Mongo     | Oak with the default Mongo backend                    |
 | Oak-Mongo-FDS | Oak with the default Mongo backend and FileDataStore  |
 | Oak-MongoNS   | Oak with the Mongo NodeStore                          |
 | Oak-MongoMK   | Oak with the Mongo MicroKernel                        |
 | Oak-Tar       | Oak with the Tar backend (aka Segment NodeStore)      |
-| Oak-H2        | Oak with the MK using embedded H2 database            |
 | Oak-RDB       | Oak with the DocumentMK/RDB persistence               |
 
 (Note that for Oak-RDB, the required JDBC drivers either need to be embedded
@@ -379,7 +383,7 @@ The following scalability options (with default values) are currently supported:
     --port 27101           - MongoDB port
     --db <name>            - MongoDB database (default is a generated name)
     --dropDBAfterTest true - Whether to drop the MongoDB database after the test
-    --base target          - Path to the base file (Tar and H2 setup),
+    --base target          - Path to the base file (Tar setup),
     --mmap <64bit?>        - TarMK memory mapping (the default on 64 bit JVMs)
     --cache 100            - cache size (in MB)
     --csvFile <file>       - Optional csv file to report the benchmark results
@@ -390,8 +394,8 @@ The following scalability options (with default values) are currently supported:
 These options are passed to the various suites and repository fixtures
 that need them. For example the the MongoDB address information by the
 MongoMK and SegmentMK -based repository fixtures. The cache setting
-controls the KernelNodeState cache size in MongoMK and the default H2 MK, and the 
-segment cache size in SegmentMK.
+controls the KernelNodeState cache size in MongoMK, and the segment
+cache size in SegmentMK.
 
 You can use extra JVM options like `-Xmx` settings to better control the
 scalability suite test environment. It's also possible to attach the JVM to a
@@ -420,13 +424,11 @@ Finally the scalability runner supports the following repository fixtures:
 |---------------|-------------------------------------------------------|
 | Oak-Memory    | Oak with default in-memory storage                    |
 | Oak-MemoryNS  | Oak with default in-memory NodeStore                  |
-| Oak-MemoryMK  | Oak with default in-memory MicroKernel                |
 | Oak-Mongo     | Oak with the default Mongo backend                    |
 | Oak-Mongo-FDS | Oak with the default Mongo backend and FileDataStore  |
 | Oak-MongoNS   | Oak with the Mongo NodeStore                          |
 | Oak-MongoMK   | Oak with the Mongo MicroKernel                        |
 | Oak-Tar       | Oak with the Tar backend (aka Segment NodeStore)      |
-| Oak-H2        | Oak with the MK using embedded H2 database            |
 | Oak-RDB       | Oak with the DocumentMK/RDB persistence               |
 
 (Note that for Oak-RDB, the required JDBC drivers either need to be embedded
