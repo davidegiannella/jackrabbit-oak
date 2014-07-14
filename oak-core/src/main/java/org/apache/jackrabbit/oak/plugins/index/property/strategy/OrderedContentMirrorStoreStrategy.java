@@ -1099,17 +1099,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     }
 
     /**
-     * short-cut for using ChildNodeEntry. See {@code getNext(NodeState)}
-     */
-    static String getPropertyNext(@Nonnull final ChildNodeEntry child) {
-        return getPropertyNext(child.getNodeState());
-    }
-
-    static String getPropertyNext(@Nonnull final ChildNodeEntry child, int lane) {
-        return getPropertyNext(child.getNodeState(), lane);
-    }
-
-    /**
      * retrieve the lane to be updated based on probabilistic approach.
      * 
      * Having 4 lanes if we have the 3 to be updated it means we'll have to update lanes
