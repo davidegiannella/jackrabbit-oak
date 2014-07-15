@@ -70,11 +70,22 @@ public class AsyncIndexUpdate implements Runnable {
             "Async", 1, "Concurrent update detected");
 
     /**
-     * Timeout in minutes after which an async job would be considered as
+     * Timeout in milliseconds after which an async job would be considered as
      * timed out. Another node in cluster would wait for timeout before
      * taking over a running job
      */
-    private static final int ASYNC_TIMEOUT = 15;
+    private static final long ASYNC_TIMEOUT;
+
+    static {
+        int value = 15;
+        try {
+            value = Integer.parseInt(System.getProperty(
+                    "oak.async.lease.timeout", "15"));
+        } catch (NumberFormatException e) {
+            // use default
+        }
+        ASYNC_TIMEOUT = TimeUnit.MINUTES.toMillis(value);
+    }
 
     private final String name;
 
