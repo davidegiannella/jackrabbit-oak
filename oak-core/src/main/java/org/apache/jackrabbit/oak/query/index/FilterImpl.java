@@ -207,6 +207,7 @@ public class FilterImpl implements Filter {
         return alwaysFalse;
     }
 
+    @Override
     public SelectorImpl getSelector() {
         return selector;
     }
@@ -350,8 +351,6 @@ public class FilterImpl implements Filter {
                 x.first = v;
             }
             break;
-        case IN:
-            
         }
         if (x.first != null && x.last != null) {
             if (x.first.compareTo(x.last) > 0) {
