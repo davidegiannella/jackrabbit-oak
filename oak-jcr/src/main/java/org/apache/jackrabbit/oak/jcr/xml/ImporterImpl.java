@@ -115,6 +115,7 @@ public class ImporterImpl implements Importer {
 
     /**
      * Creates a new importer instance.
+     *
      * @param absPath  The absolute JCR paths such as passed to the JCR call.
      * @param sessionContext The context of the editing session
      * @param root The write {@code Root}, which in case of a workspace import
@@ -280,6 +281,35 @@ public class ImporterImpl implements Importer {
         return tree;
     }
 
+    private void importProperties(@Nonnull Tree tree,
+                                  @Nonnull List<PropInfo> propInfos,
+                                  boolean ignoreRegular) throws RepositoryException {
+        // process properties
+        for (PropInfo pi : propInfos) {
+            // find applicable definition
+            //TODO find better heuristics?
+            PropertyDefinition def = pi.getPropertyDef(effectiveNodeTypeProvider.getEffectiveNodeType(tree));
+            if (def.isProtected()) {
+                // skip protected property
+                log.debug("Protected property " + pi.getName());
+
+                // notify the ProtectedPropertyImporter.
+                for (ProtectedItemImporter ppi : pItemImporters) {
+                    if (ppi instanceof ProtectedPropertyImporter
+                            && ((ProtectedPropertyImporter) ppi).handlePropInfo(tree, pi, def)) {
+                        log.debug("Protected property -> delegated to ProtectedPropertyImporter");
+                        break;
+                    } /* else: p-i-Importer isn't able to deal with this property.
+                                     try next pp-importer */
+
+                }
+            } else if (!ignoreRegular) {
+                // regular property -> create the property
+                createProperty(tree, pi, def);
+            }
+        }
+    }
+
     //-----------------------------------------------------------< Importer >---
 
     @Override
@@ -361,6 +391,12 @@ public class ImporterImpl implements Importer {
                     */
                     log.debug("Skipping protected node: " + existing);
                     parents.push(existing);
+                    /**
+                     * let ProtectedPropertyImporters handle the properties
+                     * associated with the imported node. this may include overwriting,
+                     * merging or just adding missing properties.
+                     */
+                    importProperties(existing, propInfos, true);
                     return;
                 }
                 if (def.isAutoCreated() && isNodeType(existing, ntName)) {
@@ -392,12 +428,12 @@ public class ImporterImpl implements Importer {
                 //this id exist
                 Tree conflicting = baseStateIdManager.getTree(id);
 
-                if(conflicting == null){
+                if (conflicting == null) {
                     //1.a. Check if id is found in newly created nodes
-                    if(uuids.contains(id)){
+                    if (uuids.contains(id)) {
                         conflicting = currentStateIdManager.getTree(id);
                     }
-                }else{
+                } else {
                     //1.b Re obtain the conflicting tree from Id Manager
                     //associated with current root. Such that any operation
                     //on it gets reflected in later operations
@@ -428,30 +464,7 @@ public class ImporterImpl implements Importer {
         }
 
         // process properties
-        for (PropInfo pi : propInfos) {
-            // find applicable definition
-            //TODO find better heuristics?
-            PropertyDefinition def = pi.getPropertyDef(effectiveNodeTypeProvider.getEffectiveNodeType(tree));
-
-            if (def.isProtected()) {
-                // skip protected property
-                log.debug("Skipping protected property " + pi.getName());
-
-                // notify the ProtectedPropertyImporter.
-                for (ProtectedItemImporter ppi : pItemImporters) {
-                    if (ppi instanceof ProtectedPropertyImporter
-                            && ((ProtectedPropertyImporter) ppi).handlePropInfo(tree, pi, def)) {
-                        log.debug("Protected property -> delegated to ProtectedPropertyImporter");
-                        break;
-                    } /* else: p-i-Importer isn't able to deal with this property.
-                             try next pp-importer */
-
-                }
-            } else {
-                // regular property -> create the property
-                createProperty(tree, pi, def);
-            }
-        }
+        importProperties(tree, propInfos, false);
 
         parents.push(tree);
     }
@@ -477,16 +490,16 @@ public class ImporterImpl implements Importer {
     }
 
     private void collectUUIDs(Tree tree) {
-        if(tree == null){
+        if (tree == null) {
             return;
         }
 
         String uuid = TreeUtil.getString(tree, JcrConstants.JCR_UUID);
-        if(uuid != null){
+        if (uuid != null) {
             uuids.add(uuid);
         }
 
-        for(Tree child : tree.getChildren()){
+        for (Tree child : tree.getChildren()) {
             collectUUIDs(child);
         }
     }

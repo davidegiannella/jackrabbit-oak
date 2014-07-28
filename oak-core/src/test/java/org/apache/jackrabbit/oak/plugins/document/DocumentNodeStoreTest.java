@@ -30,7 +30,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 
-import org.apache.jackrabbit.mk.api.MicroKernelException;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
@@ -60,6 +59,7 @@ import static org.apache.jackrabbit.oak.api.CommitFailedException.CONSTRAINT;
 import static org.apache.jackrabbit.oak.plugins.document.Collection.NODES;
 import static org.apache.jackrabbit.oak.plugins.document.NodeDocument.MODIFIED_IN_SECS;
 import static org.apache.jackrabbit.oak.plugins.document.NodeDocument.MODIFIED_IN_SECS_RESOLUTION;
+import static org.apache.jackrabbit.oak.plugins.document.NodeDocument.NUM_REVS_THRESHOLD;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -227,7 +227,7 @@ public class DocumentNodeStoreTest {
                     c.addNode(new DocumentNodeState(store, "/foo/node", r));
                     c.addNode(new DocumentNodeState(store, "/bar/node", r));
                     c.apply();
-                } catch (MicroKernelException e) {
+                } catch (DocumentStoreException e) {
                     exceptions.add(e);
                 }
             }
@@ -465,6 +465,88 @@ public class DocumentNodeStoreTest {
 
         ns1.dispose();
         ns2.dispose();
+    }
+
+    // OAK-1861
+    @Test
+    public void readChildrenWithDeletedSiblings() throws Exception {
+        final AtomicInteger maxLimit = new AtomicInteger(0);
+        DocumentStore docStore = new MemoryDocumentStore() {
+            @Nonnull
+            @Override
+            public <T extends Document> List<T> query(Collection<T> collection,
+                                                      String fromKey,
+                                                      String toKey,
+                                                      int limit) {
+                if (collection == Collection.NODES) {
+                    maxLimit.set(Math.max(limit, maxLimit.get()));
+                }
+                return super.query(collection, fromKey, toKey, limit);
+            }
+        };
+        DocumentNodeStore ns = new DocumentMK.Builder()
+                .setDocumentStore(docStore)
+                .setAsyncDelay(0).getNodeStore();
+        NodeBuilder builder = ns.getRoot().builder();
+        for (int i = 0; i < 1000; i++) {
+            builder.child("node-" + i);
+        }
+        ns.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        // now remove all except the last one
+        for (int i = 0; i < 999; i++) {
+            builder = ns.getRoot().builder();
+            builder.getChildNode("node-" + i).remove();
+            ns.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        }
+
+        for (ChildNodeEntry entry : ns.getRoot().getChildNodeEntries()) {
+            entry.getName();
+        }
+        // must not read more than DocumentNodeState.INITIAL_FETCH_SIZE + 1
+        assertTrue(maxLimit.get() + " > " + (DocumentNodeState.INITIAL_FETCH_SIZE + 1),
+                maxLimit.get() <= DocumentNodeState.INITIAL_FETCH_SIZE + 1);
+    }
+
+    // OAK-1972
+    @Test
+    public void readFromPreviousDoc() throws CommitFailedException {
+        DocumentStore docStore = new MemoryDocumentStore();
+        DocumentNodeStore ns = new DocumentMK.Builder()
+                .setDocumentStore(docStore).getNodeStore();
+        NodeBuilder builder = ns.getRoot().builder();
+        builder.child("test").setProperty("prop", "initial");
+        ns.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        ns.dispose();
+
+        ns = new DocumentMK.Builder().setClusterId(2).setAsyncDelay(0)
+                .setDocumentStore(docStore).getNodeStore();
+        builder = ns.getRoot().builder();
+        builder.child("test").setProperty("prop", "value");
+        ns.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+
+        Revision rev = ns.getHeadRevision();
+        NodeDocument doc = docStore.find(Collection.NODES, Utils.getIdFromPath("/test"));
+        assertNotNull(doc);
+        DocumentNodeState state = doc.getNodeAtRevision(ns, rev, null);
+        assertNotNull(state);
+        assertTrue(state.hasProperty("prop"));
+        assertEquals("value", state.getProperty("prop").getValue(Type.STRING));
+
+        for (int i = 0; i < NUM_REVS_THRESHOLD; i++) {
+            builder = ns.getRoot().builder();
+            builder.child("test").setProperty("prop", "v-" + i);
+            ns.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        }
+        ns.runBackgroundOperations();
+
+        // must still return the same value as before the split
+        doc = docStore.find(Collection.NODES, Utils.getIdFromPath("/test"));
+        assertNotNull(doc);
+        state = doc.getNodeAtRevision(ns, rev, null);
+        assertNotNull(state);
+        assertTrue(state.hasProperty("prop"));
+        assertEquals("value", state.getProperty("prop").getValue(Type.STRING));
     }
 
     private static class TestHook extends EditorHook {

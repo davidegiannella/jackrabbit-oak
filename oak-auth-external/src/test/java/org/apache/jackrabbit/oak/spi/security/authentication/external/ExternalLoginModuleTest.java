@@ -19,7 +19,6 @@ package org.apache.jackrabbit.oak.spi.security.authentication.external;
 import java.util.HashMap;
 
 import javax.jcr.SimpleCredentials;
-import javax.jcr.Value;
 import javax.security.auth.login.LoginException;
 
 import org.apache.jackrabbit.api.security.user.Authorizable;
@@ -29,7 +28,6 @@ import org.apache.jackrabbit.oak.namepath.NamePathMapper;
 import org.apache.jackrabbit.oak.plugins.value.ValueFactoryImpl;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -45,7 +43,7 @@ public class ExternalLoginModuleTest extends ExternalLoginModuleTestBase {
 
     protected final HashMap<String, Object> options = new HashMap<String, Object>();
 
-    private String userId = "testUser";
+    private final String userId = "testUser";
 
     private final static String TEST_CONSTANT_PROPERTY_NAME = "profile/constantProperty";
 
@@ -92,6 +90,32 @@ public class ExternalLoginModuleTest extends ExternalLoginModuleTestBase {
             assertNull(userManager.getAuthorizable(userId));
 
             cs = login(new SimpleCredentials(userId, new char[0]));
+
+            root.refresh();
+
+            Authorizable a = userManager.getAuthorizable(userId);
+            assertNotNull(a);
+            ExternalUser user = idp.getUser(userId);
+            for (String prop : user.getProperties().keySet()) {
+                assertTrue(a.hasProperty(prop));
+            }
+            assertEquals(TEST_CONSTANT_PROPERTY_VALUE, a.getProperty(TEST_CONSTANT_PROPERTY_NAME)[0].getString());
+        } finally {
+            if (cs != null) {
+                cs.close();
+            }
+            options.clear();
+        }
+    }
+
+    @Test
+    public void testSyncCreateUserCaseInsensitive() throws Exception {
+        UserManager userManager = getUserManager(root);
+        ContentSession cs = null;
+        try {
+            assertNull(userManager.getAuthorizable(userId));
+
+            cs = login(new SimpleCredentials(userId.toUpperCase(), new char[0]));
 
             root.refresh();
 

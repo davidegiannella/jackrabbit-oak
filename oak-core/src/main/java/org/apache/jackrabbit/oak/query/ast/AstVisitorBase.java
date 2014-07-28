@@ -28,8 +28,9 @@ public abstract class AstVisitorBase implements AstVisitor {
      */
     @Override
     public boolean visit(AndImpl node) {
-        node.getConstraint1().accept(this);
-        node.getConstraint2().accept(this);
+        for (ConstraintImpl constraint : node.getConstraints()) {
+            constraint.accept(this);
+        }
         return true;
     }
 
@@ -49,7 +50,7 @@ public abstract class AstVisitorBase implements AstVisitor {
     @Override
     public boolean visit(InImpl node) {
         node.getOperand1().accept(this);
-        for (StaticOperandImpl s : node.getOperand2List()) {
+        for (StaticOperandImpl s : node.getOperand2()) {
             s.accept(this);
         }
         return true;
@@ -130,8 +131,9 @@ public abstract class AstVisitorBase implements AstVisitor {
      */
     @Override
     public boolean visit(OrImpl node) {
-        node.getConstraint1().accept(this);
-        node.getConstraint2().accept(this);
+        for (ConstraintImpl constraint : node.getConstraints()) {
+            constraint.accept(this);
+        }
         return true;
     }
 

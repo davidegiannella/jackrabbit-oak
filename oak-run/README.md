@@ -1,16 +1,23 @@
 Oak Runnable Jar
 ================
 
-This jar contains everything you need for a simple Oak installation.
+This jar contains everything you need for a simple Oak installation. 
+
 The following runmodes are currently available:
 
-    * backup    : Backup an existing Oak repository
-    * benchmark : Run benchmark tests against different Oak repository fixtures.
-    * debug     : Print status information about an Oak repository.
-    * upgrade   : Upgrade from Jackrabbit 2.x repository to Oak.
-    * server    : Run the Oak Server
-    * console   : Start an interactive console
-    * explore   : Starts a GUI browser based on java swing
+    * backup      : Backup an existing Oak repository.
+    * restore     : Restore a backup of an Oak repository.
+    * benchmark   : Run benchmark tests against different Oak repository fixtures.
+    * debug       : Print status information about an Oak repository.
+    * compact     : Segment compaction on a TarMK repository.
+    * server      : Run the Oak Server.
+    * console     : Start an interactive console.
+    * explore     : Starts a GUI browser based on java swing.
+    * scalability : Run scalability tests against different Oak repository fixtures.
+    * help        : Print a list of available runmodes
+
+Some of the features related to Jackrabbit 2.x are provided by oak-run-jr2 jar. See
+the [Oak Runnable JR2](#jr2) section for more details.
 
 See the subsections below for more details on how to use these modes.
 
@@ -19,14 +26,16 @@ Backup
 
 The 'backup' mode creates a backup from an existing oak repository. To start this mode, use:
 
-    $ java -jar oak-run-*.jar backup /path/to/repository /path/to/backup
+    $ java -jar oak-run-*.jar backup \
+          { /path/to/oak/repository | mongodb://host:port/database } /path/to/backup
 
 Restore
 -------
 
 The 'restore' mode imports a backup of an existing oak repository. To start this mode, use:
 
-    $ java -jar oak-run-*.jar restore /path/to/repository /path/to/backup
+    $ java -jar oak-run-*.jar restore \
+          { /path/to/oak/repository | mongodb://host:port/database } /path/to/backup
 
 Debug
 -----
@@ -120,9 +129,10 @@ See the relevant documentation for more details.
 Oak server mode
 ---------------
 
-The Oak server mode starts a full Oak instance with the standard JCR plugins
-and makes it available over a simple HTTP mapping defined in the `oak-http`
-component. To start this mode, use:
+The Oak server mode starts a MicroKernel or full Oak instance with the 
+standard JCR plugins and makes it available over a simple HTTP mapping 
+defined in the `oak-http` and `oak-mk-remote` components. To start this 
+mode, use:
 
     $ java -jar oak-run-*.jar server [uri] [fixture] [options]
 
@@ -136,18 +146,17 @@ to be used. The following fixtures are currently supported:
 
 | Fixture       | Description                                           |
 |---------------|-------------------------------------------------------|
-| Jackrabbit    | Jackrabbit with the default embedded Derby  bundle PM |
+| Jackrabbit(*) | Jackrabbit with the default embedded Derby  bundle PM |
 | Oak-Memory    | Oak with default in-memory storage                    |
 | Oak-MemoryNS  | Oak with default in-memory NodeStore                  |
-| Oak-MemoryMK  | Oak with default in-memory MicroKernel                |
 | Oak-Mongo     | Oak with the default Mongo backend                    |
 | Oak-Mongo-FDS | Oak with the default Mongo backend and FileDataStore  |
 | Oak-MongoNS   | Oak with the Mongo NodeStore                          |
 | Oak-MongoMK   | Oak with the Mongo MicroKernel                        |
 | Oak-Tar       | Oak with the Tar backend (aka Segment NodeStore)      |
 | Oak-Tar-FDS   | Oak with the Tar backend and FileDataStore            |
-| Oak-H2        | Oak with the MK using embedded H2 database            |
 
+Jackrabbit fixture requires [Oak Runnable JR2 jar](#jr2)
 
 Depending on the fixture the following options are available:
 
@@ -156,17 +165,19 @@ Depending on the fixture the following options are available:
     --port 27101           - MongoDB port
     --db <name>            - MongoDB database (default is a generated name)
     --clusterIds           - Cluster Ids for the Mongo setup: a comma separated list of integers
-    --base <file>          - Tar and H2: Path to the base file
+    --base <file>          - Tar: Path to the base file
     --mmap <64bit?>        - TarMK memory mapping (the default on 64 bit JVMs)
+    --mk                   - Start in MicroKernel mode exposing the MicroKernel API 
 
 Examples:
 
     $ java -jar oak-run-*.jar server
+    $ java -jar oak-run-*.jar server -mk
     $ java -jar oak-run-*.jar server http://localhost:4503 Oak-Tar --base myOak
     $ java -jar oak-run-*.jar server http://localhost:4502 Oak-Mongo --db myOak --clusterIds c1,c2,c3
 
-See the documentation in the `oak-http` component for details about the
-available functionality.
+See the documentation in the `oak-http` and `oak-mk-remote` components for details 
+about the available functionality.
 
 
 Benchmark mode
@@ -183,7 +194,7 @@ The following benchmark options (with default values) are currently supported:
     --port 27101           - MongoDB port
     --db <name>            - MongoDB database (default is a generated name)
     --dropDBAfterTest true - Whether to drop the MongoDB database after the test
-    --base target          - Path to the base file (Tar and H2 setup),
+    --base target          - Path to the base file (Tar setup),
     --mmap <64bit?>        - TarMK memory mapping (the default on 64 bit JVMs)
     --cache 100            - cache size (in MB)
     --wikipedia <file>     - Wikipedia dump
@@ -201,8 +212,7 @@ that need them. For example the Wikipedia dump option is needed by the
 WikipediaImport test case and the MongoDB address information by the
 MongoMK and SegmentMK -based repository fixtures. The cache setting
 controls the bundle cache size in Jackrabbit, the KernelNodeState
-cache size in MongoMK and the default H2 MK, and the segment cache
-size in SegmentMK.
+cache size in MongoMK, and the segment cache size in SegmentMK.
 
 The `--concurrency` levels can be specified as comma separated list of values,
 eg: `--concurrency 1,4,8`, which will execute the same test with the number of
@@ -245,13 +255,11 @@ Finally the benchmark runner supports the following repository fixtures:
 | Jackrabbit    | Jackrabbit with the default embedded Derby  bundle PM |
 | Oak-Memory    | Oak with default in-memory storage                    |
 | Oak-MemoryNS  | Oak with default in-memory NodeStore                  |
-| Oak-MemoryMK  | Oak with default in-memory MicroKernel                |
 | Oak-Mongo     | Oak with the default Mongo backend                    |
 | Oak-Mongo-FDS | Oak with the default Mongo backend and FileDataStore  |
 | Oak-MongoNS   | Oak with the Mongo NodeStore                          |
 | Oak-MongoMK   | Oak with the Mongo MicroKernel                        |
 | Oak-Tar       | Oak with the Tar backend (aka Segment NodeStore)      |
-| Oak-H2        | Oak with the MK using embedded H2 database            |
 | Oak-RDB       | Oak with the DocumentMK/RDB persistence               |
 
 (Note that for Oak-RDB, the required JDBC drivers either need to be embedded
@@ -364,3 +372,216 @@ executing. The relevant background thread works like this:
 As you can see, the `run()` method of the background task gets invoked
 repeatedly. Such threads will automatically close once all test iterations
 are done, before the `afterSuite()` method is called.
+
+Scalability mode
+--------------
+
+The scalability mode is used for executing various scalability suites to test the 
+performance of various associated tests. It can be invoked like this:
+
+    $ java -jar oak-run-*.jar scalability [options] [suites] [fixtures]
+
+The following scalability options (with default values) are currently supported:
+
+    --host localhost       - MongoDB host
+    --port 27101           - MongoDB port
+    --db <name>            - MongoDB database (default is a generated name)
+    --dropDBAfterTest true - Whether to drop the MongoDB database after the test
+    --base target          - Path to the base file (Tar setup),
+    --mmap <64bit?>        - TarMK memory mapping (the default on 64 bit JVMs)
+    --cache 100            - cache size (in MB)
+    --csvFile <file>       - Optional csv file to report the benchmark results
+    --rdbjdbcuri           - JDBC URL for RDB persistence (defaults to local file-based H2)
+    --rdbjdbcuser          - JDBC username (defaults to "")
+    --rdbjdbcpasswd        - JDBC password (defaults to "")
+
+These options are passed to the various suites and repository fixtures
+that need them. For example the the MongoDB address information by the
+MongoMK and SegmentMK -based repository fixtures. The cache setting
+controls the KernelNodeState cache size in MongoMK, and the segment
+cache size in SegmentMK.
+
+You can use extra JVM options like `-Xmx` settings to better control the
+scalability suite test environment. It's also possible to attach the JVM to a
+profiler to better understand benchmark results. For example, I'm
+using `-agentlib:hprof=cpu=samples,depth=100` as a basic profiling
+tool, whose results can be processed with `perl analyze-hprof.pl
+java.hprof.txt` to produce a somewhat easier-to-read top-down and
+bottom-up summaries of how the execution time is distributed across
+the benchmarked codebase.
+
+The scalability suite creates the relevant repository load before starting the tests. 
+Each test case tries to benchmark and profile a specific aspect of the repository.
+
+Each scalability suite is configured to run a number of related tests which require the 
+same base load to be available in the repository.
+Either the entire suite can be executed or individual tests within the suite can be run. 
+If the suite names are specified like `ScalabilityBlobSearchSuite` then all the tests 
+configured for the suite are executed. To execute particular tests in the 
+suite, suite names appended with tests of the form `suite:test1,test2` must be specified like 
+`ScalabilityBlobSearchSuite:FormatSearcher,NodeTypeSearcher`. You can specify one or more 
+suites in the scalability command line, and oak-run will execute each suite in sequence.
+
+Finally the scalability runner supports the following repository fixtures:
+
+| Fixture       | Description                                           |
+|---------------|-------------------------------------------------------|
+| Oak-Memory    | Oak with default in-memory storage                    |
+| Oak-MemoryNS  | Oak with default in-memory NodeStore                  |
+| Oak-Mongo     | Oak with the default Mongo backend                    |
+| Oak-Mongo-FDS | Oak with the default Mongo backend and FileDataStore  |
+| Oak-MongoNS   | Oak with the Mongo NodeStore                          |
+| Oak-MongoMK   | Oak with the Mongo MicroKernel                        |
+| Oak-Tar       | Oak with the Tar backend (aka Segment NodeStore)      |
+| Oak-RDB       | Oak with the DocumentMK/RDB persistence               |
+
+(Note that for Oak-RDB, the required JDBC drivers either need to be embedded
+into oak-run, or be specified separately in the class path.)
+
+Once started, the scalability runner will execute each listed suite against all the listed 
+repository fixtures. After starting up the repository and preparing the test environment, 
+the scalability suite executes all the configured tests to warm up caches before measurements 
+are started. Then each configured test within the suite are run and the number of 
+milliseconds used by each execution is recorded. Once done, the following statistics are 
+computed and reported:
+
+| Column      | Description                                           |
+|-------------|-------------------------------------------------------|
+| min         | minimum time (in ms) taken by a test run              |
+| 10%         | time (in ms) in which the fastest 10% of test runs    |
+| 50%         | time (in ms) taken by the median test run             |
+| 90%         | time (in ms) in which the fastest 90% of test runs    |
+| max         | maximum time (in ms) taken by a test run              |
+| N           | total number of test runs in one minute (or more)     |
+
+Also, for each test, the execution times are reported for each iteration/load configured.
+
+| Column      | Description                                           |
+|-------------|-------------------------------------------------------|
+| Load        | time (in ms) taken by a test run              |
+
+The latter is more useful of these numbers as it shows how the individual execution 
+times are scaling for each load.
+
+How to add a new scalability suite
+--------------------------
+The scalability code is
+located under `org.apache.jackrabbit.oak.scalabiity` in the oak-run
+component. 
+
+To add a new scalability suite, you'll need to implement
+the `ScalabilitySuite` interface and add an instance of the new suite to the
+`allSuites` array in the `ScalabilityRunner` class, along with the test benchmarks,
+in the `org.apache.jackrabbit.oak.scalability` package.
+To implement the test benchmarks, it is required to extend the `ScalabilityBenchmark` 
+abstract class and implement the `execute()` method.
+
+The best way to implement the `ScalabilitySuite` interface is to extend the
+`ScalabilityAbstractSuite` base class that takes care of most of the benchmarking
+details. The outline of such a suite is:
+
+    class MyTestSuite extends ScalabilityAbstractSuite {
+        @Override
+        protected void beforeSuite() throws Exception {
+            // optional, run once before all the iterations,
+            // not included in the performance measurements
+        }
+        @Override
+        protected void beforeIteration(ExecutionContext) throws Exception {
+            // optional, Typically, this can be configured to create additional 
+            // loads for each iteration.
+            // This method will be called before each test iteration begins
+        }
+
+        @Override
+        protected void executeBenchmark(ScalabilityBenchmark benchmark,
+            ExecutionContext context) throws Exception {
+            // required, executes the specified benchmark
+        }
+        
+        @Override
+        protected void afterIteration() throws Exception {
+            // optional, executed after runIteration(),
+            // but not included in the performance measurements
+        }
+        @Override
+        protected void afterSuite() throws Exception {
+            // optional, run once after all the iterations are complete,
+            // not included in the performance measurements
+        }
+    }
+
+The rough outline of how the individual suite will be run is:
+
+    test.beforeSuite();
+    for (iteration...) {
+        test.beforeIteration();
+        for (benchmarks...) {
+              recordStartTime();
+              test.executeBenchmark();
+              recordEndTime();
+        }
+        test.afterIteration();
+    }
+    test.afterSuite(); 
+
+You can specify any context information to the test benchmarks using the ExecutionContext 
+object passed as parameter to the `beforeIteration()` and the `executeBenchmark()` methods.
+`ExecutionBenchmark` exposes two methods `getMap()` and `setMap()` which can be used to 
+pass context information.
+
+You can use the `loginWriter()` and `loginReader()` methods to create admin
+and anonymous sessions. There's no need to logout those sessions (unless doing
+so is relevant to the test) as they will automatically be closed after
+the suite is complete and the `afterSuite()` method has been called.
+
+Similarly, you can use the `addBackgroundJob(Runnable)` method to add
+background tasks that will be run concurrently while the test benchmark is
+executing. The relevant background thread works like this:
+
+    while (running) {
+        runnable.run();
+        Thread.yield();
+    }
+
+As you can see, the `run()` method of the background task gets invoked
+repeatedly. Such threads will automatically close once all test iterations
+are done, before the `afterSuite()` method is called.
+
+`ScalabilityAbstractSuite` defines some system properties which are used to control the 
+suites extending from it :
+
+    -Dincrements=10,100,1000,1000     - defines the varying loads for each test iteration
+    -Dprofile=true                    - to collect and print profiling data
+    -Ddebug=true                      - to output any intermediate results during the suite 
+                                        run
+<a name="jr2"></a>
+Oak Runnable Jar - JR 2
+===============================
+
+This jar provides Jackrabbit 2.x related features
+
+The following runmodes are currently available:
+
+    * upgrade     : Upgrade from Jackrabbit 2.x repository to Oak.
+    * benchmark   : Run benchmark tests against Jackrabbit 2.x repository fixture.
+    * server      : Run the JR2 Server.
+
+Oak Mongo Shell Helpers
+=======================
+
+To simplify making sense of data created by Oak in Mongo a javascript file oak-mongo.js
+is provided. It includes some useful function to navigate the data in Mongo
+
+    $ wget https://svn.apache.org/repos/asf/jackrabbit/oak/trunk/oak-run/src/main/js/oak-mongo.js
+    $ mongo localhost/oak --shell oak-mongo.js
+    MongoDB shell version: 2.6.3
+    connecting to: localhost/oak
+    type "help" for help
+    > oak.countChildren('/oak:index/')
+    356787
+    > oak.getChildStats('/oak:index')
+    { "count" : 356788, "size" : 127743372, "simple" : "121.83 MB" }
+    > oak.getChildStats('/')
+    { "count" : 593191, "size" : 302005011, "simple" : "288.01 MB" }
+    >

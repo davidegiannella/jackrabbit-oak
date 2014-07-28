@@ -42,7 +42,7 @@
               <!-- OAK-1708 TODO: temporary workaround for embedding code for DocumentNodeStoreService-->
               commons-dbcp,commons-pool,h2,json-simple,
               <!-- OAK-1708 TODO: note these below will only embedded when build with the respective profiles from oak-parent -->
-              postgresql,db2,db2-license,mysql-connector-java
+              postgresql,db2,db2-license,mysql-connector-java,ojdbc6
             </Embed-Dependency>
             <Embed-Transitive>true</Embed-Transitive>
             <Import-Package>
@@ -87,6 +87,7 @@
               org.apache.jackrabbit.oak.spi.security.authentication.callback,
               org.apache.jackrabbit.oak.spi.security.authentication.token,
               org.apache.jackrabbit.oak.spi.security.authorization,
+              org.apache.jackrabbit.oak.spi.security.authorization.accesscontrol,
               org.apache.jackrabbit.oak.spi.security.authorization.permission,
               org.apache.jackrabbit.oak.spi.security.authorization.restriction,
               org.apache.jackrabbit.oak.spi.security.principal,
@@ -329,12 +330,6 @@
       <artifactId>oak-blob</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.jackrabbit</groupId>
-      <artifactId>oak-mk</artifactId>
-      <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>

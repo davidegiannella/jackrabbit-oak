@@ -264,15 +264,15 @@ public abstract class AbstractQueryTest {
     protected List<String> assertQuery(String sql, String language,
             List<String> expected) {
         List<String> paths = executeQuery(sql, language, true);
+        for (String p : expected) {
+            assertTrue("Expected path " + p + " not found", paths.contains(p));
+        }
         assertEquals("Result set size is different", expected.size(),
                 paths.size());
-        for (String p : expected) {
-            assertTrue(paths.contains(p));
-        }
         return paths;
     }
 
-    protected void setTravesalEnabled(boolean traversalEnabled) {
+    protected void setTraversalEnabled(boolean traversalEnabled) {
         ((QueryEngineImpl) qe).setTraversalEnabled(traversalEnabled);
     }
 

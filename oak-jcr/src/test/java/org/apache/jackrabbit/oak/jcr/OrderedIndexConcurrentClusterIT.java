@@ -76,7 +76,11 @@ public class OrderedIndexConcurrentClusterIT {
     
     @BeforeClass
     public static void mongoDBAvailable() {
-        Assume.assumeTrue(OakMongoMKRepositoryStub.isMongoDBAvailable());
+        final boolean mongoAvailable = OakMongoMKRepositoryStub.isMongoDBAvailable();
+        if (!mongoAvailable) {
+            LOG.warn("Mongo DB is not available. Skipping the test");
+        }
+        Assume.assumeTrue(mongoAvailable);
     }
     
     private static MongoConnection createConnection() throws Exception {
@@ -182,10 +186,9 @@ public class OrderedIndexConcurrentClusterIT {
         raiseExceptions(exceptions);
     }
     
-    @Ignore("OAK-1892")
     @Test
     public void deleteConcurrently() throws Exception {
-        final int loop = LOOP;
+        final int loop = 1400;
         final int count = COUNT;
         final int clusters = NUM_CLUSTER_NODES;
         final List<Thread> creationWorkers = new ArrayList<Thread>();

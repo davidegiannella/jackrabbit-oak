@@ -54,6 +54,7 @@
     <module>oak-run</module>
     <module>oak-it</module>
     <module>oak-pojosr</module>
+    <module>oak-tarmk-failover</module>
   </modules>
 
   <scm>
@@ -79,10 +80,6 @@
               <exclude>oak-doc/*.iml</exclude>
               <exclude>oak-doc/target/**</exclude>
               <exclude>oak-js/package.json</exclude>
-              <exclude>oak-mk-perf/.*/**</exclude>
-              <exclude>oak-mk-perf/target/**</exclude>
-              <exclude>oak-mongomk-perf/.*/**</exclude>
-              <exclude>oak-mongomk-perf/target/**</exclude>
             </excludes>
           </configuration>
         </plugin>

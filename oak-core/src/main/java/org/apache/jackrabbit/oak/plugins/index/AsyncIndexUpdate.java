@@ -43,6 +43,7 @@ import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.CompositeHook;
 import org.apache.jackrabbit.oak.spi.commit.EditorDiff;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
+import org.apache.jackrabbit.oak.spi.commit.VisibleEditor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStateDiff;
@@ -70,11 +71,22 @@ public class AsyncIndexUpdate implements Runnable {
             "Async", 1, "Concurrent update detected");
 
     /**
-     * Timeout in minutes after which an async job would be considered as
+     * Timeout in milliseconds after which an async job would be considered as
      * timed out. Another node in cluster would wait for timeout before
      * taking over a running job
      */
-    private static final int ASYNC_TIMEOUT = 15;
+    private static final long ASYNC_TIMEOUT;
+
+    static {
+        int value = 15;
+        try {
+            value = Integer.parseInt(System.getProperty(
+                    "oak.async.lease.timeout", "15"));
+        } catch (NumberFormatException e) {
+            // use default
+        }
+        ASYNC_TIMEOUT = TimeUnit.MINUTES.toMillis(value);
+    }
 
     private final String name;
 
@@ -270,7 +282,7 @@ public class AsyncIndexUpdate implements Runnable {
             IndexUpdate indexUpdate =
                     new IndexUpdate(provider, name, after, builder, callback);
             CommitFailedException exception =
-                    EditorDiff.process(indexUpdate, before, after);
+                    EditorDiff.process(VisibleEditor.wrap(indexUpdate), before, after);
             if (exception != null) {
                 throw exception;
             }
@@ -318,7 +330,7 @@ public class AsyncIndexUpdate implements Runnable {
                     throws CommitFailedException {
                 // check for concurrent updates by this async task
                 NodeState async = before.getChildNode(ASYNC);
-                if (Objects.equal(checkpoint, async.getString(name))
+                if (checkpoint == null || Objects.equal(checkpoint, async.getString(name))
                         && lease == async.getLong(name + "-lease")) {
                     return after;
                 } else {

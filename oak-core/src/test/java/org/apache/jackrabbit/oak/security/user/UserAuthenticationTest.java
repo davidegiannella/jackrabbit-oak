@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.security.authentication.user;
+package org.apache.jackrabbit.oak.security.user;
 
 import java.security.Principal;
 import java.util.ArrayList;
@@ -24,10 +24,14 @@ import javax.annotation.Nonnull;
 import javax.jcr.Credentials;
 import javax.jcr.GuestCredentials;
 import javax.jcr.SimpleCredentials;
+import javax.security.auth.login.AccountLockedException;
+import javax.security.auth.login.AccountNotFoundException;
+import javax.security.auth.login.FailedLoginException;
 import javax.security.auth.login.LoginException;
 
 import org.apache.jackrabbit.api.security.authentication.token.TokenCredentials;
 import org.apache.jackrabbit.api.security.user.Group;
+import org.apache.jackrabbit.api.security.user.User;
 import org.apache.jackrabbit.oak.AbstractSecurityTest;
 import org.apache.jackrabbit.oak.api.AuthInfo;
 import org.apache.jackrabbit.oak.spi.security.authentication.Authentication;
@@ -51,18 +55,12 @@ public class UserAuthenticationTest extends AbstractSecurityTest {
     public void before() throws Exception {
         super.before();
         userId = getTestUser().getID();
-        authentication = new UserAuthentication(userId, getUserManager(root));
-    }
-
-    @Test
-    public void testAuthenticateWithoutUserManager() throws Exception {
-        UserAuthentication authentication = new UserAuthentication(userId, null);
-        assertFalse(authentication.authenticate(new SimpleCredentials(userId, userId.toCharArray())));
+        authentication = new UserAuthentication(getUserConfiguration(), root, userId);
     }
 
     @Test
     public void testAuthenticateWithoutUserId() throws Exception {
-        UserAuthentication authentication = new UserAuthentication(null, getUserManager(root));
+        authentication = new UserAuthentication(getUserConfiguration(), root, null);
         assertFalse(authentication.authenticate(new SimpleCredentials(userId, userId.toCharArray())));
     }
 
@@ -80,7 +78,7 @@ public class UserAuthenticationTest extends AbstractSecurityTest {
     @Test
     public void testAuthenticateCannotResolveUser() throws Exception {
         SimpleCredentials sc = new SimpleCredentials("unknownUser", "pw".toCharArray());
-        Authentication a = new UserAuthentication(sc.getUserID(), getUserManager(root));
+        Authentication a = new UserAuthentication(getUserConfiguration(), root, sc.getUserID());
 
         assertFalse(a.authenticate(sc));
     }
@@ -89,18 +87,40 @@ public class UserAuthenticationTest extends AbstractSecurityTest {
     public void testAuthenticateResolvesToGroup() throws Exception {
         Group g = getUserManager(root).createGroup("g1");
         SimpleCredentials sc = new SimpleCredentials(g.getID(), "pw".toCharArray());
-        Authentication a = new UserAuthentication(sc.getUserID(), getUserManager(root));
+        Authentication a = new UserAuthentication(getUserConfiguration(), root, sc.getUserID());
 
         try {
             a.authenticate(sc);
             fail("Authenticating Group should fail");
         } catch (LoginException e) {
             // success
+            assertTrue(e instanceof AccountNotFoundException);
         } finally {
             if (g != null) {
                 g.remove();
                 root.commit();
             }
+        }
+    }
+
+    @Test
+    public void testAuthenticateResolvesToDisabledUser() throws Exception {
+        User testUser = getTestUser();
+        SimpleCredentials sc = new SimpleCredentials(testUser.getID(), testUser.getID().toCharArray());
+        Authentication a = new UserAuthentication(getUserConfiguration(), root, sc.getUserID());
+
+        try {
+            getTestUser().disable("disabled");
+            root.commit();
+
+            a.authenticate(sc);
+            fail("Authenticating disabled user should fail");
+        } catch (LoginException e) {
+            // success
+            assertTrue(e instanceof AccountLockedException);
+        } finally {
+            getTestUser().disable(null);
+            root.commit();
         }
     }
 
@@ -117,6 +137,7 @@ public class UserAuthenticationTest extends AbstractSecurityTest {
                 fail("LoginException expected");
             } catch (LoginException e) {
                 // success
+                assertTrue(e instanceof FailedLoginException);
             }
         }
     }
@@ -128,6 +149,7 @@ public class UserAuthenticationTest extends AbstractSecurityTest {
             fail("LoginException expected");
         } catch (LoginException e) {
             // success
+            assertTrue(e instanceof FailedLoginException);
         }
     }
 
@@ -150,6 +172,7 @@ public class UserAuthenticationTest extends AbstractSecurityTest {
                 fail("LoginException expected");
             } catch (LoginException e) {
                 // success
+                assertTrue(e instanceof FailedLoginException);
             }
         }
     }

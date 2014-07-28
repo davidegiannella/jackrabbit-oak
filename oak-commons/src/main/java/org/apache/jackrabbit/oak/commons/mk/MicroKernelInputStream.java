@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.mk.util;
-
-import org.apache.jackrabbit.mk.api.MicroKernel;
-import org.apache.jackrabbit.oak.commons.IOUtils;
+package org.apache.jackrabbit.oak.commons.mk;
 
 import java.io.IOException;
 import java.io.InputStream;
+
+import org.apache.jackrabbit.mk.api.MicroKernel;
+import org.apache.jackrabbit.oak.commons.IOUtils;
 
 /**
  * An input stream to simplify reading a blob from a {@code MicroKernel}.
@@ -54,8 +54,8 @@ public class MicroKernelInputStream extends InputStream {
     @Override
     public int read(byte[] b, int off, int len) {
         int l = mk.read(id, pos, b, off, len);
-        if (l < 0) {
-            return l;
+        if (l <= 0) {
+            return -1;
         }
         pos += l;
         return l;

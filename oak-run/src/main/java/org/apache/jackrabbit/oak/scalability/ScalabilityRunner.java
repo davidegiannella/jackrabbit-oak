@@ -18,29 +18,28 @@
  */
 package org.apache.jackrabbit.oak.scalability;
 
+import static java.util.Arrays.asList;
+
 import java.io.File;
 import java.io.PrintStream;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.common.base.Splitter;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.jackrabbit.oak.benchmark.CSVResultGenerator;
 import org.apache.jackrabbit.oak.benchmark.util.Date;
 import org.apache.jackrabbit.oak.fixture.JackrabbitRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
-
-import com.google.common.base.Splitter;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-
-import static java.util.Arrays.asList;
 
 /**
  * Main class for running scalability/longevity tests.
@@ -94,10 +93,7 @@ public class ScalabilityRunner {
         int cacheSize = cache.value(options);
         RepositoryFixture[] allFixtures = new RepositoryFixture[] {
                 new JackrabbitRepositoryFixture(base.value(options), cacheSize),
-                OakRepositoryFixture.getMemory(cacheSize * MB),
                 OakRepositoryFixture.getMemoryNS(cacheSize * MB),
-                OakRepositoryFixture.getMemoryMK(cacheSize * MB),
-                OakRepositoryFixture.getH2MK(base.value(options), cacheSize * MB),
                 OakRepositoryFixture.getMongo(
                         host.value(options), port.value(options),
                         dbName.value(options), dropDBAfterTest.value(options),
@@ -144,11 +140,11 @@ public class ScalabilityRunner {
         Map<String, List<String>> argmap = Maps.newHashMap();
         // Split the args to get suites and benchmarks (i.e. suite:benchmark1,benchmark2)
         for(String arg : argset) {
-            String[] tokens = arg.split(":");
-            if (tokens.length > 1) {
-                argmap.put(tokens[0], Splitter.on(",").trimResults().splitToList(tokens[1]));
+            List<String> tokens = Splitter.on(":").limit(2).splitToList(arg);
+            if (tokens.size() > 1) {
+                argmap.put(tokens.get(0), Splitter.on(",").trimResults().splitToList(tokens.get(1)));
             } else {
-                argmap.put(tokens[0], null);
+                argmap.put(tokens.get(0), null);
             }
             argset.remove(arg);
         }
@@ -159,9 +155,11 @@ public class ScalabilityRunner {
                 List<String> benchmarks = argmap.get(suite.toString());
                 // Only keep requested benchmarks
                 if (benchmarks != null) {
-                    for (ScalabilityBenchmark availableBenchmark : suite.getBenchmarks().values()) {
-                        if (!benchmarks.contains(availableBenchmark.toString())) {
-                            suite.removeBenchmark(availableBenchmark.toString());
+                    Iterator<String> iter = suite.getBenchmarks().keySet().iterator();
+                    for (;iter.hasNext();) {
+                        String availBenchmark = iter.next();
+                        if (!benchmarks.contains(availBenchmark)) {
+                            iter.remove();
                         }
                     }
                 }

@@ -18,7 +18,6 @@ package org.apache.jackrabbit.oak.plugins.document;
 
 import javax.annotation.Nonnull;
 
-import org.apache.jackrabbit.mk.api.MicroKernelException;
 import org.apache.jackrabbit.oak.plugins.document.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,10 +67,10 @@ class Collision {
      *
      * @param store the document store.
      * @return the revision that was marked. Either our or their.
-     * @throws MicroKernelException if the mark operation fails.
+     * @throws DocumentStoreException if the mark operation fails.
      */
     @Nonnull
-    Revision mark(DocumentStore store) throws MicroKernelException {
+    Revision mark(DocumentStore store) throws DocumentStoreException {
         // first try to mark their revision
         if (markCommitRoot(document, theirRev, store)) {
             return theirRev;
@@ -127,6 +126,11 @@ class Collision {
         if (commitRoot.isCommitted(revision)) {
             return false;
         }
+        // check if there is already a collision marker
+        if (commitRoot.getLocalMap(NodeDocument.COLLISIONS).containsKey(revision)) {
+            // already marked
+            return true;
+        }
         NodeDocument.addCollision(op, revision);
         commitRoot = store.createOrUpdate(Collection.NODES, op);
         // check again on old document right before our update was applied
@@ -141,8 +145,8 @@ class Collision {
 
     private static void throwNoCommitRootException(@Nonnull Revision revision,
                                                    @Nonnull Document document)
-                                                           throws MicroKernelException {
-        throw new MicroKernelException("No commit root for revision: "
+                                                           throws DocumentStoreException {
+        throw new DocumentStoreException("No commit root for revision: "
                 + revision + ", document: " + document.format());
     }
 }
