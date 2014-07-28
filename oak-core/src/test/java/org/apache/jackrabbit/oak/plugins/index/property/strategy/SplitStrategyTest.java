@@ -225,7 +225,7 @@ public class SplitStrategyTest {
         Set<String> before, after;
         String path, sha1;
         
-        sha1 = "acdd763534a786e0d21adb9d6c6b1565d5bd5211";
+        sha1 = "cfb-acdd763534a786e0d21adb9d6c6b1565d5bd5211";
         path = "/content/foo/bar";
 
         index = EmptyNodeState.EMPTY_NODE.builder();
