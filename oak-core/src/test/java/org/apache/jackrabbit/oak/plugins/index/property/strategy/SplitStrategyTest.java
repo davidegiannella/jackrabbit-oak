@@ -74,7 +74,7 @@ public class SplitStrategyTest {
         NodeBuilder index;
         NodeBuilder node;
         final String path = "/content/foo/bar";
-        final String sha1Path = "acdd763534a786e0d21adb9d6c6b1565d5bd5211";
+        final String sha1Path = "cfb-acdd763534a786e0d21adb9d6c6b1565d5bd5211";
         Set<String> before = Sets.newHashSet();
         Set<String> after;
         
@@ -129,8 +129,8 @@ public class SplitStrategyTest {
     @Test
     public void remove() {
         Map<String, String> shapaths = ImmutableMap.of(
-            "acdd763534a786e0d21adb9d6c6b1565d5bd5211", "/content/foo/bar",
-            "7ae9bbeab35f5e42b195f309acf0b53f8a14383f", "/content/baz/baz"
+            "cfb-acdd763534a786e0d21adb9d6c6b1565d5bd5211", "/content/foo/bar",
+            "cbb-7ae9bbeab35f5e42b195f309acf0b53f8a14383f", "/content/baz/baz"
             );
         String sha, path;
         SplitStrategy strategy = new SplitStrategy();
@@ -152,8 +152,11 @@ public class SplitStrategyTest {
         assertTrue(node.exists());
         node = node.getChildNode(OrderedIndex.FILLER);
         assertTrue(node.exists());
-        assertTrue(node.getChildNode("acdd763534a786e0d21adb9d6c6b1565d5bd5211").exists());
-        assertTrue(node.getChildNode("7ae9bbeab35f5e42b195f309acf0b53f8a14383f").exists());
+        for (String k : shapaths.keySet()) {
+            assertTrue(node.getChildNode(k).exists());
+        }
+        
+        // removing the first item
         sha = shapaths.keySet().iterator().next();
         path = shapaths.get(sha);
         before = Sets.newHashSet("app");
@@ -179,7 +182,8 @@ public class SplitStrategyTest {
        
         /*
          * if there are some other children left we should keep part of the tree
-         * let's recreate
+         * let's create something like
+         * 
          *  :index : {
          *      app : {
          *          : {

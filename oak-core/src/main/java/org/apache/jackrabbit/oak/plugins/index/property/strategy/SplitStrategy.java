@@ -29,6 +29,7 @@ import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy.AdvancedIndexStoreStrategy;
 import org.apache.jackrabbit.oak.spi.query.Filter;
@@ -86,7 +87,17 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
         
         public Sha1Path(@Nonnull final String path) {
             this.path = path;
-            this.sha1 = Hashing.sha1().hashBytes(path.getBytes(Charsets.UTF_8)).toString();
+            
+            // composing a prefix to reduce the cost of a randomly distributed lists. By grepping
+            // the first letter of each part of the path we'll group closer similar/siblings nodes.
+            StringBuilder sb = new StringBuilder();
+            Iterable<String> elements = PathUtils.elements(path);
+            for (String e : elements) {
+                sb.append(e.substring(0, 1));
+            }
+            sb.append("-");
+            sb.append(Hashing.sha1().hashBytes(path.getBytes(Charsets.UTF_8)).toString());
+            this.sha1 = sb.toString();
         }
         
         public String getPath() {
