@@ -20,27 +20,37 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.REINDEX_PROPERTY_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.JcrConstants;
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
+import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
 import org.apache.jackrabbit.oak.plugins.index.property.AbstractPropertyIndexLookup;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
+import org.apache.jackrabbit.oak.plugins.index.property.OrderedPropertyIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
+import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.state.ReadOnlyBuilder;
 import org.apache.jackrabbit.oak.util.NodeCounter;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -66,12 +76,14 @@ public class SplitStrategyTest {
         .setProperty(OrderedIndex.PROPERTY_SPLIT, ImmutableList.of(3L, 3L), Type.LONGS)
         .setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true, Type.BOOLEAN).getNodeState();
 
+    private static final EditorHook HOOK = new EditorHook(
+        new IndexUpdateProvider(new OrderedPropertyIndexEditorProvider()));
+
     /**
      * adding of a new document
      */
     @Test
     public void insert() {
-        SplitStrategy strategy = new SplitStrategy();
         NodeBuilder index;
         NodeBuilder node;
         final String path = "/content/foo/bar";
@@ -82,7 +94,7 @@ public class SplitStrategyTest {
         index = EmptyNodeState.EMPTY_NODE.builder();
         after = Sets.newHashSet("app");
         node = index;
-        strategy.update(index, path, before, after);
+        STRATEGY.update(index, path, before, after);
         node = node.getChildNode("app");
         assertTrue(node.exists());
         node = node.getChildNode(OrderedIndex.FILLER);
@@ -94,7 +106,7 @@ public class SplitStrategyTest {
         index = EmptyNodeState.EMPTY_NODE.builder();
         after = Sets.newHashSet("app,les");
         node = index;
-        strategy.update(index, path, before, after);
+        STRATEGY.update(index, path, before, after);
         node = node.getChildNode("app");
         assertTrue(node.exists());
         node = node.getChildNode("les");
@@ -108,7 +120,7 @@ public class SplitStrategyTest {
         index = EmptyNodeState.EMPTY_NODE.builder();
         after = Sets.newHashSet("app,le,ts,:");
         node = index;
-        strategy.update(index, path, before, after);
+        STRATEGY.update(index, path, before, after);
         node = node.getChildNode("app");
         assertTrue(node.exists());
         node = node.getChildNode("le");
@@ -128,32 +140,38 @@ public class SplitStrategyTest {
         index = EmptyNodeState.EMPTY_NODE.builder();
         after = Sets.newHashSet("app");
         for (int i = 0; i < 2000; i++) {
-            strategy.update(index, "/content/foo/bar" + i, before, after, rnd);
+            STRATEGY.update(index, "/content/foo/bar" + i, before, after, rnd);
         }
         // with this random seeds we expect to have 5 :count-* properties
         assertEquals("with the provided seed we got a wrong number of properties", 5,
-            countCountProperties(index));
+            countCountProperties(index, null));
         node = index.getChildNode("app");
         assertTrue(node.exists());
         node = node.getChildNode(OrderedIndex.FILLER);
         assertTrue(node.exists());
         assertEquals("No :count properties is expected at the ':' node", 0,
-            countCountProperties(node));
+            countCountProperties(node, null));
     }
     
     /**
      * counts the number of the {@code :count-} properties within the provided node. See
      * {@link NodeCounter} for details.
      * 
-     * @param node
+     * @param node the node to inspect
+     * @param properties if not null it will push in all the count property names
      * @return
      */
-    private static int countCountProperties(@Nonnull final NodeBuilder node) {
+    private static int countCountProperties(@Nonnull final NodeBuilder node, 
+                                            @Nullable List<String> properties) {
         checkNotNull(node);
-        int counts = 0;        
+        int counts = 0;
         for (PropertyState p : node.getProperties()) {
-            if (p.getName().startsWith(NodeCounter.PREFIX)) {
+            String name = p.getName(); 
+            if (name.startsWith(NodeCounter.PREFIX)) {
                 counts++;
+                if (properties != null) {
+                    properties.add(name);
+                }
             }
         }
         return counts;
@@ -431,6 +449,63 @@ public class SplitStrategyTest {
             for (PropertyState p : builder.getProperties()) {
                 LOG.debug("{}", p);
             }
+        }
+    }
+    
+    /**
+     * cover the use case for reindex of the index
+     * @throws CommitFailedException 
+     */
+    @Test
+    public void reindex() throws CommitFailedException {
+        final String indexDefName = "theIndex";
+        NodeBuilder root, builder;
+        NodeState before, after, indexed, state;
+        List<String> countsBefore, countsAfter;
+        
+        // ------------------------- when re-index the :count properties must differs from previous        
+        root = InitialContent.INITIAL_CONTENT.builder();
+        builder = root.child(INDEX_DEFINITIONS_NAME);
+        builder = builder.setChildNode(indexDefName, INDEX_DEF_V2);
+        // pushing nodes
+        before = root.getNodeState();
+        for (int i = 0; i < 2000; i++) {
+            builder = root.child("foo"+i);
+            builder.setProperty(INDEXED_PROPERTY, "app");
+        }
+        after = root.getNodeState();
+        indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
+        
+        // asserting index state
+        state = indexed.getChildNode(INDEX_DEFINITIONS_NAME);
+        assertTrue(state.exists());
+        state = state.getChildNode(indexDefName);
+        assertTrue(state.exists());
+        assertFalse(state.getBoolean(REINDEX_PROPERTY_NAME));
+        state = state.getChildNode(INDEX_CONTENT_NODE_NAME);
+        assertTrue(state.exists());
+        countsBefore = new ArrayList<String>();
+        countCountProperties(new ReadOnlyBuilder(state), countsBefore);
+        assertFalse(countsBefore.isEmpty());
+        
+        // triggering a re-index
+        root = indexed.builder();
+        before = root.getNodeState();
+        root.getChildNode(INDEX_DEFINITIONS_NAME).getChildNode(indexDefName)
+            .setProperty(REINDEX_PROPERTY_NAME, true);
+        after = root.getNodeState();
+        indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
+        state = indexed.getChildNode(INDEX_DEFINITIONS_NAME).getChildNode(indexDefName);
+        assertTrue(state.exists());
+        assertFalse(state.getBoolean(REINDEX_PROPERTY_NAME));
+        state = state.getChildNode(INDEX_CONTENT_NODE_NAME);
+        assertTrue(state.exists());
+        countsAfter = new ArrayList<String>();
+        countCountProperties(new ReadOnlyBuilder(state), countsAfter);
+        assertFalse(countsAfter.isEmpty());
+        for (String name: countsAfter) {
+            // when re-indexing the :count properties should be reset and recounted.
+            assertFalse("Found a previously existing :count property", countsBefore.contains(name));
         }
     }
 }
