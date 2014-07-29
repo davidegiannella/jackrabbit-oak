@@ -14,7 +14,10 @@
 # limitations under the License.
 
 install:  true
-script:   mvn verify -Ppedantic,integrationTesting
+env:
+  - PROFILE=pedantic
+  - PROFILE=integrationTesting
+script:   "mvn verify -P${PROFILE}"
 language: java
 jdk:
   - oraclejdk7
