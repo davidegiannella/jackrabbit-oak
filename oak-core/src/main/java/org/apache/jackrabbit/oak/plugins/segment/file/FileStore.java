@@ -192,19 +192,19 @@ public class FileStore implements SegmentStore {
                 String.format(FILE_NAME_FORMAT, writeNumber, "a"));
         this.writer = new TarWriter(writeFile);
 
-        LinkedList<RecordId> heads = newLinkedList();
+        LinkedList<String> heads = newLinkedList();
         String line = journalFile.readLine();
         while (line != null) {
             int space = line.indexOf(' ');
             if (space != -1) {
-                heads.add(RecordId.fromString(tracker, line.substring(0, space)));
+                heads.add(line.substring(0, space));
             }
             line = journalFile.readLine();
         }
 
         RecordId id = null;
         while (id == null && !heads.isEmpty()) {
-            RecordId last = heads.removeLast();
+            RecordId last = RecordId.fromString(tracker, heads.removeLast());
             SegmentId segmentId = last.getSegmentId();
             if (containsSegment(
                     segmentId.getMostSignificantBits(),
@@ -355,15 +355,15 @@ public class FileStore implements SegmentStore {
                         cleanup();
                     }
                 }
-
-                // remove all obsolete tar generations
-                Iterator<File> iterator = toBeRemoved.iterator();
-                while (iterator.hasNext()) {
-                    File file = iterator.next();
-                    if (!file.exists() || file.delete()) {
-                        log.debug("TarMK GC: Removed old file {}", file);
-                        iterator.remove();
-                    }
+            }
+            // remove all obsolete tar generations
+            Iterator<File> iterator = toBeRemoved.iterator();
+            while (iterator.hasNext()) {
+                File file = iterator.next();
+                log.debug("TarMK GC: Attempting to remove old file {}", file);
+                if (!file.exists() || file.delete()) {
+                    log.debug("TarMK GC: Removed old file {}", file);
+                    iterator.remove();
                 }
             }
         }
