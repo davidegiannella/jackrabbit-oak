@@ -59,6 +59,7 @@
     <slf4j.version>1.7.6</slf4j.version> <!-- sync with logback version -->
     <logback.version>1.1.0</logback.version>
     <h2.version>1.3.176</h2.version>
+    <fixtures>SEGMENT_MK</fixtures>
   </properties>
 
   <issueManagement>
@@ -170,6 +171,7 @@
               <mongo.db>${mongo.db}</mongo.db>
               <mongo.db2>${mongo.db2}</mongo.db2>
               <segment.db>${segment.db}</segment.db>
+              <ns-fixtures>${fixtures}</ns-fixtures>
             </systemPropertyVariables>
             <redirectTestOutputToFile>true</redirectTestOutputToFile>
           </configuration>
@@ -421,6 +423,9 @@
           <name>env.OAK_INTEGRATION_TESTING</name>
         </property>
       </activation>
+      <properties>
+        <fixtures />
+      </properties>
       <build>
         <plugins>
           <plugin>
