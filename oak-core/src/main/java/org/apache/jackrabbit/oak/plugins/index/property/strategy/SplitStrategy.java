@@ -53,31 +53,11 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
     private static final Logger LOG = LoggerFactory.getLogger(SplitStrategy.class);
 
     /**
-     * used inside {@link #traverseAndCount(NodeState)} for debugging purposes
-     */
-    private static enum CountedFrom {NODE_COUNTER, CHILD_NODE_COUNT, ESTIMATED_FAIL};
-    
-    /**
      * limit used for the approximation algorithm as well as limit for the
      * {@link NodeState#getChildNodeCount(long)}
      */
-    public static final long COUNT_LIMIT = 100L;
+    private static final long COUNT_LIMIT = 100L;
     
-    
-    /**
-     * <p>
-     * value returned when there's no estimated count from
-     * {@link NodeCounter#getApproxCount(NodeState)} and the
-     * {@link NodeState#getChildNodeCount(long)} exceed {@link #COUNT_LIMIT}
-     * </p>
-     * <p>
-     * Based on the {@link NodeCounter} algorithm it's difficult we could skip more than 3 times
-     * {@link #COUNT_LIMIT} {@link NodeCounter#nodeAdded(Random, NodeBuilder, String, long)} so it
-     * will be {@code COUNT_LIMIT * 3 / 2}
-     * </p>
-     */
-    public static final long ESTIMATED_COUNT_ON_FAIL = COUNT_LIMIT * 3 / 2;
-
     /**
      * simple pojo for encoding the path.
      */
@@ -126,7 +106,7 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
         
         LOG.debug("insert()");
         Iterable<String> tokens;
-        NodeBuilder node, parent;
+        NodeBuilder node;
         
         // 1. tokenise
         tokens = Splitter.on(OrderedIndex.SPLITTER).split(key);
@@ -140,13 +120,13 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
         // let's add a special node that will be treated specially for the sortin
         // putting it as first or last depending on the order by.
         // here we'll put our paths
-        parent = node.child(OrderedIndex.FILLER);
+        node = node.child(OrderedIndex.FILLER);
         
         // 3. hash and store the path
         Sha1Path sp = new Sha1Path(path);
-        node = parent.child(sp.getSha1());
+        node = node.child(sp.getSha1());
         node.setProperty(OrderedIndex.PROPERTY_PATH, sp.getPath());
-        NodeCounter.nodeAdded(rnd, parent, NodeCounter.PREFIX, COUNT_LIMIT);
+        NodeCounter.nodeAdded(rnd, index, NodeCounter.PREFIX, COUNT_LIMIT);
     }
 
     /**
@@ -166,7 +146,7 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
         LOG.debug("remove()");
         Deque<NodeBuilder> nodes;
         Iterable<String> tokens;
-        NodeBuilder node, parent;
+        NodeBuilder node;
 
         // each node will have a ':' as leaf for keeping the paths. Let's add it
         String k = key + OrderedIndex.SPLITTER + OrderedIndex.FILLER;
@@ -193,12 +173,11 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
 
         if (node != null) {
             // 2. delete the node
-            parent = node;
             Sha1Path sp = new Sha1Path(path);
-            node = parent.getChildNode(sp.getSha1());
+            node = node.getChildNode(sp.getSha1());
             if (node.exists()) {
                 node.remove();
-                NodeCounter.nodeRemoved(rnd, parent, NodeCounter.PREFIX, COUNT_LIMIT);
+                NodeCounter.nodeRemoved(rnd, index, NodeCounter.PREFIX, COUNT_LIMIT);
             }
 
             // 3. walking up the tree and delete nodes if no children
@@ -284,45 +263,12 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
                 if (pr.first == null && pr.last == null) {
                     // property IS NOT NULL case (open query)
                     LOG.debug("count() - property is not null case");
-                    count = traverseAndCount(content);
+                    //count = traverseAndCount(content);
                 }
             }
         }
         
         LOG.debug("count() -  total count: {}", count);
         return count;
-    }
-    
-    private static long traverseAndCount(@Nonnull final NodeState root) {
-        checkNotNull(root, "NodeState cannot be null");
-                
-        long count = 0;
-        CountedFrom cf;
-        
-        for (ChildNodeEntry child : root.getChildNodeEntries()) {
-            NodeState state = child.getNodeState();
-            String name = child.getName();
-            if (OrderedIndex.FILLER.equals(name)) {
-                // it's where the paths are stored
-                long c = NodeCounter.getApproxCount(state);
-                cf = CountedFrom.NODE_COUNTER;
-                if (c == NodeCounter.NO_PROPERTIES) {
-                    // there was no estimation. trying to count the exact match
-                    c = state.getChildNodeCount(COUNT_LIMIT);
-                    cf = CountedFrom.CHILD_NODE_COUNT;
-                    if (c == Long.MAX_VALUE) {
-                        // we have more than COUNT_LIMIT. Approximate the number
-                        c = ESTIMATED_COUNT_ON_FAIL;
-                        cf = CountedFrom.ESTIMATED_FAIL;
-                    }
-                }
-                LOG.debug("traverseAndCount() - c: {} got from: {}", c, cf);
-                count += c;
-            } else {
-                count += traverseAndCount(state);
-            }
-        }
-        
-        return count;
-    }
+    }    
 }

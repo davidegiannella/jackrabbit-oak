@@ -41,6 +41,7 @@ import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.util.NodeCounter;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,7 +76,7 @@ public class SplitStrategyTest {
         NodeBuilder node;
         final String path = "/content/foo/bar";
         final String sha1Path = "cfb-acdd763534a786e0d21adb9d6c6b1565d5bd5211";
-        Set<String> before = Sets.newHashSet();
+        final Set<String> before = Sets.newHashSet();
         Set<String> after;
         
         index = EmptyNodeState.EMPTY_NODE.builder();
@@ -121,6 +122,41 @@ public class SplitStrategyTest {
         node = node.getChildNode(sha1Path);
         assertTrue("SHA1 node doesn't exists", node.exists());
         assertEquals(path, node.getString(OrderedIndex.PROPERTY_PATH));
+
+        // -------------------------------- checking we have the counting properties on :index node
+        Random rnd = new Random(1);
+        index = EmptyNodeState.EMPTY_NODE.builder();
+        after = Sets.newHashSet("app");
+        for (int i = 0; i < 2000; i++) {
+            strategy.update(index, "/content/foo/bar" + i, before, after, rnd);
+        }
+        // with this random seeds we expect to have 5 :count-* properties
+        assertEquals("with the provided seed we got a wrong number of properties", 5,
+            countCountProperties(index));
+        node = index.getChildNode("app");
+        assertTrue(node.exists());
+        node = node.getChildNode(OrderedIndex.FILLER);
+        assertTrue(node.exists());
+        assertEquals("No :count properties is expected at the ':' node", 0,
+            countCountProperties(node));
+    }
+    
+    /**
+     * counts the number of the {@code :count-} properties within the provided node. See
+     * {@link NodeCounter} for details.
+     * 
+     * @param node
+     * @return
+     */
+    private static int countCountProperties(@Nonnull final NodeBuilder node) {
+        checkNotNull(node);
+        int counts = 0;        
+        for (PropertyState p : node.getProperties()) {
+            if (p.getName().startsWith(NodeCounter.PREFIX)) {
+                counts++;
+            }
+        }
+        return counts;
     }
     
     /**
