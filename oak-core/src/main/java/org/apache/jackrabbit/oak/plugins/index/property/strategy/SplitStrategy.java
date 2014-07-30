@@ -55,7 +55,7 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
      * limit used for the approximation algorithm as well as limit for the
      * {@link NodeState#getChildNodeCount(long)}
      */
-    private static final long COUNT_LIMIT = 100L;
+    public static final long COUNT_LIMIT = 100L;
     
     /**
      * simple pojo for encoding the path.
@@ -263,6 +263,11 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
                     // property IS NOT NULL case (open query)
                     LOG.debug("count() - property is not null case");
                     count = NodeCounter.getApproxCount(content);
+                    if (count == 0 && content.getChildNodeCount(1) == 1) {
+                        // it means the index is not empty but we 
+                        // have somethig like (1 <= nodes <= (COUNT_LIMIT±10%))
+                        count = COUNT_LIMIT;
+                    }
                 }
             }
         }

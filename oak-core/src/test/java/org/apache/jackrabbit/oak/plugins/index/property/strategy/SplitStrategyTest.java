@@ -361,6 +361,18 @@ public class SplitStrategyTest {
         indexMeta = index.getNodeState();
         assertEquals(1600,
             STRATEGY.count(indexMeta, pr, AbstractPropertyIndexLookup.NO_LIMITS_COST));
+        
+        // ----------------------------------------- count when we don't have the :count properties
+        rnd = new Random(1);
+        root = InitialContent.INITIAL_CONTENT.builder();
+        index = root.child(INDEX_DEFINITIONS_NAME).setChildNode(indexDefName, INDEX_DEF_V2);
+        indexContent = index.child(INDEX_CONTENT_NODE_NAME);
+        STRATEGY.update(indexContent, "/content/foobar", EMPTY_SET, Sets.newHashSet("app,les"), rnd);
+        indexMeta = index.getNodeState();
+        assertEquals(
+            "if we don't have :count properties we expect to have something around COUNT_LIMIT",
+            SplitStrategy.COUNT_LIMIT,
+            STRATEGY.count(indexMeta, pr, AbstractPropertyIndexLookup.NO_LIMITS_COST));
     }
     
     @SuppressWarnings("unused")
