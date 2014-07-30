@@ -313,8 +313,6 @@ public class SplitStrategyTest {
         NodeBuilder root, index, indexContent, builder;
         NodeState indexMeta;
         PropertyRestriction pr;
-        long count;
-        
         
         // -------- creating a structure with entryCount specified but no content in there actually
         root = InitialContent.INITIAL_CONTENT.builder();
@@ -360,88 +358,12 @@ public class SplitStrategyTest {
             STRATEGY.update(indexContent, "/content/foobar" + i, EMPTY_SET,
                 Sets.newHashSet("app,les"), rnd);
         }
-        // asserting the index status
-        builder = indexContent;
-        builder = builder.getChildNode("app");
-        assertTrue(builder.exists());
-        builder = builder.getChildNode("les");
-        assertTrue(builder.exists());
-        builder = builder.getChildNode(OrderedIndex.FILLER);
-        assertTrue(builder.exists());
-        assertEquals(2000, builder.getChildNodeCount(2100));
-        printProperties(builder);
-        // checking the count
         indexMeta = index.getNodeState();
-        pr = new PropertyRestriction();
-        pr.propertyName = INDEXED_PROPERTY;
-        // as it is an estimation based on randomisation we can assess a range of allowed values
-        count = STRATEGY.count(indexMeta, pr, AbstractPropertyIndexLookup.NO_LIMITS_COST);
-        assertEquals(1600, count);
-        
-        // ----------------------------------------------------------- count with two keys add only
-        rnd = new Random(1);
-        root = InitialContent.INITIAL_CONTENT.builder();
-        index = root.child(INDEX_DEFINITIONS_NAME).setChildNode(indexDefName, INDEX_DEF_V2);
-        indexContent = index.child(INDEX_CONTENT_NODE_NAME);
-        for (int i = 0; i < 2000; i++) {
-            STRATEGY.update(indexContent, "/content/foobar" + i, EMPTY_SET,
-                Sets.newHashSet("app,les"), rnd);
-        }
-        for (int i = 0; i < 2000; i++) {
-            STRATEGY.update(indexContent, "/content/bazbaz" + i, EMPTY_SET,
-                Sets.newHashSet("app,le:"), rnd);
-        }
-        builder = indexContent;
-        builder = builder.getChildNode("app");
-        assertTrue(builder.exists());
-        builder = builder.getChildNode("les");
-        assertTrue(builder.exists());
-        builder = builder.getChildNode(OrderedIndex.FILLER);
-        assertTrue(builder.exists());
-        assertEquals(2000, builder.getChildNodeCount(2100));
-        printProperties(builder);
-        builder = indexContent;
-        builder = builder.getChildNode("app");
-        assertTrue(builder.exists());
-        builder = builder.getChildNode("le:");
-        assertTrue(builder.exists());
-        builder = builder.getChildNode(OrderedIndex.FILLER);
-        assertTrue(builder.exists());
-        assertEquals(2000, builder.getChildNodeCount(2100));
-        printProperties(builder);
-        indexMeta = index.getNodeState();
-        pr = new PropertyRestriction();
-        pr.propertyName = INDEXED_PROPERTY;
-        count = STRATEGY.count(indexMeta, pr, AbstractPropertyIndexLookup.NO_LIMITS_COST);
-        assertEquals(4800, count);
-        
-        // ---------------------------------- no properties for estimations and less than 100 nodes
-        root = InitialContent.INITIAL_CONTENT.builder();
-        index = root.child(INDEX_DEFINITIONS_NAME).setChildNode(indexDefName, INDEX_DEF_V2);
-        indexContent = index.child(INDEX_CONTENT_NODE_NAME);
-        for (int i = 0; i < 90; i++) {
-            STRATEGY.update(indexContent, "/content/foobar" + i, EMPTY_SET,
-                Sets.newHashSet("app,les"), rnd);
-        }
-        builder = indexContent;
-        builder = builder.getChildNode("app");
-        assertTrue(builder.exists());
-        builder = builder.getChildNode("les");
-        assertTrue(builder.exists());
-        builder = builder.getChildNode(OrderedIndex.FILLER);
-        assertTrue(builder.exists());
-        assertEquals(90, builder.getChildNodeCount(2100));
-        // cleaning up the properties to force the use case
-        for (PropertyState p : builder.getProperties()) {
-            builder.removeProperty(p.getName());
-        }
-        indexMeta = index.getNodeState();
-        pr = new PropertyRestriction();
-        pr.propertyName = INDEXED_PROPERTY;
-        count = STRATEGY.count(indexMeta, pr, AbstractPropertyIndexLookup.NO_LIMITS_COST);
-        assertEquals(90, count);        
+        assertEquals(1600,
+            STRATEGY.count(indexMeta, pr, AbstractPropertyIndexLookup.NO_LIMITS_COST));
     }
     
+    @SuppressWarnings("unused")
     private static void printProperties(@Nonnull final NodeBuilder builder) {
         checkNotNull(builder);
         if (LOG.isDebugEnabled()) {

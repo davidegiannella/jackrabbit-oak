@@ -34,7 +34,6 @@ import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy.AdvancedIndexStoreStrategy;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
-import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.util.NodeCounter;
@@ -263,7 +262,7 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
                 if (pr.first == null && pr.last == null) {
                     // property IS NOT NULL case (open query)
                     LOG.debug("count() - property is not null case");
-                    //count = traverseAndCount(content);
+                    count = NodeCounter.getApproxCount(content);
                 }
             }
         }
