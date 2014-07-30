@@ -59,8 +59,10 @@
     <slf4j.version>1.7.6</slf4j.version> <!-- sync with logback version -->
     <logback.version>1.1.0</logback.version>
     <h2.version>1.3.176</h2.version>
-    <!-- specifies on which fixture to run the integration testing tests. -->
-    <!-- override in profiles or provide from command line to change behaviour -->
+   <!-- specifies on which fixture to run the integration testing tests. 
+      override in profiles or provide from command line to change behaviour. Provide 
+      more fixtures space separated. See org.apache.jackrabbit.oak.jcr.FixturesHelper#AVAILABLE_FIXTURES 
+      for the possible values -->
     <fixtures>SEGMENT_MK</fixtures>
   </properties>
 
