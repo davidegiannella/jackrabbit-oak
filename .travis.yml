@@ -16,7 +16,10 @@
 install:  true
 env:
   - PROFILE=pedantic
-  - PROFILE=integrationTesting
+  - PROFILE=ITSegmentMK
+  - PROFILE=ITDocumentMK
+  - PROFILE=ITDocumentNS
+  - PROFILE=ITDocumentJDBC
 script:   "mvn verify -P${PROFILE}"
 language: java
 jdk:
