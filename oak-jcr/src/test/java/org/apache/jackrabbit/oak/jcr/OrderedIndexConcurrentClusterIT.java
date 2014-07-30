@@ -214,7 +214,7 @@ public class OrderedIndexConcurrentClusterIT {
         }
     }
 
-    @Test
+    @Test 
     public void deleteConcurrently() throws Exception {
         final int loop = 700;
         final int count = COUNT;
