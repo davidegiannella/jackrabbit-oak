@@ -263,10 +263,15 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
                     // property IS NOT NULL case (open query)
                     LOG.debug("count() - property is not null case");
                     count = NodeCounter.getApproxCount(content);
-                    if (count == 0 && content.getChildNodeCount(1) == 1) {
-                        // it means the index is not empty but we 
-                        // have somethig like (1 <= nodes <= (COUNT_LIMIT±10%))
-                        count = COUNT_LIMIT;
+                    if (count == 0) {
+                        if (content.getChildNodeCount(1) == 1) {
+                            // it means the index is not empty but we 
+                            // have something like (1 <= nodes <= (COUNT_LIMIT±10%))
+                            count = COUNT_LIMIT;
+                        } else {
+                            // the index is empty. Let's make sure we won't play
+                            count = Long.MAX_VALUE;
+                        }
                     }
                 }
             }
