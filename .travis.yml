@@ -16,6 +16,7 @@
 install:  true
 env:
   - PROFILE=pedantic
+  - PROFILE=unittesting
   - PROFILE=ITSegmentMK
   - PROFILE=ITDocumentMK
   - PROFILE=ITDocumentNS
