@@ -503,81 +503,15 @@
       </build>
     </profile>
     <profile>
-      <!-- runs all the IT against DocumentMK  -->
-      <id>ITDocumentMK</id>
+      <!-- runs all the IT against Document* fixtures  -->
+      <id>ITDocumentALL</id>
       <activation>
         <property>
           <name>env.OAK_INTEGRATION_TESTING</name>
         </property>
       </activation>
       <properties>
-        <fixtures>DOCUMENT_MK</fixtures>
-      </properties>
-      <build>
-        <plugins>
-           <plugin>
-             <artifactId>maven-surefire-plugin</artifactId>
-             <configuration>
-               <skipTests>true</skipTests>
-             </configuration>
-           </plugin>
-          <plugin>
-            <artifactId>maven-failsafe-plugin</artifactId>
-            <executions>
-              <execution>
-                <goals>
-                  <goal>integration-test</goal>
-                  <goal>verify</goal>
-                </goals>
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-    <profile>
-      <!-- runs all the IT against DocumentNS  -->
-      <id>ITDocumentNS</id>
-      <activation>
-        <property>
-          <name>env.OAK_INTEGRATION_TESTING</name>
-        </property>
-      </activation>
-      <properties>
-        <fixtures>DOCUMENT_NS</fixtures>
-      </properties>
-      <build>
-        <plugins>
-           <plugin>
-             <artifactId>maven-surefire-plugin</artifactId>
-             <configuration>
-               <skipTests>true</skipTests>
-             </configuration>
-           </plugin>
-          <plugin>
-            <artifactId>maven-failsafe-plugin</artifactId>
-            <executions>
-              <execution>
-                <goals>
-                  <goal>integration-test</goal>
-                  <goal>verify</goal>
-                </goals>
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-    <profile>
-      <!-- runs all the IT against DocumentJDBC  -->
-      <id>ITDocumentJDBC</id>
-      <activation>
-        <property>
-          <name>env.OAK_INTEGRATION_TESTING</name>
-        </property>
-      </activation>
-      <properties>
-        <fixtures>DOCUMENT_JDBC</fixtures>
+        <fixtures>DOCUMENT_MK DOCUMENT_NS DOCUMENT_JDBC</fixtures>
       </properties>
       <build>
         <plugins>

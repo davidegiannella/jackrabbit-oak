@@ -18,9 +18,7 @@ env:
   - PROFILE=pedantic
   - PROFILE=unittesting
   - PROFILE=ITSegmentMK
-  - PROFILE=ITDocumentMK
-  - PROFILE=ITDocumentNS
-  - PROFILE=ITDocumentJDBC
+  - PROFILE=ITDocumentALL
 script:   "mvn verify -P${PROFILE}"
 language: java
 jdk:
