@@ -23,7 +23,9 @@ import java.util.Set;
 
 /**
  * helper class that return the list of available fixtures based on the {@code ns-fixtures} system
- * property ({@code -Dns-fixture=SEGMENT_MK}).
+ * property ({@code -Dns-fixtures=SEGMENT_MK}).
+ * 
+ * See {@link FixturesHelper#Fixture} for a list of available fixtures
  */
 public class FixturesHelper {
     
