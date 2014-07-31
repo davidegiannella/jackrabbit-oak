@@ -59,6 +59,11 @@
     <slf4j.version>1.7.6</slf4j.version> <!-- sync with logback version -->
     <logback.version>1.1.0</logback.version>
     <h2.version>1.3.176</h2.version>
+   <!-- specifies on which fixture to run the integration testing tests. 
+      override in profiles or provide from command line to change behaviour. Provide 
+      more fixtures space separated. See org.apache.jackrabbit.oak.jcr.FixturesHelper#AVAILABLE_FIXTURES 
+      for the possible values -->
+    <fixtures>SEGMENT_MK</fixtures>
   </properties>
 
   <issueManagement>
@@ -172,6 +177,7 @@
               <mongo.db>${mongo.db}</mongo.db>
               <mongo.db2>${mongo.db2}</mongo.db2>
               <segment.db>${segment.db}</segment.db>
+              <ns-fixtures>${fixtures}</ns-fixtures>
             </systemPropertyVariables>
             <redirectTestOutputToFile>true</redirectTestOutputToFile>
           </configuration>
@@ -186,6 +192,7 @@
               <mongo.port>${mongo.port}</mongo.port>
               <mongo.db>${mongo.db}</mongo.db>
               <mongo.db2>${mongo.db2}</mongo.db2>
+              <ns-fixtures>${fixtures}</ns-fixtures>
             </systemPropertyVariables>
           </configuration>
         </plugin>
@@ -416,7 +423,24 @@
   </dependencyManagement>
 
   <profiles>
+    <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  Unit testing profiles -->
     <profile>
+         <id>unittesting</id>
+         <properties>
+            <!-- emptying $fixtures means run on all -->
+            <fixtures />
+         </properties>
+         <build>
+            <plugins>
+              <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+              </plugin>
+            </plugins>
+         </build>
+    </profile>
+    <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - Integration testing profiles -->
+    <profile>
+      <!-- runs all the IT agains the default fixture. See <properties> section -->
       <id>integrationTesting</id>
       <activation>
         <property>
@@ -425,6 +449,12 @@
       </activation>
       <build>
         <plugins>
+           <plugin>
+             <artifactId>maven-surefire-plugin</artifactId>
+             <configuration>
+               <skipTests>true</skipTests>
+             </configuration>
+           </plugin>
           <plugin>
             <artifactId>maven-failsafe-plugin</artifactId>
             <executions>
@@ -440,9 +470,83 @@
       </build>
     </profile>
     <profile>
+      <!-- runs all the IT against SegmentMK  -->
+      <id>ITSegmentMK</id>
+      <activation>
+        <property>
+          <name>env.OAK_INTEGRATION_TESTING</name>
+        </property>
+      </activation>
+      <properties>
+        <fixtures>SEGMENT_MK</fixtures>
+      </properties>
+      <build>
+        <plugins>
+           <plugin>
+             <artifactId>maven-surefire-plugin</artifactId>
+             <configuration>
+               <skipTests>true</skipTests>
+             </configuration>
+           </plugin>
+          <plugin>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <!-- runs all the IT against Document* fixtures  -->
+      <id>ITDocumentALL</id>
+      <activation>
+        <property>
+          <name>env.OAK_INTEGRATION_TESTING</name>
+        </property>
+      </activation>
+      <properties>
+        <fixtures>DOCUMENT_MK DOCUMENT_NS DOCUMENT_JDBC</fixtures>
+      </properties>
+      <build>
+        <plugins>
+           <plugin>
+             <artifactId>maven-surefire-plugin</artifactId>
+             <configuration>
+               <skipTests>true</skipTests>
+             </configuration>
+           </plugin>
+          <plugin>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - other profiles -->
+    <profile>
       <id>pedantic</id>
       <build>
         <plugins>
+           <plugin>
+             <artifactId>maven-surefire-plugin</artifactId>
+             <configuration>
+               <skipTests>true</skipTests>
+             </configuration>
+           </plugin>
           <plugin>
             <groupId>org.apache.rat</groupId>
             <artifactId>apache-rat-plugin</artifactId>
