@@ -378,10 +378,10 @@ public class OrderedPropertyIndexEditorV2Test {
     public void pathSpecifcIndexes() throws CommitFailedException {
         final String content = "content";
         final String contentNode = "nodeUnderContent";
-        final String repoWideContentNodeSha1 = "1fd86c2368aacab0b025615ad82dfc5a6767cc95";
-        final String contentWideContentNodeSha1 = "10e8c9ccec2e58611b3521fec924a7fda70487cd";
+        final String repoWideContentNodeSha1 = "cn-1fd86c2368aacab0b025615ad82dfc5a6767cc95";
+        final String contentWideContentNodeSha1 = "n-10e8c9ccec2e58611b3521fec924a7fda70487cd";
         final String rootNode = "nodeUnderRoot";
-        final String rootNodeSha1 = "e931bbb6f91b0554a57c0dc8282c895c33b9a0fc";
+        final String rootNodeSha1 = "n-e931bbb6f91b0554a57c0dc8282c895c33b9a0fc";
         final String indexedProperty = "indexedProperty";
         final String repoWideIndex = "repoWideIndex";
         final String pathSpecificIndex = "pathSpecificIndex";
