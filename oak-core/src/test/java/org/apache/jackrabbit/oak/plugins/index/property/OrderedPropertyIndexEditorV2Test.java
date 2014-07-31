@@ -229,9 +229,9 @@ public class OrderedPropertyIndexEditorV2Test {
         final String nodeType = NodeTypeConstants.NT_OAK_UNSTRUCTURED;
         final String indexDefName = "TheIndex";
         final String okNode = "oknode";
-        final String okSha1 = "2fad94fc15205634812cec7737ebc11d8e9db5c6";
+        final String okSha1 = "o-2fad94fc15205634812cec7737ebc11d8e9db5c6";
         final String wrongNode = "WRONGnode";
-        final String wrongSha1 = "f7dc04a5f3b8db1fd6dc16422ffda6a3c4448685";
+        final String wrongSha1 = "W-f7dc04a5f3b8db1fd6dc16422ffda6a3c4448685";
                 
         NodeState root = InitialContent.INITIAL_CONTENT;
         NodeBuilder builder = root.builder();
