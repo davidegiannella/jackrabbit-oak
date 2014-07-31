@@ -423,6 +423,21 @@
   </dependencyManagement>
 
   <profiles>
+    <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  Unit testing profiles -->
+    <profile>
+         <id>unittesting</id>
+         <properties>
+            <!-- emptying $fixtures means run on all -->
+            <fixtures />
+         </properties>
+         <build>
+            <plugins>
+              <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+              </plugin>
+            </plugins>
+         </build>
+    </profile>
     <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - Integration testing profiles -->
     <profile>
       <!-- runs all the IT agains the default fixture. See <properties> section -->
@@ -434,6 +449,12 @@
       </activation>
       <build>
         <plugins>
+           <plugin>
+             <artifactId>maven-surefire-plugin</artifactId>
+             <configuration>
+               <skipTests>true</skipTests>
+             </configuration>
+           </plugin>
           <plugin>
             <artifactId>maven-failsafe-plugin</artifactId>
             <executions>
@@ -461,6 +482,12 @@
       </properties>
       <build>
         <plugins>
+           <plugin>
+             <artifactId>maven-surefire-plugin</artifactId>
+             <configuration>
+               <skipTests>true</skipTests>
+             </configuration>
+           </plugin>
           <plugin>
             <artifactId>maven-failsafe-plugin</artifactId>
             <executions>
@@ -488,6 +515,12 @@
       </properties>
       <build>
         <plugins>
+           <plugin>
+             <artifactId>maven-surefire-plugin</artifactId>
+             <configuration>
+               <skipTests>true</skipTests>
+             </configuration>
+           </plugin>
           <plugin>
             <artifactId>maven-failsafe-plugin</artifactId>
             <executions>
@@ -515,6 +548,12 @@
       </properties>
       <build>
         <plugins>
+           <plugin>
+             <artifactId>maven-surefire-plugin</artifactId>
+             <configuration>
+               <skipTests>true</skipTests>
+             </configuration>
+           </plugin>
           <plugin>
             <artifactId>maven-failsafe-plugin</artifactId>
             <executions>
@@ -542,6 +581,12 @@
       </properties>
       <build>
         <plugins>
+           <plugin>
+             <artifactId>maven-surefire-plugin</artifactId>
+             <configuration>
+               <skipTests>true</skipTests>
+             </configuration>
+           </plugin>
           <plugin>
             <artifactId>maven-failsafe-plugin</artifactId>
             <executions>
