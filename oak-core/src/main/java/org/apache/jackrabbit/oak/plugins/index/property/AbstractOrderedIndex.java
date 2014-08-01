@@ -142,24 +142,19 @@ public abstract class AbstractOrderedIndex {
             String propertyName = PathUtils.getName(pr.propertyName);
             if (lookup.isIndexed(propertyName, "/", filter)) {
                 NodeState indexMeta = lookup.getIndexNode(propertyName, filter);
-                PropertyValue value = null;
                 boolean createPlan = false;
                 if (pr.first == null && pr.last == null) {
                     // open query: [property] is not null
-                    value = null;
                     createPlan = true;
                 } else if (pr.first != null && pr.first.equals(pr.last) && pr.firstIncluding
                            && pr.lastIncluding) {
                     // [property]=[value]
-                    value = pr.first;
                     createPlan = true;
                 } else if (pr.first != null && !pr.first.equals(pr.last)) {
                     // '>' & '>=' use cases
-                    value = pr.first;
                     createPlan = true;
                 } else if (pr.last != null && !pr.last.equals(pr.first)) {
                     // '<' & '<='
-                    value = pr.last;
                     createPlan = true;
                 }
                 if (createPlan) {
@@ -183,7 +178,7 @@ public abstract class AbstractOrderedIndex {
                     b.setSortOrder(o);
                     
                     // TODO implement the proper PropertyRestriction encoding
-                    long count = lookup.getEstimatedEntryCount(indexMeta, null);
+                    long count = lookup.getEstimatedEntryCount(indexMeta, pr);
                     b.setEstimatedEntryCount(count);
                     LOG.debug("estimatedCount: {}", count);
 

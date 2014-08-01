@@ -63,7 +63,7 @@ public class OrderedPropertyIndexLookupV2 extends AbstractPropertyIndexLookup {
         IndexStoreStrategy strategy = getStrategy(indexMeta);
         
         if (strategy instanceof AdvancedIndexStoreStrategy) {
-            return ((AdvancedIndexStoreStrategy) strategy).count(indexMeta, pr, MAX_COST);
+            return ((AdvancedIndexStoreStrategy) strategy).count(indexMeta, pr, Long.MAX_VALUE);
         } else {
             LOG.debug("Wrong strategy instance. Returning MAX_VALUE");
             return Long.MAX_VALUE;
