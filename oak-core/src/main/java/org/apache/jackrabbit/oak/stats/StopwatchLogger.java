@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Utility class to be used for tracking of timing within methods. It makes use of the
- * {@link Clock.Fast} for speeding up the operation despite loosing accuracy.
+ * {@link Clock.Fast} for speeding up the operation.
  */
 public class StopwatchLogger {
     private static final Logger LOG = LoggerFactory.getLogger(StopwatchLogger.class);
