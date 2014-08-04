@@ -38,13 +38,47 @@ public class StopwatchLogger {
     private final String clazz;
     
     private Clock clock;
+    private Logger customLog;
     
+    /**
+     * Create a class with the provided class.
+     * 
+     * @param claz
+     */
     public StopwatchLogger(@Nonnull final String clazz) {
-        this.clazz = checkNotNull(clazz);
+        this(null, checkNotNull(clazz));
     }
 
+    /**
+     * instantiate a class with the provided class
+     * 
+     * @param clazz
+     */
     public StopwatchLogger(@Nonnull final Class<?> clazz) {
-        this.clazz = checkNotNull(clazz).getName().toString();
+        this(checkNotNull(clazz).getName().toString());
+    }
+
+    /**
+     * Instantiate a class with the provided class and custom logger. The provided logger, if not
+     * null, will be then used for tracking down times
+     * 
+     * @param customLog
+     * @param clazz
+     */
+    public StopwatchLogger(@Nullable final Logger customLog, @Nonnull final Class<?> clazz) {
+        this(customLog, checkNotNull(clazz).getName().toString());
+    }
+
+    /**
+     * Instantiate a class with the provided class and custom logger. The provided logger, if not
+     * null, will be then used for tracking down times
+     *
+     * @param customLog
+     * @param clazz
+     */
+    public StopwatchLogger(@Nullable final Logger customLog, @Nonnull final String clazz) {
+        this.clazz = checkNotNull(clazz);
+        this.customLog = customLog;
     }
 
     /**
@@ -60,7 +94,7 @@ public class StopwatchLogger {
      * @param message
      */
     public void split(@Nullable final String message) {
-        track(clock, clazz, message);
+        track(customLog, clock, clazz, message);
     }
     
     /**
@@ -69,25 +103,29 @@ public class StopwatchLogger {
      * @param message
      */
     public void stop(@Nullable final String message) {
-        track(clock, clazz, message);
+        track(customLog, clock, clazz, message);
         clock = null;
     }
 
     /**
      * convenience method for tracking the messages
      * 
-     * @param clock
-     * @param clazz
-     * @param message
+     * @param customLog a potential custom logger. If null the static instance will be used
+     * @param clock the clock used for tracking.
+     * @param clazz the class to be used during the tracking of times
+     * @param message a custom message for the tracking.
      */
-    private static void track(@Nullable final Clock clock,
+    private static void track(@Nullable final Logger customLog,
+                              @Nullable final Clock clock,
                               @Nonnull final String clazz,
                               @Nullable final String message) {
         
+        Logger l = (customLog == null) ? LOG :  customLog;
+        
         if (clock == null) {
-            LOG.debug("{} - clock has not been started yet.", clazz);
+            l.debug("{} - clock has not been started yet.", clazz);
         } else {
-            LOG.debug(
+            l.debug(
                 "{} - {} {}",
                 new Object[] { checkNotNull(clazz), message == null ? "" : message,
                               clock.getTimeMonotonic() });
