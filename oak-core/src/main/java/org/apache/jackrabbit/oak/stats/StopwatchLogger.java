@@ -19,6 +19,8 @@ package org.apache.jackrabbit.oak.stats;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.concurrent.ScheduledExecutorService;
 
 import javax.annotation.Nonnull;
@@ -31,10 +33,10 @@ import org.slf4j.LoggerFactory;
  * Utility class to be used for tracking of timing within methods. It makes use of the
  * {@link Clock.Fast} for speeding up the operation.
  */
-public class StopwatchLogger {
+public class StopwatchLogger implements Closeable {
     private static final Logger LOG = LoggerFactory.getLogger(StopwatchLogger.class);
-    private static final ScheduledExecutorService EXECUTOR = newSingleThreadScheduledExecutor();
-    
+
+    private final ScheduledExecutorService executor = newSingleThreadScheduledExecutor();
     private final String clazz;
     
     private Clock clock;
@@ -85,7 +87,7 @@ public class StopwatchLogger {
      * starts the clock
      */
     public void start() {
-        clock = new Clock.Fast(EXECUTOR);
+        clock = new Clock.Fast(executor);
     }
     
     /**
@@ -129,6 +131,15 @@ public class StopwatchLogger {
                 "{} - {} {}",
                 new Object[] { checkNotNull(clazz), message == null ? "" : message,
                               clock.getTimeMonotonic() });
+        }
+    }
+
+    @Override
+    public void close() throws IOException {
+        try {
+            executor.shutdownNow();            
+        } catch (Throwable t) {
+            LOG.error("Error while shutting down the scheduler.", t);
         }
     }
 }
