@@ -15,11 +15,10 @@
 
 install:  true
 env:
-  - PROFILE=pedantic
-  - PROFILE=unittesting
-  - PROFILE=ITSegmentMK
-  - PROFILE=ITDocumentALL
-script:   "mvn verify -P${PROFILE}"
+  - PROFILE=pedantic FIXTURES= SUREFIRE_SKIP=
+  - PROFILE=unittesting FIXTURES= SUREFIRE_SKIP=
+  - PROFILE=integrationTesting FIXTURES="-Dns-fixtures=SEGMENT_MK" SUREFIRE_SKIP="-Dsurefire.skip.ut=true"
+script:   "mvn verify -P${PROFILE} ${FIXTURES} ${SUREFIRE_SKIP}"
 language: java
 jdk:
   - oraclejdk7
