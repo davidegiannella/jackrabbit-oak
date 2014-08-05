@@ -28,7 +28,11 @@ import java.util.Set;
  * See {@link FixturesHelper#Fixture} for a list of available fixtures
  */
 public class FixturesHelper {
+    /**
+     * splitter for specifying multiple fixtures
+     */
     
+    private static final String SPLIT_ON = ","; 
     /**
      * System property to be used.
      */
@@ -48,7 +52,7 @@ public class FixturesHelper {
             FIXTURES = Collections.unmodifiableSet(new HashSet<Fixture>(Arrays.asList(Fixture
                 .values())));
         } else {
-            String[] fs = raw.split("\\s");
+            String[] fs = raw.split(SPLIT_ON);
             Set<Fixture> tmp = new HashSet<Fixture>();
             for (String f : fs) {
                 String x = f.trim();
