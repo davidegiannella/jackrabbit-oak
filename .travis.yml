@@ -18,6 +18,7 @@ env:
   - PROFILE=pedantic FIXTURES= SUREFIRE_SKIP=
   - PROFILE=unittesting FIXTURES= SUREFIRE_SKIP=
   - PROFILE=integrationTesting FIXTURES="-Dns-fixtures=SEGMENT_MK" SUREFIRE_SKIP="-Dsurefire.skip.ut=true"
+  - PROFILE=integrationTesting FIXTURES="-Dns-fixtures=DOCUMENT_MK,DOCUMENT_NS,DOCUMENT_JDBC" SUREFIRE_SKIP="-Dsurefire.skip.ut=true"
 script:   "mvn verify -P${PROFILE} ${FIXTURES} ${SUREFIRE_SKIP}"
 language: java
 jdk:
