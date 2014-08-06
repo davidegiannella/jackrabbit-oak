@@ -17,7 +17,6 @@
 package org.apache.jackrabbit.oak.plugins.index.property;
 
 import static com.google.common.collect.ImmutableList.of;
-import static java.lang.System.out;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 import static org.apache.jackrabbit.oak.api.Type.LONGS;
 import static org.apache.jackrabbit.oak.api.Type.STRING;
@@ -30,7 +29,6 @@ import java.text.ParseException;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
@@ -91,7 +89,7 @@ public class OrderedPropertyIndexV2QueryTest extends BasicOrderedPropertyIndexQu
 
         Iterator<? extends ResultRow> results;
         results = executeQuery(query, SQL2, null).getRows().iterator();
-        assertRightOrder(nodes, results);
+        assertContains(nodes, results);
         
         setTraversalEnabled(true);
     }
