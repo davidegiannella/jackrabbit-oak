@@ -25,6 +25,10 @@ import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.Blob;
 
+/**
+ * A blob as a file in the file system.
+ * Used for testing.
+ */
 public class FileBlob implements Blob {
 
     private final String path;
