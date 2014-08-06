@@ -16,10 +16,12 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertTrue;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
+import static org.junit.Assert.fail;
 
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
@@ -172,6 +174,36 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
         }
     }
 
+    /**
+     * asserts that the provided resultset contains all the paths provided in the {@code expected}.
+     * Does not consider any sorting.
+     * 
+     * @param expected
+     * @param resultset
+     */
+    protected void assertContains(@Nonnull final List<ValuePathTuple> expected,
+                                  @Nonnull final Iterator<? extends ResultRow> resultset) {
+        checkNotNull(expected);
+        checkNotNull(resultset);
+        
+        assertTrue("No results returned", resultset.hasNext());
+        
+        // extracting the list of paths for easier analysis
+        List<String> paths = new ArrayList<String>(expected.size());
+        for (ValuePathTuple v : expected) {
+            paths.add(v.getPath());
+        }
+        
+        while (resultset.hasNext()) {
+            String path = resultset.next().getPath();
+            if (!paths.remove(path)) {
+                fail(String.format("Found a path that was not expected. %s", path));
+            }
+        }
+        
+        assertEquals("Not all the expected elements has been returned", 0, paths.size());
+    }
+    
     /**
      * convenience method for generating a list of ordered dates as string in ISO
      * 8601:2000-compliant format.
