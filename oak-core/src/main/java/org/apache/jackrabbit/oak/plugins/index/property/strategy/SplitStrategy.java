@@ -22,6 +22,7 @@ import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTE
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.Random;
 import java.util.Set;
 
@@ -34,6 +35,7 @@ import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy.AdvancedIndexStoreStrategy;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
+import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.util.NodeCounter;
@@ -226,21 +228,6 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
         }
     }
 
-
-    @Override
-    public Iterable<String> query(Filter filter, String indexName, NodeState indexMeta,
-                                  Iterable<String> values) {
-        // TODO Auto-generated method stub
-        LOG.debug("query()");
-        return null;
-    }
-
-    @Override
-    public long count(NodeState indexMeta, Set<String> values, int max) {
-        throw new UnsupportedOperationException(
-            "Unsupported as implementing AdvancedIndexStoreStrategy");
-    }
-
     @Override
     public long count(final NodeState indexMeta, final PropertyRestriction pr, final long max) {
         
@@ -279,5 +266,84 @@ public class SplitStrategy implements AdvancedIndexStoreStrategy {
         
         LOG.debug("count() -  total count: {}", count);
         return count;
-    }    
+    }
+
+    @Override
+    public Iterable<String> query(final String indexName, final IndexPlan plan) {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("query() - indexName: {}", indexName);
+            LOG.debug("query() - plan: {}", plan);
+        }
+        
+        checkNotNull("IndexPlan cannot be null", plan);
+        
+        PropertyRestriction pr = plan.getPropertyRestriction();
+        NodeState content = plan.getDefinition().getChildNode(INDEX_CONTENT_NODE_NAME);
+        Iterable<String> paths = null;
+        
+        if (pr != null) {
+            if (pr.first == null && pr.last == null) {
+                LOG.debug("query() - property is not null case");
+                paths = new FullIterable(content);
+            }
+        }
+        
+        return paths;
+    }
+
+    /**
+     * provides a full iteration across all the index in an unspecified order.
+     */
+    private static class FullIterable implements Iterable<String> {
+        private final NodeState indexContent;
+        
+        public FullIterable(final NodeState indexContent) {
+            this.indexContent = indexContent;
+        }
+        
+        @Override
+        public Iterator<String> iterator() {
+            return new Iterator<String>() {
+                Deque<String> navigation = new ArrayDeque<String>();
+                String currentPath = null;
+                
+                @Override
+                public boolean hasNext() {
+                    // TODO Auto-generated method stub
+                    return true;
+                }
+
+                @Override
+                public String next() {
+                    if (currentPath == null) {
+                        // we're at the beginning of the index
+                        String child = indexContent.getChildNodeNames().iterator().next();
+                        navigation.push(child);
+                    }
+                    return null;
+                }
+
+                @Override
+                public void remove() {
+                    throw new UnsupportedOperationException();
+                }
+            };
+        }
+        
+    }
+    
+    // --------------------------------------------------------------------< IndexStoreStrategy >--
+    @Override
+    public Iterable<String> query(Filter filter, String indexName, NodeState indexMeta,
+                                  Iterable<String> values) {
+        throw new UnsupportedOperationException(
+            "Unsupported as implementing AdvancedIndexStoreStrategy");
+    }
+
+    @Override
+    public long count(NodeState indexMeta, Set<String> values, int max) {
+        throw new UnsupportedOperationException(
+            "Unsupported as implementing AdvancedIndexStoreStrategy");
+    }
+
 }
