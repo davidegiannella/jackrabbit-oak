@@ -19,6 +19,7 @@ package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 import java.util.Set;
 
 import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
@@ -72,5 +73,16 @@ public interface IndexStoreStrategy {
          * @return
          */
         long count(NodeState indexMeta, Filter.PropertyRestriction pr, long max);
+        
+        /**
+         * Perfom a query as for
+         * {@link IndexStoreStrategy#query(Filter, String, NodeState, Iterable)} but providing the
+         * desired {@link IndexPlan}
+         * 
+         * @param indexName
+         * @param plan
+         * @return
+         */
+        Iterable<String> query(final String indexName, final IndexPlan plan);
     }
 }
