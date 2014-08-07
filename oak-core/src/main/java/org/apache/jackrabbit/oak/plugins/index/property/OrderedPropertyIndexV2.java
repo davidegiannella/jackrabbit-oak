@@ -16,13 +16,19 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import java.util.Collection;
 import java.util.List;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.oak.commons.PathUtils;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy;
+import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrategy.AdvancedIndexStoreStrategy;
 import org.apache.jackrabbit.oak.spi.query.Cursor;
 import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.AdvancedQueryIndex;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -31,7 +37,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 
 public class OrderedPropertyIndexV2 extends AbstractOrderedIndex implements QueryIndex, AdvancedQueryIndex {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexV2.class);
@@ -74,12 +79,28 @@ public class OrderedPropertyIndexV2 extends AbstractOrderedIndex implements Quer
     }
 
     @Override
-    public Cursor query(IndexPlan plan, NodeState rootState) {
+    public Cursor query(final IndexPlan plan, final NodeState rootState) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("query() - plan: {}", plan);
             LOG.debug("query() - rootState: {}", rootState);
         }
-        // TODO Auto-generated method stub
+        
+        checkNotNull("IndexPlan cannot be null", plan);
+        checkNotNull("NodeState cannot be null", rootState);
+        
+        final PropertyRestriction pr = plan.getPropertyRestriction();
+        int depth = 1;
+        Iterable<String> paths = null;
+        
+        AdvancedIndexStoreStrategy strategy = (AdvancedIndexStoreStrategy) getLookup(rootState)
+            .getStrategy(plan.getDefinition());
+        
+        if (pr != null) {
+            String propertyName = PathUtils.getName(pr.propertyName);
+            depth = PathUtils.getDepth(pr.propertyName);
+            paths = strategy.query(propertyName, plan);
+        }
+        
         return null;
     }
 
