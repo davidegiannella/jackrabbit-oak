@@ -160,6 +160,9 @@ public abstract class AbstractOrderedIndex {
                 if (createPlan) {
                     // we can return a sorted as well as unsorted set
                     IndexPlan.Builder b = getIndexPlanBuilder(filter);
+                    b.setPropertyRestriction(pr);
+                    b.setDefinition(indexMeta);
+                    
                     List<OrderEntry> o;
                     
                     // we have to reprocess the sort condition as we could apply on it as well
