@@ -37,9 +37,9 @@ import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.DIRE
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.TYPE;
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection.DESC;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.NT_OAK_UNSTRUCTURED;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -79,7 +79,6 @@ public class OrderedIndexIT {
     private static final String CONTENT = "content";
     private static final String NODE_TYPE = NT_UNSTRUCTURED;
     
-    @SuppressWarnings("unused")
     private static final Logger LOG = LoggerFactory.getLogger(OrderedIndexIT.class);
 
     private static final List<TimeZone> TZS = of(
@@ -191,6 +190,12 @@ public class OrderedIndexIT {
             // ensuring the correct order for checks
             sort(nodes, reverseOrder());
             
+            if (LOG.isDebugEnabled()) {
+                for (ValuePathTuple node : nodes) {
+                    LOG.debug(node.toString());
+                }
+            }
+            
             QueryManager qm = session.getWorkspace().getQueryManager();
             Query query = qm.createQuery(statement, Query.XPATH);
             QueryResult result = query.execute();
@@ -217,7 +222,22 @@ public class OrderedIndexIT {
             ValuePathTuple vpt = exp.next();
             Row row = obtained.nextRow();
             
-            assertEquals("wrong path encountered", vpt.getPath(), row.getPath());
+            // check manually about paths and dates
+            // if paths don't match maybe the date does. It's the date we care, in case of multiple
+            // paths under the same date the order of them is non-deterministic dependent on
+            // persistence rules
+            if (!vpt.getPath().equals(row.getPath())) {
+                String property = row.getNode().getProperty(ORDERED_PROPERTY).getString();
+                if (!vpt.getValue().equals(property)) {
+                    fail(String.format(
+                        "both path and date failed to match. Expected: %s - %s. Obtained: %s, %s",
+                        vpt.getPath(),
+                        vpt.getValue(),
+                        row.getPath(),
+                        property
+                        ));
+                }
+            }
         }
         
         assertFalse("we should have processed all the expected", exp.hasNext());
@@ -295,7 +315,8 @@ public class OrderedIndexIT {
      */
     public static Calendar midnightFirstJan2013() {
         Calendar c = Calendar.getInstance();
-        c.set(2013, Calendar.JANUARY, 1, 0, 0);
+        c.set(2013, Calendar.JANUARY, 1, 0, 0, 0);
+        c.set(Calendar.MILLISECOND, 0);
         return c;
     }
 
