@@ -148,6 +148,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             LOG.debug("fetchKeyNode() - entry: {} ", entry);
             printWalkedLanes("fetchKeyNode() - ", walked);
         }
+        
         if (entry != null && entry.equals(key)) {
             // it's an existing node. We should not need to update anything around pointers
             LOG.debug("fetchKeyNode() - node already there.");
@@ -641,12 +642,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         public boolean hasNext() {
             boolean hasNext = (includeStart && start.equals(current))
                 || (!includeStart && !Strings.isNullOrEmpty(getPropertyNext(current)));
-            
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("FullIterator::hasNext() - current name: {} - state: {}", currentName, current);
-                LOG.debug("FullIterator::hasNext() - hasNext: {}", hasNext);
-            }
-            
+                        
             return hasNext;
         }
 
@@ -666,8 +662,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     throw new NoSuchElementException();
                 }
             }
-            
-            LOG.debug("FullIterator::next() - entry: {}", entry);
             
             return entry;
         }
@@ -860,17 +854,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             do {
                 stillLaning = lane > 0;
                 nextkey = getPropertyNext(index.getChildNode(currentKey), lane);
-                LOG.debug("seek() - {}->next[{}]: {}", new Object[]{currentKey, lane, nextkey});
                 if ((Strings.isNullOrEmpty(nextkey) || !walkingPredicate.apply(nextkey)) && lane > 0) {
                     // if we're currently pointing to NIL or the next element does not fit the search
                     // but we still have lanes left, let's lower the lane;
                     lane--;
                 } else {
                     if (condition.apply(nextkey)) {
-                        LOG.debug("seek() - nextKey: {} !! condition applied !!", nextkey);
                         found = nextkey;
                     } else {
-                        LOG.debug("seek() - nextKey: {} keep searching", nextkey);
                         currentKey = nextkey;
                         if (keepWalked && !Strings.isNullOrEmpty(currentKey)) {
                             for (int l = lane; l >= 0; l--) {
@@ -965,10 +956,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 b = searchforOriginal.compareTo(name) > 0
                     || (include && searchforOriginal.equals(name));
             }
-
-            LOG.debug(
-                "PredicateLessThan::apply() - searchFor: '{}', arg0: '{}', include: {}, apply: {}",
-                new Object[] { searchforOriginal, arg0, include, b });
             
             return b;
         }
