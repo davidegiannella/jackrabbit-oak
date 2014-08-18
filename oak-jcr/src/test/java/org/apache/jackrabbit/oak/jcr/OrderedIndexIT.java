@@ -184,12 +184,6 @@ public class OrderedIndexIT {
             Calendar start = midnightFirstJan2013();
             List<String> dates = generateOrderedDates(String.class, numberOfNodes, DESC, start,
                 DAY_OF_MONTH, 1, TZS, true);
-            List<String> millis = generateOrderedDates(Long.class, numberOfNodes, DESC, start,
-                DAY_OF_MONTH, 1, TZS, false);
-
-            List<String> allTogether = newArrayList();
-            allTogether.addAll(dates);
-            allTogether.addAll(millis);
             
             List<ValuePathTuple> nodes = addNodes(dates, content, DATE, 0);
             session.save();
