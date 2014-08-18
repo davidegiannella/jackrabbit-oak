@@ -155,7 +155,7 @@ public class OrderedIndexIT {
     
     @SuppressWarnings("deprecation")
     @Test
-    public void test() throws IOException, RepositoryException, RepositoryStubException  {
+    public void oak2035() throws IOException, RepositoryException, RepositoryStubException  {
         final int numberOfNodes = 1500;
         final String statement = String.format(
             "/jcr:root/content//element(*, %s) order by @%s descending", NODE_TYPE,
