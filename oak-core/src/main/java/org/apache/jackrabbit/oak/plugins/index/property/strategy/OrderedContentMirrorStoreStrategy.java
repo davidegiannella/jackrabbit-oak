@@ -302,8 +302,12 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         
         final NodeState indexState = indexMeta.getChildNode(indexStorageNodeName);
         final NodeBuilder index = new ReadOnlyBuilder(indexState);
-
-        if (pr.first != null && !pr.first.equals(pr.last)) {
+        final String firstEncoded = (pr.first == null) ? null 
+                                                       : encode(pr.first.getValue(Type.STRING));
+        final String lastEncoded = (pr.last == null) ? null
+                                                     : encode(pr.last.getValue(Type.STRING));
+        
+        if (firstEncoded != null && !firstEncoded.equals(lastEncoded)) {
             // '>' & '>=' and between use case
             LOG.debug("'>' & '>=' and between use case");
             ChildNodeEntry firstValueableItem;
@@ -311,10 +315,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             Iterable<String> it = Collections.emptyList();
             Iterable<ChildNodeEntry> childrenIterable;
             
-            if (pr.last == null) {
+            if (lastEncoded == null) {
                 LOG.debug("> & >= case.");
                 firstValuableItemKey = seek(index,
-                    new PredicateGreaterThan(pr.first.getValue(Type.STRING), pr.firstIncluding));
+                    new PredicateGreaterThan(firstEncoded, pr.firstIncluding));
                 if (firstValuableItemKey != null) {
                     firstValueableItem = new OrderedChildNodeEntry(firstValuableItemKey,
                         indexState.getChildNode(firstValuableItemKey));
@@ -323,15 +327,15 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                         it = new QueryResultsWrapper(filter, indexName, childrenIterable);
                     } else {
                         it = new QueryResultsWrapper(filter, indexName, new BetweenIterable(
-                            indexState, firstValueableItem, pr.first.getValue(Type.STRING),
+                            indexState, firstValueableItem, firstEncoded,
                             pr.firstIncluding, direction));
                     }
                 }
             } else {
                 String first, last;
                 boolean includeFirst, includeLast;
-                first = pr.first.getValue(Type.STRING);
-                last = pr.last.getValue(Type.STRING);
+                first = firstEncoded;
+                last = lastEncoded;
                 includeFirst = pr.firstIncluding;
                 includeLast = pr.lastIncluding;
 
@@ -362,10 +366,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             }
 
             return it;
-        } else if (pr.last != null && !pr.last.equals(pr.first)) {
+        } else if (lastEncoded != null && !lastEncoded.equals(firstEncoded)) {
             // '<' & '<=' use case
             LOG.debug("'<' & '<=' use case");
-            final String searchfor = pr.last.getValue(Type.STRING);
+            final String searchfor = lastEncoded;
             final boolean include = pr.lastIncluding;
             Predicate<String> predicate = new PredicateLessThan(searchfor, include);
             
@@ -393,8 +397,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         } else {
             // property is not null. AKA "open query"
             LOG.debug("property is not null. AKA 'open query'. FullIterable");
-//            Iterable<String> values = null;
-//            return query(filter, indexName, indexMeta, values);
             return new QueryResultsWrapper(filter, indexName, new FullIterable(indexState, false));
         }
     }
@@ -909,7 +911,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * {@code searchfor}
      */
     static class PredicateGreaterThan implements Predicate<String> {
-        private String searchforEncoded;
         private String searchforDecoded;
         private boolean include;
         
@@ -918,7 +919,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
         
         public PredicateGreaterThan(@Nonnull String searchfor, boolean include) {
-            this.searchforEncoded = encode(searchfor);
             this.searchforDecoded = searchfor;
             this.include = include;
         }
@@ -928,8 +928,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             boolean b = false;
             if (!Strings.isNullOrEmpty(arg0)) {
                 String name = arg0;
-                b = searchforEncoded.compareTo(name) < 0 || (include && searchforEncoded
-                        .equals(name));
+                b = searchforDecoded.compareTo(name) < 0 || 
+                    (include && searchforDecoded.equals(name));
             }
             
             return b;
@@ -945,7 +945,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * evaluates when the current element is less than (<) and less than equal {@code searchfor}
      */
     static class PredicateLessThan implements Predicate<String> {
-        private String searchforEncoded;
         private String searchforOriginal;
         private boolean include;
 
@@ -954,8 +953,6 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
 
         public PredicateLessThan(@Nonnull String searchfor, boolean include) {
-//            this.searchforEncoded = encode(searchfor);
-            this.searchforEncoded = searchfor;
             this.searchforOriginal = searchfor;
             this.include = include;
         }
@@ -965,13 +962,13 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             boolean b = false;
             if (!Strings.isNullOrEmpty(arg0)) {
                 String name = arg0;
-                b = searchforEncoded.compareTo(name) > 0
-                    || (include && searchforEncoded.equals(name));
+                b = searchforOriginal.compareTo(name) > 0
+                    || (include && searchforOriginal.equals(name));
             }
 
             LOG.debug(
                 "PredicateLessThan::apply() - searchFor: '{}', arg0: '{}', include: {}, apply: {}",
-                new Object[] { searchforEncoded, arg0, include, b });
+                new Object[] { searchforOriginal, arg0, include, b });
             
             return b;
         }
