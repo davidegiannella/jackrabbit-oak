@@ -796,7 +796,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                                @Nullable final String[] walkedLanes) {
         boolean keepWalked = false;
         String searchfor = condition.getSearchFor();
-        LOG.debug("seek() - Searching for: {}", condition.getSearchFor());        
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("seek() - Searching for: {}", condition.getSearchFor());        
+            LOG.debug("seek() - condition: {}", condition);
+        }
         Predicate<String> walkingPredicate = direction.isAscending() 
                                                              ? new PredicateLessThan(searchfor, true)
                                                              : new PredicateGreaterThan(searchfor, true);
@@ -855,14 +858,17 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             do {
                 stillLaning = lane > 0;
                 nextkey = getPropertyNext(index.getChildNode(currentKey), lane);
+                LOG.debug("seek() - {}->next[{}]: {}", new Object[]{currentKey, lane, nextkey});
                 if ((Strings.isNullOrEmpty(nextkey) || !walkingPredicate.apply(nextkey)) && lane > 0) {
                     // if we're currently pointing to NIL or the next element does not fit the search
                     // but we still have lanes left, let's lower the lane;
                     lane--;
                 } else {
                     if (condition.apply(nextkey)) {
+                        LOG.debug("seek() - nextKey: {} !! condition applied !!", nextkey);
                         found = nextkey;
                     } else {
+                        LOG.debug("seek() - nextKey: {} keep searching", nextkey);
                         currentKey = nextkey;
                         if (keepWalked && !Strings.isNullOrEmpty(currentKey)) {
                             for (int l = lane; l >= 0; l--) {
@@ -948,7 +954,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
 
         public PredicateLessThan(@Nonnull String searchfor, boolean include) {
-            this.searchforEncoded = encode(searchfor);
+//            this.searchforEncoded = encode(searchfor);
+            this.searchforEncoded = searchfor;
             this.searchforOriginal = searchfor;
             this.include = include;
         }
@@ -962,6 +969,10 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     || (include && searchforEncoded.equals(name));
             }
 
+            LOG.debug(
+                "PredicateLessThan::apply() - searchFor: '{}', arg0: '{}', include: {}, apply: {}",
+                new Object[] { searchforEncoded, arg0, include, b });
+            
             return b;
         }
         
