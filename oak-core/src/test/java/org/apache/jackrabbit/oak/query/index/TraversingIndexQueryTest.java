@@ -259,45 +259,35 @@ public class TraversingIndexQueryTest extends AbstractQueryTest {
         root.commit();
 
         assertQuery("/jcr:root/content/nodes//*[(*/*/*/@prop >= 9)]", "xpath",
-                ImmutableList.of("/content/nodes/a", "/content/nodes/a/b",
-                        "/content/nodes/a/b/c"));
+                ImmutableList.of("/content/nodes/a"));
 
         assertQuery(
                 "/jcr:root/content/nodes//element(*, nt:unstructured)[(*/*/*/@prop >= 9)]",
-                "xpath", ImmutableList.of("/content/nodes/a",
-                        "/content/nodes/a/b", "/content/nodes/a/b/c"));
+                "xpath", ImmutableList.of("/content/nodes/a"));
 
         assertQuery("/jcr:root/content/nodes//*[(*/*/*/@prop >= 10)]", "xpath",
-                ImmutableList.of("/content/nodes/a", "/content/nodes/a/b",
-                        "/content/nodes/a/b/c"));
+                ImmutableList.of("/content/nodes/a"));
         assertQuery(
                 "/jcr:root/content/nodes//element(*, nt:unstructured)[(*/*/*/@prop >= 10)]",
-                "xpath", ImmutableList.of("/content/nodes/a",
-                        "/content/nodes/a/b", "/content/nodes/a/b/c"));
+                "xpath", ImmutableList.of("/content/nodes/a"));
 
         assertQuery("/jcr:root/content/nodes//*[(*/*/*/@prop >= 15)]", "xpath",
-                ImmutableList.of("/content/nodes/a", "/content/nodes/a/b",
-                        "/content/nodes/a/b/c"));
+                ImmutableList.of("/content/nodes/a"));
         assertQuery(
                 "/jcr:root/content/nodes//element(*, nt:unstructured)[(*/*/*/@prop >= 15)]",
-                "xpath", ImmutableList.of("/content/nodes/a",
-                        "/content/nodes/a/b", "/content/nodes/a/b/c"));
+                "xpath", ImmutableList.of("/content/nodes/a"));
 
         assertQuery("/jcr:root/content/nodes//*[(*/*/*/@prop >= 20)]", "xpath",
-                ImmutableList.of("/content/nodes/a", "/content/nodes/a/b",
-                        "/content/nodes/a/b/c"));
+                ImmutableList.of("/content/nodes/a"));
         assertQuery(
                 "/jcr:root/content/nodes//element(*, nt:unstructured)[(*/*/*/@prop >= 20)]",
-                "xpath", ImmutableList.of("/content/nodes/a",
-                        "/content/nodes/a/b", "/content/nodes/a/b/c"));
+                "xpath", ImmutableList.of("/content/nodes/a"));
 
         assertQuery("/jcr:root/content/nodes//*[(*/*/*/@prop >= 30)]", "xpath",
-                ImmutableList.of("/content/nodes/a", "/content/nodes/a/b",
-                        "/content/nodes/a/b/c"));
+                ImmutableList.of("/content/nodes/a"));
         assertQuery(
                 "/jcr:root/content/nodes//element(*, nt:unstructured)[(*/*/*/@prop >= 30)]",
-                "xpath", ImmutableList.of("/content/nodes/a",
-                        "/content/nodes/a/b", "/content/nodes/a/b/c"));
+                "xpath", ImmutableList.of("/content/nodes/a"));
     }
 
     @Test
