@@ -638,7 +638,7 @@ public class SelectorImpl extends SourceImpl {
     private void readOakProperties(ArrayList<PropertyValue> target, Tree t, String oakPropertyName, Integer propertyType) {
         boolean skipCurrentNode = false;
 
-        while (true) {
+        while (!skipCurrentNode) {
             if (t == null || !t.exists()) {
                 return;
             }
