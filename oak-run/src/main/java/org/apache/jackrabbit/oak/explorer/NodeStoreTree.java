@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import javax.jcr.PropertyType;
@@ -60,16 +61,16 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import com.google.common.collect.Lists;
 import com.google.common.escape.Escapers;
 
-class NodeStoreTree extends JPanel implements TreeSelectionListener {
+public class NodeStoreTree extends JPanel implements TreeSelectionListener {
 
     private final FileStore store;
 
-    private final DefaultTreeModel treeModel;
+    private DefaultTreeModel treeModel;
     private final JTree tree;
     private final JTextArea log;
 
-    private final Map<String, Set<UUID>> index;
-    private final Map<RecordId, Long[]> sizeCache;
+    private Map<String, Set<UUID>> index;
+    private Map<RecordIdKey, Long[]> sizeCache;
 
     public NodeStoreTree(FileStore store, JTextArea log) {
         super(new GridLayout(1, 0));
@@ -77,7 +78,7 @@ class NodeStoreTree extends JPanel implements TreeSelectionListener {
         this.log = log;
 
         index = store.getTarReaderIndex();
-        sizeCache = new HashMap<RecordId, Long[]>();
+        sizeCache = new HashMap<RecordIdKey, Long[]>();
 
         DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode(
                 new NamePathModel("/", "/", store.getHead(), sizeCache), true);
@@ -93,6 +94,15 @@ class NodeStoreTree extends JPanel implements TreeSelectionListener {
 
         JScrollPane scrollPane = new JScrollPane(tree);
         add(scrollPane);
+    }
+
+    private void refreshModel() {
+        index = store.getTarReaderIndex();
+        sizeCache = new HashMap<RecordIdKey, Long[]>();
+        DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode(
+                new NamePathModel("/", "/", store.getHead(), sizeCache), true);
+        treeModel = new DefaultTreeModel(rootNode);
+        addChildren(rootNode);
     }
 
     @Override
@@ -291,17 +301,19 @@ class NodeStoreTree extends JPanel implements TreeSelectionListener {
         log.setText(sb.toString());
     }
 
-    private static void filterNodeStates(Set<UUID> uuids, List<String> paths,
+    public static void filterNodeStates(Set<UUID> uuids, List<String> paths,
             SegmentNodeState state, String path) {
+        Set<String> localPaths = new TreeSet<String>();
         for (PropertyState ps : state.getProperties()) {
             if (ps instanceof SegmentPropertyState) {
                 SegmentPropertyState sps = (SegmentPropertyState) ps;
                 SegmentId id = sps.getRecordId().getSegmentId();
                 if (contains(id, uuids)) {
-                    paths.add(path + "@" + ps);
+                    localPaths.add(path + "@" + ps);
                 }
             }
         }
+        paths.addAll(localPaths);
         for (ChildNodeEntry ce : state.getChildNodeEntries()) {
             NodeState c = ce.getNodeState();
             if (c instanceof SegmentNodeState) {
@@ -381,10 +393,12 @@ class NodeStoreTree extends JPanel implements TreeSelectionListener {
     }
 
     public void compact() {
+        sizeCache = new HashMap<RecordIdKey, Long[]>();
+        treeModel = null;
+
         StringBuilder sb = new StringBuilder();
 
         long s = System.currentTimeMillis();
-        store.gc();
         store.compact();
         try {
             store.flush();
@@ -410,6 +424,8 @@ class NodeStoreTree extends JPanel implements TreeSelectionListener {
         }
         sb.append("----------");
         log.setText(sb.toString());
+
+        refreshModel();
     }
 
     private static class NamePathModel implements Comparable<NamePathModel> {
@@ -423,7 +439,7 @@ class NodeStoreTree extends JPanel implements TreeSelectionListener {
         private Long[] size = { -1l, -1l };
 
         public NamePathModel(String name, String path, NodeState state,
-                Map<RecordId, Long[]> sizeCache) {
+                Map<RecordIdKey, Long[]> sizeCache) {
             this.name = name;
             this.path = path;
             this.state = state;
@@ -485,9 +501,10 @@ class NodeStoreTree extends JPanel implements TreeSelectionListener {
     }
 
     private static Long[] exploreSize(SegmentNodeState ns,
-            Map<RecordId, Long[]> sizeCache) {
-        if (sizeCache.containsKey(ns.getRecordId())) {
-            return sizeCache.get(ns.getRecordId());
+            Map<RecordIdKey, Long[]> sizeCache) {
+        RecordIdKey key = new RecordIdKey(ns.getRecordId());
+        if (sizeCache.containsKey(key)) {
+            return sizeCache.get(key);
         }
         Long[] s = { 0l, 0l };
 
@@ -512,9 +529,10 @@ class NodeStoreTree extends JPanel implements TreeSelectionListener {
 
         for (String n : names) {
             SegmentNodeState k = (SegmentNodeState) ns.getChildNode(n);
-            if (sizeCache.containsKey(k.getRecordId())) {
+            RecordIdKey ckey = new RecordIdKey(k.getRecordId());
+            if (sizeCache.containsKey(ckey)) {
                 // already been here, record size under 'link'
-                Long[] ks = sizeCache.get(k.getRecordId());
+                Long[] ks = sizeCache.get(ckey);
                 s[1] = s[1] + ks[0] + ks[1];
             } else {
                 Long[] ks = exploreSize(k, sizeCache);
@@ -527,7 +545,42 @@ class NodeStoreTree extends JPanel implements TreeSelectionListener {
                 s[0] = s[0] + ps.size(j);
             }
         }
-        sizeCache.put(ns.getRecordId(), s);
+        sizeCache.put(key, s);
         return s;
     }
+
+    private static class RecordIdKey {
+
+        private final long msb;
+        private final long lsb;
+        private final int offset;
+
+        public RecordIdKey(RecordId rid) {
+            this.offset = rid.getOffset();
+            this.msb = rid.getSegmentId()
+                    .getMostSignificantBits();
+            this.lsb = rid.getSegmentId()
+                    .getLeastSignificantBits();
+        }
+
+        @Override
+        public boolean equals(Object object) {
+            if (this == object) {
+                return true;
+            } else if (object instanceof RecordIdKey) {
+                RecordIdKey that = (RecordIdKey) object;
+                return offset == that.offset && msb == that.msb
+                        && lsb == that.lsb;
+            } else {
+                return false;
+            }
+        }
+
+        @Override
+        public int hashCode() {
+            return ((int) lsb) ^ offset;
+        }
+
+    }
+
 }

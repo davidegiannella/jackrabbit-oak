@@ -90,6 +90,18 @@ repository. To start this mode, use:
 
     $ java -jar oak-run-*.jar compact /path/to/oak/repository
 
+Checkpoints
+-----------
+
+The 'checkpoints' mode can be used to list or remove repository checkpoints
+To start this mode, use:
+
+    $ java -jar oak-run-*.jar checkpoints /path/to/oak/repository [list|rm-all|rm <checkpoint>]
+
+The 'list' option (treated as a default when nothing is specified) will list all existing checkpoints.
+The 'rm-all' option will wipe clean the 'checkpoints' node.
+The 'rm <checkpoint>' option will remove a specific checkpoint from the repository.
+
 Upgrade
 -------
 
@@ -585,3 +597,8 @@ is provided. It includes some useful function to navigate the data in Mongo
     > oak.getChildStats('/')
     { "count" : 593191, "size" : 302005011, "simple" : "288.01 MB" }
     >
+    
+For reporting any issue related to Oak the script provides a function to collect important stats and 
+can be dumped to a file
+
+    $ mongo localhost/oak --eval "load('/path/to/oak-mongo.js');printjson(oak.systemStats());" --quiet > oak-stats.json

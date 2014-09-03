@@ -53,6 +53,7 @@ import org.apache.jackrabbit.oak.plugins.segment.Compactor;
 import org.apache.jackrabbit.oak.plugins.segment.RecordId;
 import org.apache.jackrabbit.oak.plugins.segment.Segment;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentId;
+import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStore;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentTracker;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeState;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentStore;
@@ -132,6 +133,11 @@ public class FileStore implements SegmentStore {
      * Flag to request revision cleanup during the next flush.
      */
     private final AtomicBoolean cleanupNeeded = new AtomicBoolean(false);
+
+    /**
+     * Flag to set the compaction on pause.
+     */
+    private volatile boolean pauseCompaction = true;
 
     /**
      * List of old tar file generations that are waiting to be removed. They can
@@ -249,7 +255,30 @@ public class FileStore implements SegmentStore {
                 new Runnable() {
                     @Override
                     public void run() {
-                        compact();
+                        log.info("TarMK compaction started");
+                        long time = System.currentTimeMillis();
+                        CompactionGainEstimate estimate = estimateCompactionGain();
+                        long gain = estimate.estimateCompactionGain();
+                        time = System.currentTimeMillis() - time;
+                        if (gain >= 10) {
+                            log.info(
+                                    "Estimated compaction in {}ms, gain is {}% ({}/{}), so running compaction",
+                                    new Object[] { time, gain,
+                                            estimate.getReachableSize(),
+                                            estimate.getTotalSize() });
+                            if (!pauseCompaction) {
+                                compact();
+                            } else {
+                                log.info("TarMK compaction paused");
+                            }
+                        } else {
+                            log.info(
+                                    "Estimated compaction in {}ms, gain is {}% ({}/{}), so skipping compaction for now",
+                                    new Object[] { time, gain,
+                                            estimate.getReachableSize(),
+                                            estimate.getTotalSize() });
+                        }
+                        cleanupNeeded.set(true);
                     }
                 });
 
@@ -334,6 +363,30 @@ public class FileStore implements SegmentStore {
             size += reader.size();
         }
         return size;
+    }
+
+    /**
+     * Returns the number of segments in this TarMK instance.
+     *
+     * @return number of segments
+     */
+    private synchronized int count() {
+        int count = writer.count();
+        for (TarReader reader : readers) {
+            count += reader.count();
+        }
+        return count;
+    }
+
+    CompactionGainEstimate estimateCompactionGain() {
+        CompactionGainEstimate estimate = new CompactionGainEstimate(getHead(),
+                count());
+        synchronized (this) {
+            for (TarReader reader : readers) {
+                reader.accept(estimate);
+            }
+        }
+        return estimate;
     }
 
     public void flush() throws IOException {
@@ -429,12 +482,20 @@ public class FileStore implements SegmentStore {
      */
     public void compact() {
         long start = System.nanoTime();
-        log.info("TarMK compaction started");
+        log.info("TarMK compaction running");
 
         SegmentWriter writer = new SegmentWriter(this, tracker);
         Compactor compactor = new Compactor(writer);
 
         SegmentNodeState before = getHead();
+        long existing = before.getChildNode(SegmentNodeStore.CHECKPOINTS)
+                .getChildNodeCount(Long.MAX_VALUE);
+        if (existing > 1) {
+            log.warn(
+                    "TarMK compaction found {} checkpoints, you might need to run checkpoint cleanup",
+                    existing);
+        }
+
         SegmentNodeState after = compactor.compact(EMPTY_NODE, before);
         writer.flush();
         while (!setHead(before, after)) {
@@ -456,7 +517,6 @@ public class FileStore implements SegmentStore {
 
         log.info("TarMK compaction completed in {}ms", MILLISECONDS
                 .convert(System.nanoTime() - start, NANOSECONDS));
-        cleanupNeeded.set(true);
     }
 
     public synchronized Iterable<SegmentId> getSegmentIds() {
@@ -658,4 +718,8 @@ public class FileStore implements SegmentStore {
         return index;
     }
 
+    public FileStore setPauseCompaction(boolean pauseCompaction) {
+        this.pauseCompaction = pauseCompaction;
+        return this;
+    }
 }

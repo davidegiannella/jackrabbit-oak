@@ -25,9 +25,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.URL;
+import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -35,6 +38,8 @@ import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,6 +49,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Queues;
 import com.google.common.io.Closer;
+import com.google.common.util.concurrent.AbstractScheduledService;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientURI;
 import com.mongodb.MongoURI;
@@ -59,6 +65,7 @@ import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.commons.json.JsopBuilder;
 import org.apache.jackrabbit.oak.console.Console;
 import org.apache.jackrabbit.oak.explorer.Explorer;
+import org.apache.jackrabbit.oak.explorer.NodeStoreTree;
 import org.apache.jackrabbit.oak.fixture.OakFixture;
 import org.apache.jackrabbit.oak.http.OakServlet;
 import org.apache.jackrabbit.oak.jcr.Jcr;
@@ -73,8 +80,11 @@ import org.apache.jackrabbit.oak.plugins.segment.Segment;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentId;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeState;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStore;
+import org.apache.jackrabbit.oak.plugins.segment.failover.client.FailoverClient;
 import org.apache.jackrabbit.oak.plugins.segment.file.FileStore;
 import org.apache.jackrabbit.oak.scalability.ScalabilityRunner;
+import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
+import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.upgrade.RepositoryUpgrade;
@@ -142,6 +152,12 @@ public class Main {
             case EXPLORE:
                 Explorer.main(args);
                 break;
+            case SYNCSLAVE:
+                syncslave(args);
+                break;
+        case CHECKPOINTS:
+            checkpoints(args);
+            break;
             case HELP:
             default:
                 System.err.print("Available run modes: ");
@@ -208,6 +224,79 @@ public class Main {
             throw closer.rethrow(e);
         } finally {
             closer.close();
+        }
+    }
+
+    //TODO react to state changes of FailoverClient (triggered via JMX), once the state model of FailoverClient is complete.
+    private static class ScheduledSyncService extends AbstractScheduledService {
+
+        private final FailoverClient failoverClient;
+        private final int interval;
+
+        public ScheduledSyncService(FailoverClient failoverClient, int interval) {
+            this.failoverClient = failoverClient;
+            this.interval = interval;
+        }
+
+        @Override
+        public void runOneIteration() throws Exception {
+            failoverClient.run();
+        }
+
+        @Override
+        protected Scheduler scheduler() {
+            return Scheduler.newFixedDelaySchedule(0, interval, TimeUnit.SECONDS);
+        }
+    }
+
+    private static void syncslave(String[] args) throws Exception {
+
+        final String defaultHost = "127.0.0.1";
+        final int defaultPort = 8023;
+
+        final OptionParser parser = new OptionParser();
+        final OptionSpec<String> host = parser.accepts("host", "master host").withRequiredArg().ofType(String.class).defaultsTo(defaultHost);
+        final OptionSpec<Integer> port = parser.accepts("port", "master port").withRequiredArg().ofType(Integer.class).defaultsTo(defaultPort);
+        final OptionSpec<Integer> interval = parser.accepts("interval", "interval between successive executions").withRequiredArg().ofType(Integer.class);
+        final OptionSpec<?> help = parser.acceptsAll(asList("h", "?", "help"), "show help").forHelp();
+        final OptionSpec<String> nonOption = parser.nonOptions(Mode.SYNCSLAVE + " <path to repository>");
+
+        final OptionSet options = parser.parse(args);
+        final List<String> nonOptions = nonOption.values(options);
+
+        if (options.has(help)) {
+            parser.printHelpOn(System.out);
+            System.exit(0);
+        }
+
+        if (nonOptions.isEmpty()) {
+            parser.printHelpOn(System.err);
+            System.exit(1);
+        }
+
+        FileStore store = null;
+        FailoverClient failoverClient = null;
+        ScheduledSyncService syncService = null;
+        try {
+            store = new FileStore(new File(nonOptions.get(0)), 256);
+            failoverClient = new FailoverClient(
+                    options.has(host)? options.valueOf(host) : defaultHost,
+                    options.has(port)? options.valueOf(port) : defaultPort,
+                    store);
+            if (!options.has(interval)) {
+                failoverClient.run();
+            } else {
+                syncService = new ScheduledSyncService(failoverClient, options.valueOf(interval));
+                syncService.startAsync();
+                syncService.awaitTerminated();
+            }
+        } finally {
+            if (store != null) {
+                store.close();
+            }
+            if (failoverClient != null) {
+                failoverClient.close();
+            }
         }
     }
 
@@ -292,6 +381,9 @@ public class Main {
         if (args.length != 1) {
             System.err.println("usage: compact <path>");
             System.exit(1);
+        } else if (!isValidFileStore(args[0])) {
+            System.err.println("Invalid FileStore directory " + args[0]);
+            System.exit(1);
         } else {
             File directory = new File(args[0]);
             System.out.println("Compacting " + directory);
@@ -317,9 +409,96 @@ public class Main {
         }
     }
 
+    private static void checkpoints(String[] args) throws IOException {
+        if (args.length == 0) {
+            System.err
+                    .println("usage: checkpoints <path> [list|rm-all|rm <checkpoint>]");
+            System.exit(1);
+        }
+        if (!isValidFileStore(args[0])) {
+            System.err.println("Invalid FileStore directory " + args[0]);
+            System.exit(1);
+        }
+
+        String path = args[0];
+        String op = "list";
+        if (args.length >= 2) {
+            op = args[1];
+            if (!"list".equals(op) && !"rm-all".equals(op) && !"rm".equals(op)) {
+                System.err.println("Unknown comand.");
+                System.exit(1);
+            }
+        }
+        System.out.println("Checkpoints " + path);
+        FileStore store = new FileStore(new File(path), 256, false);
+        try {
+            if ("list".equals(op)) {
+                NodeState ns = store.getHead().getChildNode("checkpoints");
+                for (ChildNodeEntry cne : ns.getChildNodeEntries()) {
+                    System.out.printf("- %s - %s%n", cne.getName(), new Timestamp(cne.getNodeState().getLong("timestamp")));
+                }
+                System.out.println("Found "
+                        + ns.getChildNodeCount(Integer.MAX_VALUE)
+                        + " checkpoints");
+            }
+            if ("rm-all".equals(op)) {
+                long time = System.currentTimeMillis();
+                SegmentNodeState head = store.getHead();
+                NodeBuilder builder = head.builder();
+
+                NodeBuilder cps = builder.getChildNode("checkpoints");
+                long cnt = cps.getChildNodeCount(Integer.MAX_VALUE);
+                builder.setChildNode("checkpoints");
+                boolean ok = store.setHead(head,
+                        (SegmentNodeState) builder.getNodeState());
+                time = System.currentTimeMillis() - time;
+                if (ok) {
+                    System.err.println("Removed " + cnt + " checkpoints in "
+                            + time + "ms.");
+                } else {
+                    System.err.println("Failed to remove all checkpoints.");
+                }
+            }
+            if ("rm".equals(op)) {
+                if (args.length != 3) {
+                    System.err.println("Missing checkpoint id");
+                    System.exit(1);
+                }
+                long time = System.currentTimeMillis();
+                String cp = args[2];
+                SegmentNodeState head = store.getHead();
+                NodeBuilder builder = head.builder();
+
+                NodeBuilder cpn = builder.getChildNode("checkpoints")
+                        .getChildNode(cp);
+                if (cpn.exists()) {
+                    cpn.remove();
+                    boolean ok = store.setHead(head,
+                            (SegmentNodeState) builder.getNodeState());
+                    time = System.currentTimeMillis() - time;
+                    if (ok) {
+                        System.err.println("Removed checkpoint " + cp + " in "
+                                + time + "ms.");
+                    } else {
+                        System.err.println("Failed to remove checkpoint " + cp);
+                    }
+                } else {
+                    System.err.println("Checkpoint '" + cp + "' not found.");
+                    System.exit(1);
+                }
+            }
+        } finally {
+            store.close();
+        }
+
+    }
+
     private static void debug(String[] args) throws IOException {
         if (args.length == 0) {
             System.err.println("usage: debug <path> [id...]");
+            System.exit(1);
+        } else if (!isValidFileStore(args[0])) {
+            System.err.println("Invalid FileStore directory " + args[0]);
             System.exit(1);
         } else {
             // TODO: enable debug information for other node store implementations
@@ -328,119 +507,189 @@ public class Main {
             FileStore store = new FileStore(file, 256, false);
             try {
                 if (args.length == 1) {
-                    Map<SegmentId, List<SegmentId>> idmap = Maps.newHashMap();
-
-                    int dataCount = 0;
-                    long dataSize = 0;
-                    int bulkCount = 0;
-                    long bulkSize = 0;
-                    for (SegmentId id : store.getSegmentIds()) {
-                        if (id.isDataSegmentId()) {
-                            Segment segment = id.getSegment();
-                            dataCount++;
-                            dataSize += segment.size();
-                            idmap.put(id, segment.getReferencedIds());
-                        } else if (id.isBulkSegmentId()) {
-                            bulkCount++;
-                            bulkSize += id.getSegment().size();
-                            idmap.put(id, Collections.<SegmentId>emptyList());
-                        }
-                    }
-                    System.out.println("Total size:");
-                    System.out.format(
-                            "%6dMB in %6d data segments%n",
-                            dataSize / (1024 * 1024), dataCount);
-                    System.out.format(
-                            "%6dMB in %6d bulk segments%n",
-                            bulkSize / (1024 * 1024), bulkCount);
-
-                    Set<SegmentId> garbage = newHashSet(idmap.keySet());
-                    Queue<SegmentId> queue = Queues.newArrayDeque();
-                    queue.add(store.getHead().getRecordId().getSegmentId());
-                    while (!queue.isEmpty()) {
-                        SegmentId id = queue.remove();
-                        if (garbage.remove(id)) {
-                            queue.addAll(idmap.get(id));
-                        }
-                    }
-                    dataCount = 0;
-                    dataSize = 0;
-                    bulkCount = 0;
-                    bulkSize = 0;
-                    for (SegmentId id : garbage) {
-                        if (id.isDataSegmentId()) {
-                            dataCount++;
-                            dataSize += id.getSegment().size();
-                        } else if (id.isBulkSegmentId()) {
-                            bulkCount++;
-                            bulkSize += id.getSegment().size();
-                        }
-                    }
-                    System.out.println("Available for garbage collection:");
-                    System.out.format(
-                            "%6dMB in %6d data segments%n",
-                            dataSize / (1024 * 1024), dataCount);
-                    System.out.format(
-                            "%6dMB in %6d bulk segments%n",
-                            bulkSize / (1024 * 1024), bulkCount);
+                    debugFileStore(store);
                 } else {
-                    Pattern pattern = Pattern.compile(
-                            "([0-9a-f-]+)|(([0-9a-f-]+:[0-9a-f]+)(-([0-9a-f-]+:[0-9a-f]+))?)?(/.*)?");
-                    for (int i = 1; i < args.length; i++) {
-                        Matcher matcher = pattern.matcher(args[i]);
-                        if (!matcher.matches()) {
-                            System.err.println("Unknown argument: " + args[i]);
-                        } else if (matcher.group(1) != null) {
-                            UUID uuid = UUID.fromString(matcher.group(1));
-                            SegmentId id = store.getTracker().getSegmentId(
-                                    uuid.getMostSignificantBits(),
-                                    uuid.getLeastSignificantBits());
-                            System.out.println(id.getSegment());
-                        } else {
-                            RecordId id1 = store.getHead().getRecordId();
-                            RecordId id2 = null;
-                            if (matcher.group(2) != null) {
-                                id1 = RecordId.fromString(
-                                        store.getTracker(), matcher.group(3));
-                                if (matcher.group(4) != null) {
-                                    id2 = RecordId.fromString(
-                                            store.getTracker(), matcher.group(5));
-                                }
-                            }
-                            String path = "/";
-                            if (matcher.group(6) != null) {
-                                path = matcher.group(6);
-                            }
-
-                            if (id2 == null) {
-                                NodeState node = new SegmentNodeState(id1);
-                                System.out.println("/ (" + id1 + ") -> " + node);
-                                for (String name : PathUtils.elements(path)) {
-                                    node = node.getChildNode(name);
-                                    RecordId nid = null;
-                                    if (node instanceof SegmentNodeState) {
-                                        nid = ((SegmentNodeState) node).getRecordId();
-                                    }
-                                    System.out.println(
-                                            "  " + name  + " (" + nid + ") -> " + node);
-                                }
-                            } else {
-                                NodeState node1 = new SegmentNodeState(id1);
-                                NodeState node2 = new SegmentNodeState(id2);
-                                for (String name : PathUtils.elements(path)) {
-                                    node1 = node1.getChildNode(name);
-                                    node2 = node2.getChildNode(name);
-                                }
-                                System.out.println(JsopBuilder.prettyPrint(
-                                        JsopDiff.diffToJsop(node1, node2)));
-                            }
-                        }
+                    if (args[1].endsWith(".tar")) {
+                        debugTarFile(store, args);
+                    } else {
+                        debugSegment(store, args);
                     }
                 }
             } finally {
                 store.close();
             }
         }
+    }
+
+    private static void debugTarFile(FileStore store, String[] args) {
+        File root = new File(args[0]);
+        for (int i = 1; i < args.length; i++) {
+            String f = args[i];
+            if (!f.endsWith(".tar")) {
+                System.out.println("skipping " + f);
+                continue;
+            }
+            File tar = new File(root, f);
+            if (!tar.exists()) {
+                System.out.println("file doesn't exist, skipping " + f);
+                continue;
+            }
+            System.out.println("Debug file " + tar + "(" + tar.length() + ")");
+            Set<UUID> uuids = new HashSet<UUID>();
+            boolean hasrefs = false;
+            for (Entry<String, Set<UUID>> e : store.getTarReaderIndex()
+                    .entrySet()) {
+                if (e.getKey().endsWith(f)) {
+                    hasrefs = true;
+                    uuids = e.getValue();
+                }
+            }
+            if (hasrefs) {
+                System.out.println("SegmentNodeState references to " + f);
+                List<String> paths = new ArrayList<String>();
+                NodeStoreTree.filterNodeStates(uuids, paths, store.getHead(),
+                        "/");
+                for (String p : paths) {
+                    System.out.println("  " + p);
+                }
+            } else {
+                System.out.println("No references to " + f);
+            }
+        }
+    }
+
+    private static void debugSegment(FileStore store, String[] args) {
+        Pattern pattern = Pattern
+                .compile("([0-9a-f-]+)|(([0-9a-f-]+:[0-9a-f]+)(-([0-9a-f-]+:[0-9a-f]+))?)?(/.*)?");
+        for (int i = 1; i < args.length; i++) {
+            Matcher matcher = pattern.matcher(args[i]);
+            if (!matcher.matches()) {
+                System.err.println("Unknown argument: " + args[i]);
+            } else if (matcher.group(1) != null) {
+                UUID uuid = UUID.fromString(matcher.group(1));
+                SegmentId id = store.getTracker().getSegmentId(
+                        uuid.getMostSignificantBits(),
+                        uuid.getLeastSignificantBits());
+                System.out.println(id.getSegment());
+            } else {
+                RecordId id1 = store.getHead().getRecordId();
+                RecordId id2 = null;
+                if (matcher.group(2) != null) {
+                    id1 = RecordId.fromString(store.getTracker(),
+                            matcher.group(3));
+                    if (matcher.group(4) != null) {
+                        id2 = RecordId.fromString(store.getTracker(),
+                                matcher.group(5));
+                    }
+                }
+                String path = "/";
+                if (matcher.group(6) != null) {
+                    path = matcher.group(6);
+                }
+
+                if (id2 == null) {
+                    NodeState node = new SegmentNodeState(id1);
+                    System.out.println("/ (" + id1 + ") -> " + node);
+                    for (String name : PathUtils.elements(path)) {
+                        node = node.getChildNode(name);
+                        RecordId nid = null;
+                        if (node instanceof SegmentNodeState) {
+                            nid = ((SegmentNodeState) node).getRecordId();
+                        }
+                        System.out.println("  " + name + " (" + nid + ") -> "
+                                + node);
+                    }
+                } else {
+                    NodeState node1 = new SegmentNodeState(id1);
+                    NodeState node2 = new SegmentNodeState(id2);
+                    for (String name : PathUtils.elements(path)) {
+                        node1 = node1.getChildNode(name);
+                        node2 = node2.getChildNode(name);
+                    }
+                    System.out.println(JsopBuilder.prettyPrint(JsopDiff
+                            .diffToJsop(node1, node2)));
+                }
+            }
+        }
+    }
+
+    private static void debugFileStore(FileStore store){
+
+        Map<SegmentId, List<SegmentId>> idmap = Maps.newHashMap();
+
+        int dataCount = 0;
+        long dataSize = 0;
+        int bulkCount = 0;
+        long bulkSize = 0;
+        for (SegmentId id : store.getSegmentIds()) {
+            if (id.isDataSegmentId()) {
+                Segment segment = id.getSegment();
+                dataCount++;
+                dataSize += segment.size();
+                idmap.put(id, segment.getReferencedIds());
+            } else if (id.isBulkSegmentId()) {
+                bulkCount++;
+                bulkSize += id.getSegment().size();
+                idmap.put(id, Collections.<SegmentId>emptyList());
+            }
+        }
+        System.out.println("Total size:");
+        System.out.format(
+                "%6dMB in %6d data segments%n",
+                dataSize / (1024 * 1024), dataCount);
+        System.out.format(
+                "%6dMB in %6d bulk segments%n",
+                bulkSize / (1024 * 1024), bulkCount);
+
+        Set<SegmentId> garbage = newHashSet(idmap.keySet());
+        Queue<SegmentId> queue = Queues.newArrayDeque();
+        queue.add(store.getHead().getRecordId().getSegmentId());
+        while (!queue.isEmpty()) {
+            SegmentId id = queue.remove();
+            if (garbage.remove(id)) {
+                queue.addAll(idmap.get(id));
+            }
+        }
+        dataCount = 0;
+        dataSize = 0;
+        bulkCount = 0;
+        bulkSize = 0;
+        for (SegmentId id : garbage) {
+            if (id.isDataSegmentId()) {
+                dataCount++;
+                dataSize += id.getSegment().size();
+            } else if (id.isBulkSegmentId()) {
+                bulkCount++;
+                bulkSize += id.getSegment().size();
+            }
+        }
+        System.out.println("Available for garbage collection:");
+        System.out.format(
+                "%6dMB in %6d data segments%n",
+                dataSize / (1024 * 1024), dataCount);
+        System.out.format(
+                "%6dMB in %6d bulk segments%n",
+                bulkSize / (1024 * 1024), bulkCount);
+    
+    }
+
+    /**
+     * Checks if the provided directory is a valid FileStore
+     * 
+     * @return true if the provided directory is a valid FileStore
+     */
+    private static boolean isValidFileStore(String path) {
+        File store = new File(path);
+        if (store == null || !store.isDirectory()) {
+            return false;
+        }
+        // for now the only check is the existence of the journal file
+        for (String f : store.list()) {
+            if ("journal.log".equals(f)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void upgrade(String[] args) throws Exception {
@@ -519,7 +768,7 @@ public class Main {
         OptionSpec<String> dbName = parser.accepts("db", "MongoDB database").withRequiredArg();
         OptionSpec<Integer> clusterIds = parser.accepts("clusterIds", "Cluster Ids").withOptionalArg().ofType(Integer.class).withValuesSeparatedBy(',');
         OptionSpec<String> nonOption = parser.nonOptions();
-        OptionSpec help = parser.acceptsAll(asList("h", "?", "help"), "show help").forHelp();
+        OptionSpec<?> help = parser.acceptsAll(asList("h", "?", "help"), "show help").forHelp();
         OptionSet options = parser.parse(args);
 
         if (options.has(help)) {
@@ -659,6 +908,7 @@ public class Main {
 
             // 2 - Webdav Server on JCR repository
             final Repository jcrRepository = jcr.createRepository();
+            @SuppressWarnings("serial")
             ServletHolder webdav = new ServletHolder(new SimpleWebdavServlet() {
                 @Override
                 public Repository getRepository() {
@@ -670,6 +920,7 @@ public class Main {
             context.addServlet(webdav, path + "/webdav/*");
 
             // 3 - JCR Remoting Server
+            @SuppressWarnings("serial")
             ServletHolder jcrremote = new ServletHolder(new JcrRemotingServlet() {
                 @Override
                 protected Repository getRepository() {
@@ -695,7 +946,9 @@ public class Main {
         UPGRADE("upgrade"),
         SCALABILITY("scalability"),
         EXPLORE("explore"),
-        HELP("help");
+        SYNCSLAVE("syncslave"),
+        HELP("help"),
+        CHECKPOINTS("checkpoints");
 
         private final String name;
 

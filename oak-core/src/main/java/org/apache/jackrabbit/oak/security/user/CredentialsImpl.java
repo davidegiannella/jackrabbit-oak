@@ -16,6 +16,9 @@
  */
 package org.apache.jackrabbit.oak.security.user;
 
+import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.jcr.Credentials;
 
 /**
@@ -27,15 +30,17 @@ public class CredentialsImpl implements Credentials {
     private final String userId;
     private final String pwHash;
 
-    CredentialsImpl(String userId, String pwHash) {
+    CredentialsImpl(@Nonnull String userId, @Nullable String pwHash) {
         this.userId = userId;
         this.pwHash = pwHash;
     }
 
+    @Nonnull
     public String getUserId() {
         return userId;
     }
 
+    @CheckForNull
     public String getPasswordHash() {
         return pwHash;
     }
