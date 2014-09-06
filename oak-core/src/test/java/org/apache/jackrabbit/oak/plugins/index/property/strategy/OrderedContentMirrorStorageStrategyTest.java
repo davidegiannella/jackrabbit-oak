@@ -3686,59 +3686,62 @@ public class OrderedContentMirrorStorageStrategyTest {
     @Test
     public void oak2077() {
         NodeBuilder index;
-        NodeState indexState;
         MockOrderedContentMirrorStoreStrategy ascending = new MockOrderedContentMirrorStoreStrategy();
         MockOrderedContentMirrorStoreStrategy descending = new MockOrderedContentMirrorStoreStrategy(DESC);
         MockOrderedContentMirrorStoreStrategy strategy;
         OrderedIndex.Predicate<String> condition;
-        String[] wl;
-        String entry, missingEntry, node;
-                
-        // creating a dangling link on each lane one at time
+        String missingEntry, node;
+        
+        
+        // creating a dangling link on each lane one at time. 
         for (int lane = 0; lane < LANES; lane++) {
+            
+            // ---------------------------------------------------< ascending, plain/inserts case >
             missingEntry = KEYS[5];
             strategy = ascending;
-            index = EMPTY_NODE.builder();
             condition = new PredicateGreaterThan(missingEntry, true);
+            index = EMPTY_NODE.builder();
             node = oak2077CreateStructure(index, lane, strategy, missingEntry);
-            indexState = index.getNodeState();
 
-            wl = new String[LANES];
-            entry = strategy.seek(index, condition, wl, 0);
-            assertNull("the seeked node does not exist and should have been null. lane: " + lane,
-                entry);
-            assertEquals("As the index is a NodeBuilder we expect the entry to be fixed. lane: "
-                         + lane, "", getPropertyNext(index.getChildNode(node), lane));
-            
-            index = new ReadOnlyBuilder(indexState);
-            entry = strategy.seek(index, condition);
-            assertNull("the seeked node does not exist and should have been null. lane: " + lane,
-                entry);
-            assertEquals(
-                "As the index is in ReadOnly we expect the entry not to be touched. lane: " + lane,
-                missingEntry, getPropertyNext(index.getChildNode(node), lane));
+            assertOak2077(condition, strategy, index, lane, node);
 
+            // ------------------------------------------------- < descending, plain/inserts case >
             missingEntry = KEYS[0];
             strategy = descending;
             index = EMPTY_NODE.builder();
             condition = new PredicateLessThan(missingEntry, true);
             node = oak2077CreateStructure(index, lane, strategy, missingEntry);
-            indexState = index.getNodeState();
 
-            wl = new String[LANES];
-            entry = strategy.seek(index, condition, wl, 0);
-            assertNull("the seeked node does not exist and should have been null. lane: " + lane,
-                entry);
-            assertEquals("As the index is a NodeBuilder we expect the entry to be fixed. lane: "
-                         + lane, "", getPropertyNext(index.getChildNode(node), lane));
-            index = new ReadOnlyBuilder(indexState);
-            entry = strategy.seek(index, condition);
-            assertNull("the seeked node does not exist and should have been null. lane: " + lane,
-                entry);
-            assertEquals(
-                "As the index is in ReadOnly we expect the entry not to be touched. lane: " + lane,
-                missingEntry, getPropertyNext(index.getChildNode(node), lane));
+            assertOak2077(condition, strategy, index, lane, node);
         }
+    }
+
+    private static void assertOak2077(@Nonnull final OrderedIndex.Predicate<String> condition, 
+                                      @Nonnull final OrderedContentMirrorStoreStrategy strategy, 
+                                      @Nonnull NodeBuilder index, 
+                                      final int lane, 
+                                      @Nonnull final String node) {
+        
+        checkNotNull(condition);
+        checkNotNull(strategy);
+        checkNotNull(index);
+        checkArgument(lane >= 0 && lane < LANES);
+        checkNotNull(node);
+        
+        NodeState indexState = index.getNodeState();
+        String[] wl = new String[LANES];
+        String entry;
+        
+        entry = strategy.seek(index, condition, wl, 0);
+        assertNull("the seeked node does not exist and should have been null. lane: " + lane, entry);
+        assertEquals(
+            "As the index is a NodeBuilder we expect the entry to be fixed. lane: " + lane, "",
+            getPropertyNext(index.getChildNode(node), lane));
+
+          index = new ReadOnlyBuilder(indexState);
+          entry = strategy.seek(index, condition);
+          assertNull("the seeked node does not exist and should have been null. lane: " + lane,
+              entry);
     }
     
     /**
