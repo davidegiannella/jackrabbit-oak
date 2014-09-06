@@ -17,8 +17,11 @@
 
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Sets.newHashSet;
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.LANES;
+import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection.DESC;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.NEXT;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.START;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.setPropertyNext;
@@ -3684,34 +3687,51 @@ public class OrderedContentMirrorStorageStrategyTest {
         NodeBuilder index;
         NodeState indexState;
         MockOrderedContentMirrorStoreStrategy ascending = new MockOrderedContentMirrorStoreStrategy();
+        MockOrderedContentMirrorStoreStrategy descending = new MockOrderedContentMirrorStoreStrategy(DESC);
+        MockOrderedContentMirrorStoreStrategy strategy;
         String[] wl;
-        String entry;
+        String entry, missingEntry;
         
-        // creating a dangling link on the 4th lane
-        index = EMPTY_NODE.builder();
-        ascending.setLane(0);
-        ascending.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[0]));
-        ascending.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[1]));
-        ascending.setLane(3);
-        ascending.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[2]));
-        ascending.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[3]));
-        setPropertyNext(index.getChildNode(KEYS[2]), "foobar", 3); 
+        missingEntry = "foobar";
         
-        // keeping a state for later test
+        // ------------------------------------------- < creating a dangling link on the 4th lane >
+        strategy = ascending;
+        index = oak2077CreateStructure(3, strategy, missingEntry);
         indexState = index.getNodeState();
-        
-        LOG.debug(index.getChildNode(START).getProperty(NEXT).toString());
-        LOG.debug(index.getChildNode(KEYS[2]).getProperty(NEXT).toString());
-        
+
         wl = new String[LANES];
-        entry = ascending.seek(index, new PredicateGreaterThan("foobar", true), wl, 0);
-        
-        LOG.debug("entry: {} - wl: {}", entry, wl);
-        
+        entry = strategy.seek(index, new PredicateGreaterThan(missingEntry, true), wl, 0);
         assertNull("the seeked node does not exist and should have been null", entry);
         
-        entry = ascending.seek(new ReadOnlyBuilder(indexState), new PredicateGreaterThan("foobar",
-            true));
-        assertNull(entry);
+        entry = strategy.seek(new ReadOnlyBuilder(indexState), 
+            new PredicateGreaterThan(missingEntry, true));
+        assertNull("the seeked node does not exist and should have been null", entry);
+    }
+    
+    /**
+     * utility method to create the structure for the {@link #oak2077()} test.
+     * 
+     * @param lane
+     * @param strategy
+     * @param missingEntry
+     * @return
+     */
+    private static NodeBuilder oak2077CreateStructure(final int lane, 
+                                                      @Nonnull final MockOrderedContentMirrorStoreStrategy strategy,
+                                                      @Nonnull final String missingEntry) {
+        checkNotNull(strategy);
+        checkArgument(lane >= 0 && lane < LANES);
+        checkNotNull(missingEntry);
+        
+        NodeBuilder index = EMPTY_NODE.builder();
+        strategy.setLane(0);
+        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[0]));
+        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[1]));
+        strategy.setLane(lane);
+        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[2]));
+        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[3]));
+        setPropertyNext(index.getChildNode(KEYS[2]), missingEntry, lane); 
+        
+        return index;
     }
 }
