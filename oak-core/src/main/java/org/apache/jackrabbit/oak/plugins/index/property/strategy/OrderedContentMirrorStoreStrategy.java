@@ -17,9 +17,11 @@
 
 package org.apache.jackrabbit.oak.plugins.index.property.strategy;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.LANES;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -101,6 +103,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     private static final Random RND = new Random(System.currentTimeMillis());
     
     /**
+     * maximum number of attempt for potential recursive processes like seek() 
+     */
+    private static final int MAX_RETRIES = 5;
+    
+    /**
      * the direction of the index.
      */
     private OrderDirection direction = OrderedIndex.DEFAULT_DIRECTION;
@@ -143,7 +150,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         
         // we use the seek for seeking the right spot. The walkedLanes will have all our
         // predecessors
-        String entry = seek(index, condition, walked);
+        String entry = seek(index, condition, walked, 0);
         if (LOG.isDebugEnabled()) {
             LOG.debug("fetchKeyNode() - entry: {} ", entry);
             printWalkedLanes("fetchKeyNode() - ", walked);
@@ -196,7 +203,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     do {
                         entry = seek(index,
                             new PredicateEquals(key),
-                            walkedLanes
+                            walkedLanes,
+                            0
                             );
                         lane0Next = getPropertyNext(index.getChildNode(walkedLanes[0]));
                         if (LOG.isDebugEnabled()) {
@@ -771,7 +779,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * last argument
      */
     String seek(@Nonnull NodeBuilder index, @Nonnull Predicate<String> condition) {
-        return seek(index, condition, null);
+        return seek(index, condition, null, 0);
     }
     
     /**
@@ -785,11 +793,12 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      *            lane represented by the corresponding position in the array. <b>You have</b> to
      *            pass in an array already sized as {@link OrderedIndex#LANES} or an
      *            {@link IllegalArgumentException} will be raised
+     * @param retries the number of retries
      * @return the entry or null if not found
      */
     String seek(@Nonnull final NodeBuilder index,
                                @Nonnull final Predicate<String> condition,
-                               @Nullable final String[] walkedLanes) {
+                               @Nullable final String[] walkedLanes, int retries) {
         boolean keepWalked = false;
         String searchfor = condition.getSearchFor();
         if (LOG.isDebugEnabled()) {
@@ -837,6 +846,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     lane++;
                 } else {
                     if (condition.apply(nextkey)) {
+                        // this branch is used so far only for range queries.
+                        // while figuring out how to correctly reproduce the issue is less risky
+                        // to leave this untouched.
                         found = nextkey;
                     } else {
                         currentKey = nextkey;
@@ -860,7 +872,18 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     lane--;
                 } else {
                     if (condition.apply(nextkey)) {
-                        found = nextkey;
+                        if (ensureAndCleanNode(index, nextkey, currentKey, lane)) {
+                            found = nextkey;
+                        } else {
+                            if (retries < MAX_RETRIES) {
+                                return seek(index, condition, walkedLanes, ++retries);
+                            } else {
+                                LOG.debug(
+                                    "Attempted a lookup and fix for {} times. Leaving it be and returning null",
+                                    retries);
+                                return null;
+                            }
+                        }
                     } else {
                         currentKey = nextkey;
                         if (keepWalked && !Strings.isNullOrEmpty(currentKey)) {
@@ -874,6 +897,42 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
         
         return found;
+    }
+    
+    /**
+     * ensure that the provided {@code next} actually exists as node. Attempt to clean it up
+     * otherwise.
+     * 
+     * @param index the {@code :index} node
+     * @param next the {@code :next} retrieved for the provided lane
+     * @param current the current node from which {@code :next} has been retrieved
+     * @param lane the lane on which we're looking into
+     * @return true if the node exists, false otherwise
+     */
+    private static boolean ensureAndCleanNode(@Nonnull final NodeBuilder index, 
+                                              @Nonnull final String next,
+                                              @Nonnull final String current,
+                                              final int lane) {
+        checkNotNull(index);
+        checkNotNull(next);
+        checkNotNull(current);
+        checkArgument(lane < LANES && lane >= 0, "The lane must be between 0 and LANES");
+        
+        if (index.getChildNode(next).exists()) {
+            return true;
+        } else {
+            LOG.warn(
+                "Dangling link to '{}' found on lane '{}' for key '{}'. Trying to clean it up. You may consider a reindex",
+                new Object[] { next, lane, current });
+            if (index instanceof ReadOnlyBuilder) {
+                LOG.debug("Index is read-only. Can't update. Skipping");
+            } else {
+                // as we're already pointing to nowhere it's safe to truncate here and avoid
+                // future errors
+                setPropertyNext(index.getChildNode(current), "", lane);
+            }
+            return false;
+        }
     }
     
     /**
