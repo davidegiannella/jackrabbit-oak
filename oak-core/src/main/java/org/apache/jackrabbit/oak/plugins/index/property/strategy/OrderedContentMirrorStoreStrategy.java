@@ -846,6 +846,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     lane++;
                 } else {
                     if (condition.apply(nextkey)) {
+                        // this branch is used so far only for range queries.
+                        // while figuring out how to correctly reproduce the issue is less risky
+                        // to leave this untouched.
                         found = nextkey;
                     } else {
                         currentKey = nextkey;
