@@ -3731,17 +3731,16 @@ public class OrderedContentMirrorStorageStrategyTest {
         NodeState indexState = index.getNodeState();
         String[] wl = new String[LANES];
         String entry;
-        
+
         entry = strategy.seek(index, condition, wl, 0);
         assertNull("the seeked node does not exist and should have been null. lane: " + lane, entry);
         assertEquals(
             "As the index is a NodeBuilder we expect the entry to be fixed. lane: " + lane, "",
             getPropertyNext(index.getChildNode(node), lane));
 
-          index = new ReadOnlyBuilder(indexState);
-          entry = strategy.seek(index, condition);
-          assertNull("the seeked node does not exist and should have been null. lane: " + lane,
-              entry);
+        index = new ReadOnlyBuilder(indexState);
+        entry = strategy.seek(index, condition);
+        assertNull("the seeked node does not exist and should have been null. lane: " + lane, entry);
     }
     
     /**
