@@ -24,6 +24,7 @@ import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.LANE
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection.DESC;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.NEXT;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.START;
+import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.getPropertyNext;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.setPropertyNext;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
 import static org.easymock.EasyMock.createNiceMock;
@@ -3689,49 +3690,90 @@ public class OrderedContentMirrorStorageStrategyTest {
         MockOrderedContentMirrorStoreStrategy ascending = new MockOrderedContentMirrorStoreStrategy();
         MockOrderedContentMirrorStoreStrategy descending = new MockOrderedContentMirrorStoreStrategy(DESC);
         MockOrderedContentMirrorStoreStrategy strategy;
+        OrderedIndex.Predicate<String> condition;
         String[] wl;
-        String entry, missingEntry;
-        
-        missingEntry = "foobar";
-        
-        // ------------------------------------------- < creating a dangling link on the 4th lane >
-        strategy = ascending;
-        index = oak2077CreateStructure(3, strategy, missingEntry);
-        indexState = index.getNodeState();
+        String entry, missingEntry, node;
+                
+        // creating a dangling link on each lane one at time
+        for (int lane = 0; lane < LANES; lane++) {
+            missingEntry = KEYS[5];
+            strategy = ascending;
+            index = EMPTY_NODE.builder();
+            condition = new PredicateGreaterThan(missingEntry, true);
+            node = oak2077CreateStructure(index, lane, strategy, missingEntry);
+            indexState = index.getNodeState();
 
-        wl = new String[LANES];
-        entry = strategy.seek(index, new PredicateGreaterThan(missingEntry, true), wl, 0);
-        assertNull("the seeked node does not exist and should have been null", entry);
-        
-        entry = strategy.seek(new ReadOnlyBuilder(indexState), 
-            new PredicateGreaterThan(missingEntry, true));
-        assertNull("the seeked node does not exist and should have been null", entry);
+            wl = new String[LANES];
+            entry = strategy.seek(index, condition, wl, 0);
+            assertNull("the seeked node does not exist and should have been null. lane: " + lane,
+                entry);
+            assertEquals("As the index is a NodeBuilder we expect the entry to be fixed. lane: "
+                         + lane, "", getPropertyNext(index.getChildNode(node), lane));
+            
+            index = new ReadOnlyBuilder(indexState);
+            entry = strategy.seek(index, condition);
+            assertNull("the seeked node does not exist and should have been null. lane: " + lane,
+                entry);
+            assertEquals(
+                "As the index is in ReadOnly we expect the entry not to be touched. lane: " + lane,
+                missingEntry, getPropertyNext(index.getChildNode(node), lane));
+
+            missingEntry = KEYS[0];
+            strategy = descending;
+            index = EMPTY_NODE.builder();
+            condition = new PredicateLessThan(missingEntry, true);
+            node = oak2077CreateStructure(index, lane, strategy, missingEntry);
+            indexState = index.getNodeState();
+
+            wl = new String[LANES];
+            entry = strategy.seek(index, condition, wl, 0);
+            assertNull("the seeked node does not exist and should have been null. lane: " + lane,
+                entry);
+            assertEquals("As the index is a NodeBuilder we expect the entry to be fixed. lane: "
+                         + lane, "", getPropertyNext(index.getChildNode(node), lane));
+            index = new ReadOnlyBuilder(indexState);
+            entry = strategy.seek(index, condition);
+            assertNull("the seeked node does not exist and should have been null. lane: " + lane,
+                entry);
+            assertEquals(
+                "As the index is in ReadOnly we expect the entry not to be touched. lane: " + lane,
+                missingEntry, getPropertyNext(index.getChildNode(node), lane));
+        }
     }
     
     /**
+     * <p>
      * utility method to create the structure for the {@link #oak2077()} test.
+     * </p>
+     * <p>
+     * Create an index according to strategy with nodes from {@code 001} to {@code 004}.
+     * </p>
      * 
      * @param lane
      * @param strategy
      * @param missingEntry
-     * @return
+     * @return the node name with the wrong lane for testing on it later on.
      */
-    private static NodeBuilder oak2077CreateStructure(final int lane, 
+    private static String oak2077CreateStructure(@Nonnull final NodeBuilder index,
+                                                      final int lane, 
                                                       @Nonnull final MockOrderedContentMirrorStoreStrategy strategy,
                                                       @Nonnull final String missingEntry) {
+        checkNotNull(index);
         checkNotNull(strategy);
         checkArgument(lane >= 0 && lane < LANES);
         checkNotNull(missingEntry);
         
-        NodeBuilder index = EMPTY_NODE.builder();
-        strategy.setLane(0);
-        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[0]));
-        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[1]));
-        strategy.setLane(lane);
-        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[2]));
-        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[3]));
-        setPropertyNext(index.getChildNode(KEYS[2]), missingEntry, lane); 
+        String node;
         
-        return index;
+        strategy.setLane(0);
+        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[1]));
+        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[2]));
+        strategy.setLane(lane);
+        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[3]));
+        strategy.update(index, "/we/dont/care", EMPTY_KEY_SET, newHashSet(KEYS[4]));
+        node = KEYS[3];
+        setPropertyNext(index.getChildNode(node), missingEntry, lane); 
+        
+        return node;
     }
 }

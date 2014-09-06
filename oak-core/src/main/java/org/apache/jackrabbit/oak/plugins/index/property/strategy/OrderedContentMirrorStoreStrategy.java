@@ -919,7 +919,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             return true;
         } else {
             LOG.warn(
-                "Dangling link to '{}' found on lane '{}' and key '{}'. Trying to clean it up. You may consider a reindex",
+                "Dangling link to '{}' found on lane '{}' for key '{}'. Trying to clean it up. You may consider a reindex",
                 new Object[] { next, lane, current });
             if (index instanceof ReadOnlyBuilder) {
                 LOG.debug("Index is read-only. Can't update. Skipping");
