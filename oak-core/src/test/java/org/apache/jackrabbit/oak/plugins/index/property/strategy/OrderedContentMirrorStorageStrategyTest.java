@@ -26,6 +26,7 @@ import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedC
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.START;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.getPropertyNext;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.setPropertyNext;
+import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.FixingDanglingLinkCallback;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
 import static org.easymock.EasyMock.createNiceMock;
 import static org.easymock.EasyMock.expect;
@@ -3146,7 +3147,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         
         try {
             item = store.seek(builder,
-                new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0);
+                new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0, null);
             fail("With a wrong size for the lane it should have raised an exception");
         } catch (IllegalArgumentException e) {
             // so far so good. It was expected
@@ -3161,7 +3162,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         entry = searchFor;
         wl = new String[OrderedIndex.LANES];
         item = store.seek(builder,
-            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0);
+            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0, null);
         assertNotNull(wl);
         assertEquals(OrderedIndex.LANES, wl.length);
         assertEquals("Wrong lane", lane0, wl[0]);
@@ -3178,7 +3179,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         entry = searchFor;
         wl = new String[OrderedIndex.LANES];
         item = store.seek(builder,
-            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0);
+            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0, null);
         assertNotNull(wl);
         assertEquals(OrderedIndex.LANES, wl.length);
         assertEquals("Wrong lane", lane0, wl[0]);
@@ -3195,7 +3196,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         entry = searchFor;
         wl = new String[OrderedIndex.LANES];
         item = store.seek(builder,
-            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0);
+            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0, null);
         assertNotNull(wl);
         assertEquals(OrderedIndex.LANES, wl.length);
         assertEquals("Wrong lane", lane0, wl[0]);
@@ -3268,7 +3269,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         
         try {
             item = store.seek(builder,
-                new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0);
+                new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0, null);
             fail("With a wrong size for the lane it should have raised an exception");
         } catch (IllegalArgumentException e) {
             // so far so good. It was expected
@@ -3283,7 +3284,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         entry = searchFor;
         wl = new String[OrderedIndex.LANES];
         item = store.seek(builder,
-            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0);
+            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0, null);
         assertNotNull(wl);
         assertEquals(OrderedIndex.LANES, wl.length);
         assertEquals("Wrong lane", lane0, wl[0]);
@@ -3300,7 +3301,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         entry = searchFor;
         wl = new String[OrderedIndex.LANES];
         item = store.seek(builder,
-            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0);
+            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0, null);
         assertNotNull(wl);
         assertEquals(OrderedIndex.LANES, wl.length);
         assertEquals("Wrong lane", lane0, wl[0]);
@@ -3317,7 +3318,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         entry = searchFor;
         wl = new String[OrderedIndex.LANES];
         item = store.seek(builder,
-            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0);
+            new OrderedContentMirrorStoreStrategy.PredicateEquals(searchFor), wl, 0, null);
         assertNotNull(wl);
         assertEquals(OrderedIndex.LANES, wl.length);
         assertEquals("Wrong lane", lane0, wl[0]);
@@ -3732,7 +3733,7 @@ public class OrderedContentMirrorStorageStrategyTest {
         String[] wl = new String[LANES];
         String entry;
 
-        entry = strategy.seek(index, condition, wl, 0);
+        entry = strategy.seek(index, condition, wl, 0, new FixingDanglingLinkCallback(index));
         assertNull("the seeked node does not exist and should have been null. lane: " + lane, entry);
         assertEquals(
             "As the index is a NodeBuilder we expect the entry to be fixed. lane: " + lane, "",

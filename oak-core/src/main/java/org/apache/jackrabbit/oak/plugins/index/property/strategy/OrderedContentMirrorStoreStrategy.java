@@ -150,7 +150,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         
         // we use the seek for seeking the right spot. The walkedLanes will have all our
         // predecessors
-        String entry = seek(index, condition, walked, 0);
+        String entry = seek(index, condition, walked, 0, new FixingDanglingLinkCallback(index));
         if (LOG.isDebugEnabled()) {
             LOG.debug("fetchKeyNode() - entry: {} ", entry);
             printWalkedLanes("fetchKeyNode() - ", walked);
@@ -204,7 +204,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                         entry = seek(index,
                             new PredicateEquals(key),
                             walkedLanes,
-                            0
+                            0,
+                            new ReadOnlyDanglinLinkCallback()
                             );
                         lane0Next = getPropertyNext(index.getChildNode(walkedLanes[0]));
                         if (LOG.isDebugEnabled()) {
@@ -779,7 +780,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * last argument
      */
     String seek(@Nonnull NodeBuilder index, @Nonnull Predicate<String> condition) {
-        return seek(index, condition, null, 0);
+        return seek(index, condition, null, 0, new ReadOnlyDanglinLinkCallback());
     }
     
     /**
@@ -798,7 +799,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      */
     String seek(@Nonnull final NodeBuilder index,
                                @Nonnull final Predicate<String> condition,
-                               @Nullable final String[] walkedLanes, int retries) {
+                               @Nullable final String[] walkedLanes, 
+                               int retries,
+                               @Nullable DanglingLinkCallback callback) {
         boolean keepWalked = false;
         String searchfor = condition.getSearchFor();
         if (LOG.isDebugEnabled()) {
@@ -872,11 +875,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     lane--;
                 } else {
                     if (condition.apply(nextkey)) {
-                        if (ensureAndCleanNode(index, nextkey, currentKey, lane)) {
+                        if (ensureAndCleanNode(index, nextkey, currentKey, lane, callback)) {
                             found = nextkey;
                         } else {
                             if (retries < MAX_RETRIES) {
-                                return seek(index, condition, walkedLanes, ++retries);
+                                return seek(index, condition, walkedLanes, ++retries, callback);
                             } else {
                                 LOG.debug(
                                     "Attempted a lookup and fix for {} times. Leaving it be and returning null",
@@ -912,7 +915,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     private static boolean ensureAndCleanNode(@Nonnull final NodeBuilder index, 
                                               @Nonnull final String next,
                                               @Nonnull final String current,
-                                              final int lane) {
+                                              final int lane,
+                                              @Nullable DanglingLinkCallback callback) {
         checkNotNull(index);
         checkNotNull(next);
         checkNotNull(current);
@@ -921,15 +925,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         if (index.getChildNode(next).exists()) {
             return true;
         } else {
-            LOG.warn(
-                "Dangling link to '{}' found on lane '{}' for key '{}'. Trying to clean it up. You may consider a reindex",
-                new Object[] { next, lane, current });
-            if (index instanceof ReadOnlyBuilder) {
-                LOG.debug("Index is read-only. Can't update. Skipping");
-            } else {
-                // as we're already pointing to nowhere it's safe to truncate here and avoid
-                // future errors
-                setPropertyNext(index.getChildNode(current), "", lane);
+            if (callback != null) {
+                callback.perform(current, next, lane);
             }
             return false;
         }
@@ -1234,5 +1231,57 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
         
         return lane;
+    }
+    
+    /**
+     * implementors of this interface will deal with the dangling link cases along the list
+     * (OAK-2077)
+     */
+    private interface DanglingLinkCallback {
+        /**
+         * perform the required operation on the provided {@code current} node for the {@code next}
+         * value on {@code lane}
+         * 
+         * @param current the current node with the dangling link
+         * @param next the value pointing to the missing node
+         * @param lane the lane on which the link is on
+         */
+        void perform(String current, String next, int lane);
+    }
+    
+    /**
+     * implements a "Read-only" version for managing the dangling links which will simply track down
+     * in logs the presence of it
+     */
+    static class ReadOnlyDanglinLinkCallback implements DanglingLinkCallback {
+        
+        @Override
+        public void perform(@Nonnull final String current, 
+                            @Nonnull final String next, 
+                            int lane) {
+            checkNotNull(next);
+            checkNotNull(current);
+            checkArgument(lane < LANES && lane >= 0, "The lane must be between 0 and LANES");
+
+            LOG.warn(
+                "Dangling link to '{}' found on lane '{}' for key '{}'. Trying to clean it up. You may consider a reindex",
+                new Object[] { next, lane, current });            
+        }
+    }
+    
+    static class FixingDanglingLinkCallback extends ReadOnlyDanglinLinkCallback {
+        private final NodeBuilder indexContent;
+        
+        public FixingDanglingLinkCallback(@Nonnull final NodeBuilder indexContent) {
+            this.indexContent = checkNotNull(indexContent);
+        }
+
+        @Override
+        public void perform(String current, String next, int lane) {
+            super.perform(current, next, lane);
+            // as we're already pointing to nowhere it's safe to truncate here and avoid
+            // future errors
+            setPropertyNext(indexContent.getChildNode(current), "", lane);
+        }
     }
 }
