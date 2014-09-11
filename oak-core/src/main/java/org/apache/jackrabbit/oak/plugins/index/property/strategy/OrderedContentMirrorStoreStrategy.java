@@ -273,6 +273,11 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         }
         return cne;
     }
+    
+    public Iterable<String> query(final Filter filter, final String indexName,
+            final NodeState indexMeta, final PropertyRestriction pr) {
+        return query(filter, indexName, indexMeta, pr, "");
+    }
 
     /**
      * search the index for the provided PropertyRestriction
@@ -284,8 +289,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @return the iterable
      */
     public Iterable<String> query(final Filter filter, final String indexName,
-                                  final NodeState indexMeta, final PropertyRestriction pr) {
-        return query(filter, indexName, indexMeta, INDEX_CONTENT_NODE_NAME, pr);
+                                  final NodeState indexMeta, final PropertyRestriction pr,
+                                  String pathPrefix) {
+        return query(filter, indexName, indexMeta, INDEX_CONTENT_NODE_NAME, pr, pathPrefix);
     }
 
     /**
@@ -301,7 +307,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      */
     public Iterable<String> query(final Filter filter, final String indexName,
                                   final NodeState indexMeta, final String indexStorageNodeName,
-                                  final PropertyRestriction pr) {
+                                  final PropertyRestriction pr, String pathPrefix) {
         if (LOG.isDebugEnabled()) {
             LOG.debug("query() - filter: {}", filter);            
             LOG.debug("query() - indexName: {}", indexName);            
@@ -334,11 +340,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                         indexState.getChildNode(firstValuableItemKey));
                     if (direction.isAscending()) {
                         childrenIterable = new SeekedIterable(indexState, firstValueableItem);
-                        it = new QueryResultsWrapper(filter, indexName, childrenIterable);
+                        it = new QueryResultsWrapper(filter, indexName, 
+                                childrenIterable, pathPrefix);
                     } else {
-                        it = new QueryResultsWrapper(filter, indexName, new BetweenIterable(
-                            indexState, firstValueableItem, firstEncoded,
-                            pr.firstIncluding, direction));
+                        it = new QueryResultsWrapper(filter, indexName, 
+                                new BetweenIterable(
+                                        indexState, firstValueableItem, firstEncoded,
+                                        pr.firstIncluding, direction),
+                                pathPrefix);
                     }
                 }
             } else {
@@ -371,7 +380,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                         indexState.getChildNode(firstValuableItemKey));
                     childrenIterable = new BetweenIterable(indexState, firstValueableItem, last,
                         includeLast, direction);
-                    it = new QueryResultsWrapper(filter, indexName, childrenIterable);
+                    it = new QueryResultsWrapper(filter, indexName, 
+                            childrenIterable, pathPrefix);
                 }
             }
 
@@ -396,18 +406,21 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                 firstValueableItem = new OrderedChildNodeEntry(firstValueableItemKey,
                     indexState.getChildNode(firstValueableItemKey));
                 if (direction.isAscending()) {
-                    it = new QueryResultsWrapper(filter, indexName, new BetweenIterable(indexState,
-                        firstValueableItem, searchfor, include, direction));
+                    it = new QueryResultsWrapper(filter, indexName, 
+                            new BetweenIterable(indexState, firstValueableItem, searchfor, include, direction),
+                            pathPrefix);
                 } else {
-                    it = new QueryResultsWrapper(filter, indexName, new SeekedIterable(indexState,
-                        firstValueableItem));
+                    it = new QueryResultsWrapper(filter, indexName, 
+                            new SeekedIterable(indexState, firstValueableItem),
+                            pathPrefix);
                 }
             }
             return it;
         } else {
             // property is not null. AKA "open query"
             LOG.debug("property is not null. AKA 'open query'. FullIterable");
-            return new QueryResultsWrapper(filter, indexName, new FullIterable(indexState, false));
+            return new QueryResultsWrapper(filter, indexName, 
+                    new FullIterable(indexState, false), pathPrefix);
         }
     }
     
@@ -611,17 +624,20 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         private Iterable<ChildNodeEntry> children;
         private String indexName;
         private Filter filter;
+        private String pathPrefix;
 
         public QueryResultsWrapper(Filter filter, String indexName,
-                                   Iterable<ChildNodeEntry> children) {
+                                   Iterable<ChildNodeEntry> children,
+                                   String pathPrefix) {
             this.children = children;
             this.indexName = indexName;
             this.filter = filter;
+            this.pathPrefix = pathPrefix;
         }
 
         @Override
         public Iterator<String> iterator() {
-            PathIterator pi = new PathIterator(filter, indexName);
+            PathIterator pi = new PathIterator(filter, indexName, pathPrefix);
             pi.setPathContainsValue(true);
             pi.enqueue(children.iterator());
             return pi;

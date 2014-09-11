@@ -18,22 +18,14 @@ package org.apache.jackrabbit.oak.fixture;
 
 import java.io.File;
 import java.net.UnknownHostException;
-import java.util.Map;
 
 import javax.sql.DataSource;
 
-import com.google.common.collect.Maps;
 import org.apache.commons.io.FileUtils;
-import org.apache.jackrabbit.core.data.DataStore;
-import org.apache.jackrabbit.core.data.DataStoreException;
-import org.apache.jackrabbit.core.data.FileDataStore;
 import org.apache.jackrabbit.mk.api.MicroKernel;
 import org.apache.jackrabbit.oak.Oak;
-import org.apache.jackrabbit.oak.commons.PropertiesUtil;
 import org.apache.jackrabbit.oak.kernel.KernelNodeStore;
 import org.apache.jackrabbit.oak.kernel.NodeStoreKernel;
-import org.apache.jackrabbit.oak.plugins.blob.cloud.CloudBlobStore;
-import org.apache.jackrabbit.oak.plugins.blob.datastore.DataStoreBlobStore;
 import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
 import org.apache.jackrabbit.oak.plugins.document.rdb.RDBBlobStore;
 import org.apache.jackrabbit.oak.plugins.document.rdb.RDBDataSourceFactory;
@@ -164,73 +156,35 @@ public abstract class OakFixture {
                                       final File base, final int fdsCacheInMB) {
         return new OakFixture(name) {
             private DocumentMK[] kernels;
-            private BlobStore blobStore;
-            private File blobStoreDir;
+            private BlobStoreFixture blobStoreFixture;
 
-            private BlobStore getBlobStore() {
+            {
                 if (useFileDataStore) {
-                    FileDataStore fds = new FileDataStore();
-                    fds.setMinRecordLength(4092);
-                    blobStoreDir = new File(base, "datastore" + unique);
-                    fds.init(blobStoreDir.getAbsolutePath());
-                    return new DataStoreBlobStore(fds, true, fdsCacheInMB);
+                    blobStoreFixture = BlobStoreFixture.getFileDataStore(base, fdsCacheInMB);
+                } else {
+                    blobStoreFixture = BlobStoreFixture.create(base, false);
                 }
-
-                try {
-                    String className = System.getProperty("dataStore");
-                    if (className != null) {
-                        DataStore ds = Class.forName(className).asSubclass(DataStore.class).newInstance();
-                        PropertiesUtil.populate(ds, getConfig(), false);
-                        ds.init(null);
-                        blobStore = new DataStoreBlobStore(ds);
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-
-                return blobStore;
-            }
-
-            /**
-             * Taken from org.apache.jackrabbit.oak.plugins.document.blob.ds.DataStoreUtils
-             */
-            private Map<String, ?> getConfig() {
-                Map<String, Object> result = Maps.newHashMap();
-                for (Map.Entry<String, ?> e : Maps.fromProperties(System.getProperties()).entrySet()) {
-                    String key = e.getKey();
-                    if (key.startsWith("ds.") || key.startsWith("bs.")) {
-                        key = key.substring(3); //length of bs.
-                        result.put(key, e.getValue());
-                    }
-                }
-                return result;
             }
 
             @Override
             public MicroKernel getMicroKernel() throws UnknownHostException {
                 MongoConnection mongo = new MongoConnection(uri);
-                BlobStore blobStore = getBlobStore();
                 DocumentMK.Builder mkBuilder = new DocumentMK.Builder().
                         setMongoDB(mongo.getDB()).
                         memoryCacheSize(cacheSize).
                         setLogging(false);
-                if (blobStore != null) {
-                    mkBuilder.setBlobStore(blobStore);
-                }
+                setupBlobStore(mkBuilder);
                 return mkBuilder.open();
             }
 
             @Override
             public Oak getOak(int clusterId) throws Exception {
                 MongoConnection mongo = new MongoConnection(uri);
-                BlobStore blobStore = getBlobStore();
                 DocumentMK.Builder mkBuilder = new DocumentMK.Builder().
                         setMongoDB(mongo.getDB()).
                         memoryCacheSize(cacheSize).
                         setClusterId(clusterId).setLogging(false);
-                if (blobStore != null) {
-                    mkBuilder.setBlobStore(blobStore);
-                }
+                setupBlobStore(mkBuilder);
                 DocumentMK dmk = mkBuilder.open();
                 Oak oak;
                 if (useMk) {
@@ -247,14 +201,11 @@ public abstract class OakFixture {
                 kernels = new DocumentMK[cluster.length];
                 for (int i = 0; i < cluster.length; i++) {
                     MongoConnection mongo = new MongoConnection(uri);
-                    BlobStore blobStore = getBlobStore();
                     DocumentMK.Builder mkBuilder = new DocumentMK.Builder().
                             setMongoDB(mongo.getDB()).
                             memoryCacheSize(cacheSize).
                             setClusterId(i).setLogging(false);
-                    if (blobStore != null) {
-                        mkBuilder.setBlobStore(blobStore);
-                    }
+                    setupBlobStore(mkBuilder);
                     kernels[i] = mkBuilder.open();
                     Oak oak;
                     if (useMk) {
@@ -278,17 +229,18 @@ public abstract class OakFixture {
                                 new MongoConnection(uri);
                         mongo.getDB().dropDatabase();
                         mongo.close();
-                        if (blobStore instanceof CloudBlobStore) {
-                            ((CloudBlobStore) blobStore).deleteBucket();
-                        } else if (blobStore instanceof DataStoreBlobStore) {
-                            ((DataStoreBlobStore) blobStore).clearInUse();
-                            ((DataStoreBlobStore) blobStore).deleteAllOlderThan(
-                                    System.currentTimeMillis() + 10000000);
+                        if(blobStoreFixture != null){
+                            blobStoreFixture.tearDown();
                         }
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
-                    FileUtils.deleteQuietly(blobStoreDir);
+                }
+            }
+
+            private void setupBlobStore(DocumentMK.Builder mkBuilder) {
+                if (blobStoreFixture != null) {
+                    mkBuilder.setBlobStore(blobStoreFixture.setUp());
                 }
             }
         };
@@ -381,72 +333,82 @@ public abstract class OakFixture {
     public static OakFixture getTar(
             final String name, final File base, final int maxFileSizeMB, final int cacheSizeMB,
             final boolean memoryMapping, final boolean useBlobStore) {
-        return new OakFixture(name) {
-            private SegmentStore[] stores;
-            private BlobStore[] blobStores = new BlobStore[0];
-            private String blobStoreDir = "datastore" + unique;
+        return new SegmentFixture(name, base, maxFileSizeMB, cacheSizeMB, memoryMapping, useBlobStore);
+    }
 
-            @Override
-            public MicroKernel getMicroKernel() throws Exception {
-                FileStore fs = new FileStore(base, maxFileSizeMB, cacheSizeMB, memoryMapping);
-                return new NodeStoreKernel(new SegmentNodeStore(fs));
+    public static class SegmentFixture extends OakFixture {
+        private FileStore[] stores;
+        private BlobStoreFixture[] blobStoreFixtures = new BlobStoreFixture[0];
+        private final File base;
+        private final int maxFileSizeMB;
+        private final int cacheSizeMB;
+        private final boolean memoryMapping;
+        private final boolean useBlobStore;
+
+        public SegmentFixture(String name, File base, int maxFileSizeMB, int cacheSizeMB,
+                              boolean memoryMapping, boolean useBlobStore) {
+            super(name);
+            this.base = base;
+            this.maxFileSizeMB = maxFileSizeMB;
+            this.cacheSizeMB = cacheSizeMB;
+            this.memoryMapping = memoryMapping;
+            this.useBlobStore = useBlobStore;
+        }
+
+        @Override
+        public MicroKernel getMicroKernel() throws Exception {
+            FileStore fs = new FileStore(base, maxFileSizeMB, cacheSizeMB, memoryMapping);
+            return new NodeStoreKernel(new SegmentNodeStore(fs));
+        }
+
+        @Override
+        public Oak getOak(int clusterId) throws Exception {
+            FileStore fs = new FileStore(base, maxFileSizeMB, cacheSizeMB, memoryMapping);
+            return new Oak(new SegmentNodeStore(fs));
+        }
+
+        @Override
+        public Oak[] setUpCluster(int n) throws Exception {
+            Oak[] cluster = new Oak[n];
+            stores = new FileStore[cluster.length];
+            if (useBlobStore) {
+                blobStoreFixtures = new BlobStoreFixture[cluster.length];
             }
 
-            @Override
-            public Oak getOak(int clusterId) throws Exception {
-                FileStore fs = new FileStore(base, maxFileSizeMB, cacheSizeMB, memoryMapping);
-                return new Oak(new SegmentNodeStore(fs));
-            }
-
-            @Override
-            public Oak[] setUpCluster(int n) throws Exception {
-                Oak[] cluster = new Oak[n];
-                stores = new FileStore[cluster.length];
+            for (int i = 0; i < cluster.length; i++) {
+                BlobStore blobStore = null;
                 if (useBlobStore) {
-                    blobStores = new BlobStore[cluster.length];
+                    blobStoreFixtures[i] = BlobStoreFixture.create(base, true);
+                    blobStore = blobStoreFixtures[i].setUp();
                 }
 
-                for (int i = 0; i < cluster.length; i++) {
-                    BlobStore blobStore = null;
-                    if (useBlobStore) {
-                        blobStore = createBlobStore();
-                        blobStores[i] = blobStore;
-                    }
-
-                    stores[i] = new FileStore(blobStore,
-                            new File(base, unique),
-                            EmptyNodeState.EMPTY_NODE,
-                            maxFileSizeMB, cacheSizeMB, memoryMapping);
-                    cluster[i] = new Oak(new SegmentNodeStore(stores[i]));
-                }
-                return cluster;
+                stores[i] = new FileStore(blobStore,
+                        new File(base, unique),
+                        EmptyNodeState.EMPTY_NODE,
+                        maxFileSizeMB, cacheSizeMB, memoryMapping);
+                cluster[i] = new Oak(new SegmentNodeStore(stores[i]));
             }
+            return cluster;
+        }
 
-            @Override
-            public void tearDownCluster() {
-                for (SegmentStore store : stores) {
-                    store.close();
-                }
-                for (BlobStore blobStore : blobStores) {
-                    if (blobStore instanceof DataStore) {
-                        try {
-                            ((DataStore) blobStore).close();
-                        } catch (DataStoreException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-                FileUtils.deleteQuietly(new File(base, unique));
-                FileUtils.deleteQuietly(new File(base, blobStoreDir));
+        @Override
+        public void tearDownCluster() {
+            for (SegmentStore store : stores) {
+                store.close();
             }
+            for (BlobStoreFixture blobStore : blobStoreFixtures) {
+                blobStore.tearDown();
+            }
+            FileUtils.deleteQuietly(new File(base, unique));
+        }
 
-            private BlobStore createBlobStore() {
-                FileDataStore fds = new FileDataStore();
-                fds.setMinRecordLength(4092);
-                fds.init(new File(base, blobStoreDir).getAbsolutePath());
-                return new DataStoreBlobStore(fds);
-            }
-        };
+        public BlobStoreFixture[] getBlobStoreFixtures() {
+            return blobStoreFixtures;
+        }
+
+        public FileStore[] getStores() {
+            return stores;
+        }
     }
 
 }
