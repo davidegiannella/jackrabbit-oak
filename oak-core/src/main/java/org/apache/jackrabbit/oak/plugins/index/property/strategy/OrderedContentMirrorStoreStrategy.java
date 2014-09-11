@@ -105,7 +105,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     /**
      * maximum number of attempt for potential recursive processes like seek() 
      */
-    private static final int MAX_RETRIES = 5;
+    private static final int MAX_RETRIES = LANES+1;
     
     /**
      * the direction of the index.
@@ -205,7 +205,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                             new PredicateEquals(key),
                             walkedLanes,
                             0,
-                            new ReadOnlyDanglinLinkCallback()
+                            new LoggingDanglinLinkCallback()
                             );
                         lane0Next = getPropertyNext(index.getChildNode(walkedLanes[0]));
                         if (LOG.isDebugEnabled()) {
@@ -796,7 +796,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * last argument
      */
     String seek(@Nonnull NodeBuilder index, @Nonnull Predicate<String> condition) {
-        return seek(index, condition, null, 0, new ReadOnlyDanglinLinkCallback());
+        return seek(index, condition, null, 0, new LoggingDanglinLinkCallback());
     }
     
     /**
@@ -1269,7 +1269,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * implements a "Read-only" version for managing the dangling links which will simply track down
      * in logs the presence of it
      */
-    static class ReadOnlyDanglinLinkCallback implements DanglingLinkCallback {
+    static class LoggingDanglinLinkCallback implements DanglingLinkCallback {
+        private boolean alreadyLogged;
         
         @Override
         public void perform(@Nonnull final String current, 
@@ -1279,13 +1280,16 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             checkNotNull(current);
             checkArgument(lane < LANES && lane >= 0, "The lane must be between 0 and LANES");
 
-            LOG.warn(
-                "Dangling link to '{}' found on lane '{}' for key '{}'. Trying to clean it up. You may consider a reindex",
-                new Object[] { next, lane, current });            
+            if (!alreadyLogged) {
+                LOG.warn(
+                    "Dangling link to '{}' found on lane '{}' for key '{}'. Trying to clean it up. You may consider a reindex",
+                    new Object[] { next, lane, current });
+                alreadyLogged = true;
+            }
         }
     }
     
-    static class FixingDanglingLinkCallback extends ReadOnlyDanglinLinkCallback {
+    static class FixingDanglingLinkCallback extends LoggingDanglinLinkCallback {
         private final NodeBuilder indexContent;
         
         public FixingDanglingLinkCallback(@Nonnull final NodeBuilder indexContent) {
