@@ -1300,8 +1300,12 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         public void perform(String current, String next, int lane) {
             super.perform(current, next, lane);
             // as we're already pointing to nowhere it's safe to truncate here and avoid
-            // future errors
-            setPropertyNext(indexContent.getChildNode(current), "", lane);
+            // future errors. We'll fix all the lanes from slowest to fastest starting from the lane
+            // with the error. This should keep the list a bit more consistent with what is
+            // expected.
+            for (int l = lane; l < LANES; l++) {
+                setPropertyNext(indexContent.getChildNode(current), "", lane);                
+            }
         }
     }
 }
