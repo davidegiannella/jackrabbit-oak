@@ -1144,7 +1144,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @param value
      * @param lane
      */
-    static void setPropertyNext(@Nonnull final NodeBuilder node, 
+    public static void setPropertyNext(@Nonnull final NodeBuilder node, 
                                 final String value, final int lane) {
         if (node != null && value != null && lane >= 0 && lane < OrderedIndex.LANES) {
             PropertyState next = node.getProperty(NEXT);
@@ -1192,7 +1192,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     /**
      * short-cut for using NodeBuilder. See {@code getNext(NodeState)}
      */
-    static String getPropertyNext(@Nonnull final NodeBuilder node) {
+    public static String getPropertyNext(@Nonnull final NodeBuilder node) {
         return getPropertyNext(node, 0);
     }
 

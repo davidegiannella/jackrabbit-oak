@@ -79,18 +79,30 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
             throw new RuntimeException("amount cannot be greater than 1000");
         }
         List<String> values = new ArrayList<String>(amount);
-        NumberFormat nf = new DecimalFormat("000");
+        
 
         if (OrderDirection.DESC.equals(direction)) {
             for (int i = amount; i > 0; i--) {
-                values.add(String.format("value%s", String.valueOf(nf.format(i))));
+                values.add(formatNumber(i));
             }
         } else {
             for (int i = 0; i < amount; i++) {
-                values.add(String.format("value%s", String.valueOf(nf.format(i))));
+                values.add(formatNumber(i));
             }
         }
         return values;
+    }
+    
+    /**
+     * formats the provided number for being used by the
+     * {@link #generateOrderedValues(int, OrderDirection)}
+     * 
+     * @param number
+     * @return something in the format {@code value000}
+     */
+    public static String formatNumber(int number) {
+        NumberFormat nf = new DecimalFormat("000");
+        return String.format("value%s", String.valueOf(nf.format(number)));
     }
 
     /**

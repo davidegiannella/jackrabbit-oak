@@ -18,11 +18,16 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.api.Type.STRING;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection.ASC;
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection.DESC;
+import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.START;
+import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.getPropertyNext;
+import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.setPropertyNext;
 import static org.junit.Assert.fail;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Random;
 
@@ -43,7 +48,9 @@ import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrat
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
+import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -52,12 +59,17 @@ import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.util.NodeUtil;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableMap;
 
 public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
+    private static final Logger LOG = LoggerFactory.getLogger(Oak2077QueriesTest.class);
     private NodeStore nodestore;
+    private ContentRepository repository;
     
+    // ------------------------------------------------------------------------ < utility classes >
     /**
      * used to return an instance of IndexEditor with a defined Random for a better reproducible
      * unit testing
@@ -105,8 +117,6 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         PropertyIndexEditor getChildIndexEditor(PropertyIndexEditor parent, String name) {
             return new SeededPropertyIndexEditor(this, name);
         }
-        
-        
     }
     
     /**
@@ -132,14 +142,16 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             this.rnd = rnd;
         }
     }
-    
+
+    // ---------------------------------------------------------------------------------- < tests >
     @Override
     protected ContentRepository createRepository() {
         nodestore = new MemoryNodeStore();
-        return new Oak(nodestore).with(new InitialContent())
+        repository = new Oak(nodestore).with(new InitialContent())
             .with(new OpenSecurityProvider())
             .with(new SeededOrderedPropertyIndexEditorProvider())
-            .createContentRepository();
+            .createContentRepository(); 
+        return repository;
     }
 
     @Override
@@ -167,9 +179,11 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
     }
     
     @Test
-    public void queryNotNullAscending() throws IllegalArgumentException, RepositoryException, CommitFailedException {
+    public void queryNotNullAscending() throws Exception {
         final OrderDirection direction = ASC;
-        final int numberOfNodes = 10;
+        // with 1k nodes we're sure to have all the 4 lanes due to probability
+        final int numberOfNodes = 999;
+        final String unexistent  = formatNumber(numberOfNodes + 1);
         
         defineIndex(direction);
         
@@ -178,17 +192,38 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
         root.commit();
         
-        NodeState state = nodestore.getRoot();
-        NodeState node = state.getChildNode(INDEX_DEFINITIONS_NAME);
+        // truncating the list on lane 0
+        NodeBuilder rootBuilder = nodestore.getRoot().builder();
+        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
+        builder = builder.getChildNode(TEST_INDEX_NAME);
+        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
         
-        node = node.getChildNode(TEST_INDEX_NAME);
-        node = node.getChildNode(IndexConstants.INDEX_CONTENT_NODE_NAME);
+        NodeBuilder truncated = builder.getChildNode(START);
+        String truncatedName;
         
-        for (ChildNodeEntry n : node.getChildNodeEntries()) {
-            for (PropertyState p : n.getNodeState().getProperties()) {
-                System.out.println(n.getName() + ": " + p);
-            }
+        for (int i = 0; i < 4; i++) {
+            // changing the 4th element. No particular reasons on why the 4th.
+            truncatedName = getPropertyNext(truncated);
+            truncated = builder.getChildNode(truncatedName);
         }
+        
+        setPropertyNext(truncated, unexistent, 0);
+        
+        // re-basing should be fine as we're the only one changing the data
+        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        
+        // re-setting the env-variables
+        session.close();
+        session = repository.login(null, null);
+        root = session.getLatestRoot();
+        qe = root.getQueryEngine();
+        
+        // pointing to a non-existent node in lane 0 we expect the result to be truncated
+        // TODO change the format of the "value999" adding one more digit
+        // TODO check that the above doesn't break any previos tests.
+        // TODO perform a query
+        // TODO ensure result ends at the right point
+        fail("complete the test");
     }
     
     @Test @Ignore
