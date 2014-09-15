@@ -1238,7 +1238,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * @param rnd the Random generator to be used for probability
      * @return the lane to be updated. 
      */
-    int getLane(@Nonnull final Random rnd) {
+    protected int getLane(@Nonnull final Random rnd) {
         final int maxLanes = OrderedIndex.LANES - 1;
         int lane = 0;
         

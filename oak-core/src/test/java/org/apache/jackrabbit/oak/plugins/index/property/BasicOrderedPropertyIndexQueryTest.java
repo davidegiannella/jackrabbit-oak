@@ -94,7 +94,7 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
     }
 
     /**
-     * as {@code generateOrderedValues(int, OrderDirection)} by forcing OrderDirection.ASC
+     * as {@link #generateOrderedValues(int, OrderDirection)} by forcing {@link OrderDirection.ASC}
      *
      * @param amount
      * @return
