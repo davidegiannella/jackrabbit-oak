@@ -16,12 +16,16 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import static org.junit.Assert.fail;
+
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.junit.Ignore;
+import org.junit.Test;
 
 public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
     private NodeStore nodestore;
@@ -29,11 +33,94 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
     @Override
     protected ContentRepository createRepository() {
         nodestore = new MemoryNodeStore();
-        return new Oak().with(new InitialContent())
+        return new Oak(nodestore).with(new InitialContent())
             .with(new OpenSecurityProvider())
-            .with(new LowCostOrderedPropertyIndexProvider())
             .with(new OrderedPropertyIndexEditorProvider())
             .createContentRepository();
     }
 
+    @Override
+    protected void createTestIndexNode() throws Exception {
+        // leaving it empty. Prefer to create the index definition in each method
+    }
+    
+    @Test @Ignore
+    public void queryNotNullAscending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryNotNullDescending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryEqualsAscending() {
+        fail();
+    }
+
+    @Test @Ignore
+    public void queryEqualsDescending() {
+        fail();
+    }
+
+    @Test @Ignore
+    public void queryGreaterThanAscending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryGreaterThenDescending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryGreaterThanEqualAscending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryGreaterThanEqualDescending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryLessThanAscending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryLessThanDescending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryLessThanEqualAscending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryLessThanEqualDescending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryBetweenAscending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryBetweenDescending() {
+        fail();
+    }
+    
+    @Test @Ignore
+    public void queryBetweenWithBoundariesAscending() {
+        fail();
+    }
+
+    @Test @Ignore
+    public void queryBetweenWithBoundariesDescending() {
+        fail();
+    }
 }
