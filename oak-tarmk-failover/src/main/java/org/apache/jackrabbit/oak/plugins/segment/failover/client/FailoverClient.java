@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.jackrabbit.oak.plugins.segment.SegmentStore;
 import org.apache.jackrabbit.oak.plugins.segment.failover.CommunicationObserver;
+import org.apache.jackrabbit.oak.plugins.segment.failover.jmx.ClientFailoverStatusMBean;
 import org.apache.jackrabbit.oak.plugins.segment.failover.jmx.FailoverStatusMBean;
 import org.apache.jackrabbit.oak.plugins.segment.failover.codec.RecordIdDecoder;
 import org.apache.jackrabbit.oak.plugins.segment.failover.store.FailoverStore;
@@ -54,7 +55,7 @@ import javax.management.ObjectName;
 import javax.management.StandardMBean;
 import javax.net.ssl.SSLException;
 
-public final class FailoverClient implements FailoverStatusMBean, Runnable, Closeable {
+public final class FailoverClient implements ClientFailoverStatusMBean, Runnable, Closeable {
     public static final String CLIENT_ID_PROPERTY_NAME = "failOverID";
 
     private static final Logger log = LoggerFactory
@@ -62,7 +63,6 @@ public final class FailoverClient implements FailoverStatusMBean, Runnable, Clos
 
     private final String host;
     private final int port;
-    private final boolean checkChecksums;
     private int readTimeoutMs = 10000;
 
     private final FailoverStore store;
@@ -71,22 +71,23 @@ public final class FailoverClient implements FailoverStatusMBean, Runnable, Clos
     private EventLoopGroup group;
     private EventExecutorGroup executor;
     private SslContext sslContext;
+    private boolean active = false;
     private boolean running;
-    private String state;
+    private int failedRequests;
+    private long lastSuccessfulRequest;
+    private volatile String state;
+    private final Object sync = new Object();
 
     public FailoverClient(String host, int port, SegmentStore store) throws SSLException {
-        this(host, port, store, false, true);
+        this(host, port, store, false);
     }
 
     public FailoverClient(String host, int port, SegmentStore store, boolean secure) throws SSLException {
-        this(host, port, store, secure, true);
-    }
-
-    public FailoverClient(String host, int port, SegmentStore store, boolean secure, boolean checksums) throws SSLException {
         this.state = STATUS_INITIALIZING;
+        this.lastSuccessfulRequest = -1;
+        this.failedRequests = 0;
         this.host = host;
         this.port = port;
-        this.checkChecksums = checksums;
         if (secure) {
             this.sslContext = SslContext.newClientContext(InsecureTrustManagerFactory.INSTANCE);
         }
@@ -96,7 +97,7 @@ public final class FailoverClient implements FailoverStatusMBean, Runnable, Clos
 
         final MBeanServer jmxServer = ManagementFactory.getPlatformMBeanServer();
         try {
-            jmxServer.registerMBean(new StandardMBean(this, FailoverStatusMBean.class), new ObjectName(this.getMBeanName()));
+            jmxServer.registerMBean(new StandardMBean(this, ClientFailoverStatusMBean.class), new ObjectName(this.getMBeanName()));
         }
         catch (Exception e) {
             log.error("can register failover status mbean", e);
@@ -130,47 +131,61 @@ public final class FailoverClient implements FailoverStatusMBean, Runnable, Clos
     }
 
     public void run() {
-        state = STATUS_STARTING;
-        this.executor = new DefaultEventExecutorGroup(4);
-        this.handler = new FailoverClientHandler(this.store, executor, this.observer);
 
-        group = new NioEventLoopGroup();
-        Bootstrap b = new Bootstrap();
-        b.group(group);
-        b.channel(NioSocketChannel.class);
-        b.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, readTimeoutMs);
-        b.option(ChannelOption.TCP_NODELAY, true);
-        b.option(ChannelOption.SO_REUSEADDR, true);
-        b.option(ChannelOption.SO_KEEPALIVE, true);
-
-        b.handler(new ChannelInitializer<SocketChannel>() {
-            @Override
-            public void initChannel(SocketChannel ch) throws Exception {
-                ChannelPipeline p = ch.pipeline();
-                if (sslContext != null) {
-                    p.addLast(sslContext.newHandler(ch.alloc()));
-                }
-                // WriteTimeoutHandler & ReadTimeoutHandler
-                p.addLast("readTimeoutHandler", new ReadTimeoutHandler(
-                        readTimeoutMs, TimeUnit.MILLISECONDS));
-                p.addLast(new StringEncoder(CharsetUtil.UTF_8));
-                if (FailoverClient.this.checkChecksums) {
-                    p.addLast(new SnappyFramedDecoder(true));
-                }
-                p.addLast(new RecordIdDecoder(store));
-                p.addLast(executor, handler);
+        Bootstrap b;
+        synchronized (this.sync) {
+            if (this.active) {
+                return;
             }
-        });
+            state = STATUS_STARTING;
+            executor = new DefaultEventExecutorGroup(4);
+            handler = new FailoverClientHandler(this.store, executor, this.observer);
+            group = new NioEventLoopGroup();
+
+            b = new Bootstrap();
+            b.group(group);
+            b.channel(NioSocketChannel.class);
+            b.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, readTimeoutMs);
+            b.option(ChannelOption.TCP_NODELAY, true);
+            b.option(ChannelOption.SO_REUSEADDR, true);
+            b.option(ChannelOption.SO_KEEPALIVE, true);
+
+            b.handler(new ChannelInitializer<SocketChannel>() {
+                @Override
+                public void initChannel(SocketChannel ch) throws Exception {
+                    ChannelPipeline p = ch.pipeline();
+                    if (sslContext != null) {
+                        p.addLast(sslContext.newHandler(ch.alloc()));
+                    }
+                    // WriteTimeoutHandler & ReadTimeoutHandler
+                    p.addLast("readTimeoutHandler", new ReadTimeoutHandler(
+                            readTimeoutMs, TimeUnit.MILLISECONDS));
+                    p.addLast(new StringEncoder(CharsetUtil.UTF_8));
+                    p.addLast(new SnappyFramedDecoder(true));
+                    p.addLast(new RecordIdDecoder(store));
+                    p.addLast(executor, handler);
+                }
+            });
+            state = STATUS_RUNNING;
+            this.running = true;
+            this.active = true;
+        }
+
         try {
             // Start the client.
-            running = true;
-            state = STATUS_RUNNING;
             ChannelFuture f = b.connect(host, port).sync();
             // Wait until the connection is closed.
             f.channel().closeFuture().sync();
+            this.failedRequests = 0;
+            this.lastSuccessfulRequest = System.currentTimeMillis() / 1000;
         } catch (Exception e) {
+            this.failedRequests++;
             log.error("Failed synchronizing state.", e);
             stop();
+        } finally {
+            synchronized (this.sync) {
+                this.active = false;
+            }
         }
     }
 
@@ -199,5 +214,26 @@ public final class FailoverClient implements FailoverStatusMBean, Runnable, Clos
     @Override
     public String getStatus() {
         return this.state;
+    }
+
+    @Override
+    public int getFailedRequests() {
+        return this.failedRequests;
+    }
+
+    @Override
+    public int getSecondsSinceLastSuccess() {
+        if (this.lastSuccessfulRequest < 0) return -1;
+        return (int)(System.currentTimeMillis() / 1000 - this.lastSuccessfulRequest);
+    }
+
+    @Override
+    public int calcFailedRequests() {
+        return this.getFailedRequests();
+    }
+
+    @Override
+    public int calcSecondsSinceLastSuccess() {
+        return this.getSecondsSinceLastSuccess();
     }
 }

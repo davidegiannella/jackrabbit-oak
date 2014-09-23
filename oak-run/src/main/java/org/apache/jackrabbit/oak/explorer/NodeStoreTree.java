@@ -54,6 +54,7 @@ import org.apache.jackrabbit.oak.kernel.JsopDiff;
 import org.apache.jackrabbit.oak.plugins.segment.RecordId;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentId;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeState;
+import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStateHelper;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentPropertyState;
 import org.apache.jackrabbit.oak.plugins.segment.file.FileStore;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
@@ -180,6 +181,15 @@ public class NodeStoreTree extends JPanel implements TreeSelectionListener {
             tarFile = getFile(recordId);
             if (tarFile.length() > 0) {
                 sb.append(" in " + tarFile);
+            }
+            sb.append(newline);
+
+            RecordId templateId = SegmentNodeStateHelper.getTemplateId(s);
+            String f = getFile(templateId);
+            sb.append("TemplateId ");
+            sb.append(templateId);
+            if (!f.equals(tarFile)) {
+                sb.append(" in " + f);
             }
             sb.append(newline);
         }
@@ -342,11 +352,26 @@ public class NodeStoreTree extends JPanel implements TreeSelectionListener {
         for (PropertyState ps : state.getProperties()) {
             if (ps instanceof SegmentPropertyState) {
                 SegmentPropertyState sps = (SegmentPropertyState) ps;
-                SegmentId id = sps.getRecordId().getSegmentId();
-                if (contains(id, uuids)) {
-                    localPaths.add(path + "@" + ps);
+                RecordId recordId = sps.getRecordId();
+                SegmentId id = recordId.getSegmentId();
+                if (uuids.contains(new UUID(id.getMostSignificantBits(), id.getLeastSignificantBits()))) {
+                    localPaths.add(path + "@" + ps + " [SegmentPropertyState@" + recordId + "]");
                 }
             }
+        }
+
+        RecordId stateId = state.getRecordId();
+        SegmentId segmentId = stateId.getSegmentId();
+        if (uuids.contains(new UUID(segmentId.getMostSignificantBits(), segmentId
+                .getLeastSignificantBits()))) {
+            localPaths.add(path + " [SegmentNodeState@" + stateId + "]");
+        }
+
+        RecordId templateId = SegmentNodeStateHelper.getTemplateId(state);
+        SegmentId template = templateId.getSegmentId();
+        if (uuids.contains(new UUID(template.getMostSignificantBits(), template
+                .getLeastSignificantBits()))) {
+            localPaths.add(path + "[Template@" + templateId + "]");
         }
         paths.addAll(localPaths);
         for (ChildNodeEntry ce : state.getChildNodeEntries()) {
@@ -356,17 +381,6 @@ public class NodeStoreTree extends JPanel implements TreeSelectionListener {
                         path + ce.getName() + "/");
             }
         }
-    }
-
-    private static boolean contains(SegmentId id, Set<UUID> uuids) {
-        for (UUID u : uuids) {
-            if (id.getMostSignificantBits() == u.getMostSignificantBits()
-                    && id.getLeastSignificantBits() == u
-                            .getLeastSignificantBits()) {
-                return true;
-            }
-        }
-        return false;
     }
 
     public void printDiff(String input) {

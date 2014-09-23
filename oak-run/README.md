@@ -13,6 +13,8 @@ The following runmodes are currently available:
     * server      : Run the Oak Server.
     * console     : Start an interactive console.
     * explore     : Starts a GUI browser based on java swing.
+    * syncmaster  : Run a TarMK Cold Standby master
+    * syncslave   : Run a TarMK Cold Standby slave
     * scalability : Run scalability tests against different Oak repository fixtures.
     * recovery    : Run a _lastRev recovery on a MongoMK repository
     * help        : Print a list of available runmodes
@@ -83,13 +85,40 @@ browsing of an existing oak repository.
 
     $ java -jar oak-run-*.jar explore /path/to/oak/repository [skip-size-check]
 
+Syncmaster
+-------
+
+The 'syncmaster' mode starts a TarMK Cold Standby master listening on a TCP/IP port for connecting slaves.
+
+    $ java -jar oak-run-*.jar syncmaster [options] /path/to/TarMK
+    
+The following options are available:
+
+    --port 8023            - port to listen at
+    --admissible 127.0.0.1 - admissible client IP range or host name
+    --secure               - use secure connections
+
+Syncslave
+-------
+
+The 'syncslave' mode starts a TarMK Cold Standby slave to  create or update a continous backup from a Cold Standby master.
+
+    $ java -jar oak-run-*.jar syncslave [options] /path/to/TarMK
+
+The following options are available:
+
+    --port 8023            - port to connect to
+    --host 127.0.0.1       - host to connect to
+    --secure               - use secure connections
+    --interval 5           - schedule the slave to run continously, connecting every n seconds
+
 Compact
 -------
 
 The 'compact' mode runs the segment compaction operation on the provided TarMK
 repository. To start this mode, use:
 
-    $ java -jar oak-run-*.jar compact /path/to/oak/repository
+    $ java -jar oak-run-*.jar compact /path/to/TarMK
 
 Checkpoints
 -----------
@@ -97,10 +126,11 @@ Checkpoints
 The 'checkpoints' mode can be used to list or remove repository checkpoints
 To start this mode, use:
 
-    $ java -jar oak-run-*.jar checkpoints /path/to/oak/repository [list|rm-all|rm <checkpoint>]
+    $ java -jar oak-run-*.jar checkpoints /path/to/oak/repository [list|rm-all|rm-unreferenced|rm <checkpoint>]
 
 The 'list' option (treated as a default when nothing is specified) will list all existing checkpoints.
 The 'rm-all' option will wipe clean the 'checkpoints' node.
+The 'rm-unreferenced' option will remove all checkpoints except the one referenced from the async indexer (/:async@async).
 The 'rm <checkpoint>' option will remove a specific checkpoint from the repository.
 
 Upgrade

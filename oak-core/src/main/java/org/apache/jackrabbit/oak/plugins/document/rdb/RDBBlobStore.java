@@ -146,29 +146,27 @@ public class RDBBlobStore extends CachingBlobStore implements Closeable {
                     Statement stmt = con.createStatement();
 
                     if (baseName.equals("DATASTORE_META")) {
-                        if ("MySQL".equals(dbtype)) {
-                            stmt.execute("create table " + tableName
-                                    + " (ID varchar(767) not null primary key, LVL int, LASTMOD bigint)");
-                        } else if ("Oracle".equals(dbtype)) {
-                            stmt.execute("create table " + tableName
-                                    + " (ID varchar(1000) not null primary key, LVL number, LASTMOD number)");
+                        String ct;
+                        if ("Oracle".equals(dbtype)) {
+                            ct = "create table " + tableName
+                                    + " (ID varchar(767) not null primary key, LVL number, LASTMOD number)";
                         } else {
-                            stmt.execute("create table " + tableName
-                                    + " (ID varchar(1000) not null primary key, LVL int, LASTMOD bigint)");
+                            ct = "create table " + tableName + " (ID varchar(767) not null primary key, LVL int, LASTMOD bigint)";
                         }
+                        stmt.execute(ct);
                     } else {
-                        // the code below likely will need to be extended for
-                        // new database types
+                        String ct;
                         if ("PostgreSQL".equals(dbtype)) {
-                            stmt.execute("create table " + tableName + " (ID varchar(1000) not null primary key, DATA bytea)");
+                            ct = "create table " + tableName + " (ID varchar(767) not null primary key, DATA bytea)";
                         } else if ("DB2".equals(dbtype) || (dbtype != null && dbtype.startsWith("DB2/"))) {
-                            stmt.execute("create table " + tableName + " (ID varchar(1000) not null primary key, DATA blob("
-                                    + MINBLOB + "))");
+                            ct = "create table " + tableName + " (ID varchar(767) not null primary key, DATA blob(" + MINBLOB
+                                    + "))";
                         } else if ("MySQL".equals(dbtype)) {
-                            stmt.execute("create table " + tableName + " (ID varchar(767) not null primary key, DATA mediumblob)");
+                            ct = "create table " + tableName + " (ID varchar(767) not null primary key, DATA mediumblob)";
                         } else {
-                            stmt.execute("create table " + tableName + " (ID varchar(1000) not null primary key, DATA blob)");
+                            ct = "create table " + tableName + " (ID varchar(767) not null primary key, DATA blob)";
                         }
+                        stmt.execute(ct);
                     }
 
                     stmt.close();
@@ -362,7 +360,7 @@ public class RDBBlobStore extends CachingBlobStore implements Closeable {
         try {
             int count = 0;
             PreparedStatement prep = con.prepareStatement("select id from " + metaTable + " where lastMod < ?");
-           prep.setLong(1, minLastModified);
+            prep.setLong(1, minLastModified);
             ResultSet rs = prep.executeQuery();
             ArrayList<String> ids = new ArrayList<String>();
             while (rs.next()) {
@@ -416,11 +414,10 @@ public class RDBBlobStore extends CachingBlobStore implements Closeable {
                 prepMeta.setLong(batch + 1, maxLastModifiedTime);
 
                 prepData = con.prepareStatement("delete from " + dataTable + " where id in (" + inClause.toString()
-                        + ") and lastMod <= ?");
+                        + ") and not exists(select * from " + metaTable + " m where id = m.id and m.lastMod <= ?)");
                 prepData.setLong(batch + 1, maxLastModifiedTime);
             } else {
                 prepMeta = con.prepareStatement("delete from " + metaTable + " where id in (" + inClause.toString() + ")");
-
                 prepData = con.prepareStatement("delete from " + dataTable + " where id in (" + inClause.toString() + ")");
             }
 

@@ -48,6 +48,11 @@ public interface IndexStatsMBean {
     String getStatus();
 
     /**
+     * @return the last upto which the repository was indexed
+     */
+    String getLastIndexedTime();
+
+    /**
      * Pauses the background indexing process. Future changes are not indexed
      * until the {@link #resume()} method is called.
      * 
@@ -83,5 +88,30 @@ public interface IndexStatsMBean {
      *         kept until the next cycle begins.
      */
     long getUpdates();
+
+    /**
+     * Returns the current reference checkpoint used by the async indexer
+     * 
+     * @return the reference checkpoint
+     */
+    String getReferenceCheckpoint();
+
+    /**
+     * Returns the processed checkpoint used by the async indexer. If this index
+     * round finishes successfully, the processed checkpoint will become the
+     * reference checkpoint, and the old reference checkpoint wil be released.
+     * 
+     * @return the processed checkpoint
+     */
+    String getProcessedCheckpoint();
+
+    /**
+     * Temporary checkpoints represent old checkpoints that have been processed
+     * but the cleanup was not successful of did not happen at all (like in the
+     * event the system was forcibly stopped).
+     * 
+     * @return the already processed checkpoints
+     */
+    String getTemporaryCheckpoints();
 
 }

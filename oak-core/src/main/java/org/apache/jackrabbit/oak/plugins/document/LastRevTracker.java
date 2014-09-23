@@ -14,16 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.plugins.segment.failover.store;
+package org.apache.jackrabbit.oak.plugins.document;
 
-import org.apache.jackrabbit.oak.plugins.segment.Segment;
+/**
+ * An implementation of this interface receives callbacks about paths
+ * that need an update of the _lastRev field on documents.
+ */
+public interface LastRevTracker {
 
-public interface RemoteSegmentLoader {
-
-    Segment readSegment(String id);
-
-    void close();
-
-    boolean isClosed();
-
+    /**
+     * Called when a document needs an update of the _lastRev field.
+     *
+     * @param path the path of the document to update.
+     */
+    public void track(String path);
 }

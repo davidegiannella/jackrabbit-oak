@@ -24,6 +24,7 @@ import org.apache.jackrabbit.oak.plugins.segment.failover.server.FailoverServer;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import javax.management.MBeanServer;
@@ -97,6 +98,9 @@ public class MBeanTest extends TestBase {
             String m = jmxServer.getAttribute(status, "Mode").toString();
             if (!m.startsWith("client: ")) fail("unexpected mode " + m);
 
+            assertEquals("1", jmxServer.getAttribute(status, "FailedRequests").toString());
+            assertEquals("-1", jmxServer.getAttribute(status, "SecondsSinceLastSuccess").toString());
+
             assertEquals(FailoverStatusMBean.STATUS_STOPPED, jmxServer.getAttribute(status, "Status"));
 
             assertEquals(false, jmxServer.getAttribute(status, "Running"));
@@ -124,6 +128,12 @@ public class MBeanTest extends TestBase {
         try {
             assertTrue(jmxServer.isRegistered(status));
             assertEquals("client: Foo", jmxServer.getAttribute(status, "Mode"));
+
+            assertEquals("1", jmxServer.getAttribute(status, "FailedRequests").toString());
+            assertEquals("-1", jmxServer.getAttribute(status, "SecondsSinceLastSuccess").toString());
+
+            assertEquals("1", jmxServer.invoke(status, "calcFailedRequests", null, null).toString());
+            assertEquals("-1", jmxServer.invoke(status, "calcSecondsSinceLastSuccess", null, null).toString());
         } finally {
             client.close();
         }
@@ -132,6 +142,7 @@ public class MBeanTest extends TestBase {
     }
 
     @Test
+    @Ignore("OAK-2086")
     public void testClientAndServerEmptyConfig() throws Exception {
         final FailoverServer server = new FailoverServer(this.port, this.storeS);
         server.start();
@@ -165,6 +176,18 @@ public class MBeanTest extends TestBase {
 
             assertEquals(true, jmxServer.getAttribute(serverStatus, "Running"));
             assertEquals(true, jmxServer.getAttribute(clientStatus, "Running"));
+
+            assertEquals("0", jmxServer.getAttribute(clientStatus, "FailedRequests").toString());
+            assertEquals("0", jmxServer.getAttribute(clientStatus, "SecondsSinceLastSuccess").toString());
+            assertEquals("0", jmxServer.invoke(clientStatus, "calcFailedRequests", null, null).toString());
+            assertEquals("0", jmxServer.invoke(clientStatus, "calcSecondsSinceLastSuccess", null, null).toString());
+
+            Thread.sleep(1000);
+
+            assertEquals("0", jmxServer.getAttribute(clientStatus, "FailedRequests").toString());
+            assertEquals("1", jmxServer.getAttribute(clientStatus, "SecondsSinceLastSuccess").toString());
+            assertEquals("0", jmxServer.invoke(clientStatus, "calcFailedRequests", null, null).toString());
+            assertEquals("1", jmxServer.invoke(clientStatus, "calcSecondsSinceLastSuccess", null, null).toString());
 
             assertEquals(new Long(2), jmxServer.getAttribute(connectionStatus, "TransferredSegments"));
             assertEquals(new Long(128), jmxServer.getAttribute(connectionStatus, "TransferredSegmentBytes"));

@@ -14,16 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.plugins.segment.failover.store;
 
-import org.apache.jackrabbit.oak.plugins.segment.Segment;
+package org.apache.jackrabbit.oak.plugins.segment.failover.jmx;
 
-public interface RemoteSegmentLoader {
+import org.apache.jackrabbit.oak.commons.jmx.Description;
 
-    Segment readSegment(String id);
+public interface ClientFailoverStatusMBean extends FailoverStatusMBean {
 
-    void close();
+    @Description("number of consecutive failed requests")
+    int getFailedRequests();
 
-    boolean isClosed();
+    @Description("number of seconds since last successful request")
+    int getSecondsSinceLastSuccess();
+
+    // expose the informations as operations, too
+
+    @Description("number of consecutive failed requests")
+    int calcFailedRequests();
+
+    @Description("number of seconds since last successful request")
+    int calcSecondsSinceLastSuccess();
 
 }
