@@ -207,7 +207,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
     public void queryNotNullAscending() throws Exception {
         setTraversalEnabled(false);
         // with 1k nodes we're sure to have all the 4 lanes due to probability
-        final int numberOfNodes = 10;
+        final int numberOfNodes = 20;
         final OrderDirection direction = ASC;
         final String unexistent  = formatNumber(numberOfNodes + 1);
         final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
@@ -258,6 +258,9 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         Result result = executeQuery(statement, SQL2, null);
         assertRightOrder(expected, result.getRows().iterator());
+        
+        // as the full iterable used in `property IS NOT NULL` cases walk the index on lane 0, any
+        // other lanes doesn't matter.
         
         setTraversalEnabled(true);
     }
