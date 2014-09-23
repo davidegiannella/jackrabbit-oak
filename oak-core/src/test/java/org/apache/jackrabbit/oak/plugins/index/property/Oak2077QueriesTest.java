@@ -180,9 +180,9 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
     
     @Test
     public void queryNotNullAscending() throws Exception {
-        final OrderDirection direction = ASC;
         // with 1k nodes we're sure to have all the 4 lanes due to probability
         final int numberOfNodes = 999;
+        final OrderDirection direction = ASC;
         final String unexistent  = formatNumber(numberOfNodes + 1);
         
         defineIndex(direction);
@@ -219,7 +219,6 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         qe = root.getQueryEngine();
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
-        // TODO change the format of the "value999" adding one more digit
         // TODO check that the above doesn't break any previos tests.
         // TODO perform a query
         // TODO ensure result ends at the right point

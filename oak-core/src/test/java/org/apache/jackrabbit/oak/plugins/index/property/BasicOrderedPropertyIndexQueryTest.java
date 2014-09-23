@@ -101,7 +101,7 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
      * @return something in the format {@code value000}
      */
     public static String formatNumber(int number) {
-        NumberFormat nf = new DecimalFormat("000");
+        NumberFormat nf = new DecimalFormat("0000");
         return String.format("value%s", String.valueOf(nf.format(number)));
     }
 
