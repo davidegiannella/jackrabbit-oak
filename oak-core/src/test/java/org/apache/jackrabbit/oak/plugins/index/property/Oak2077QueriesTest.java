@@ -67,7 +67,10 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 
 public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
     private static final Logger LOG = LoggerFactory.getLogger(Oak2077QueriesTest.class);
@@ -238,16 +241,24 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         
         resetEnvVariables();
         
+        //filtering out the part that should not be returned by the resultset.
+        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
+            new Predicate<ValuePathTuple>() {
+                boolean stopHere;
+
+                @Override
+                public boolean apply(ValuePathTuple input) {
+                    if (!stopHere) {
+                        stopHere = unexistent.equals(input.getValue());
+                    }
+                    return !stopHere;
+                }
+            }));
+        
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         Result result = executeQuery(statement, SQL2, null);
-//        assertRightOrder(nodes, result.getRows().iterator());
-        for (ResultRow row : result.getRows()) {
-            LOG.debug("{}", row.getTree(null));
-        }
+        assertRightOrder(expected, result.getRows().iterator());
         
-        // TODO perform a query
-        // TODO ensure result ends at the right point
-//        fail("complete the test");
         setTraversalEnabled(true);
     }
     
