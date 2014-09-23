@@ -211,7 +211,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                             new PredicateEquals(key),
                             walkedLanes,
                             0,
-                            new LoggingDanglinLinkCallback()
+                            LOGGING_DANGLING_CALLBACK
                             );
                         lane0Next = getPropertyNext(index.getChildNode(walkedLanes[0]));
                         if (LOG.isDebugEnabled()) {
@@ -677,7 +677,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             boolean hasNext = (includeStart && start.equals(current))
                 || (!includeStart && !Strings.isNullOrEmpty(next)
                     && ensureAndCleanNode(
-                                  builder, next, (currentName == null ? "" : currentName), 0,
+                                  builder, next, 
+                                  currentName == null ? "" : currentName, 
+                                  0,
                                   LOGGING_DANGLING_CALLBACK));
                         
             return hasNext;
@@ -808,7 +810,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * last argument
      */
     String seek(@Nonnull NodeBuilder index, @Nonnull Predicate<String> condition) {
-        return seek(index, condition, null, 0, new LoggingDanglinLinkCallback());
+        return seek(index, condition, null, 0, LOGGING_DANGLING_CALLBACK);
     }
     
     /**
