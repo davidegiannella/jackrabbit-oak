@@ -32,12 +32,17 @@ import java.util.List;
 import java.util.Random;
 
 import javax.annotation.Nonnull;
+import javax.jcr.NoSuchWorkspaceException;
 import javax.jcr.RepositoryException;
+import javax.jcr.query.Row;
+import javax.security.auth.login.LoginException;
 
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.Result;
+import org.apache.jackrabbit.oak.api.ResultRow;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
@@ -150,6 +155,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         repository = new Oak(nodestore).with(new InitialContent())
             .with(new OpenSecurityProvider())
             .with(new SeededOrderedPropertyIndexEditorProvider())
+            .with(new OrderedPropertyIndexProvider())
             .createContentRepository(); 
         return repository;
     }
@@ -177,14 +183,32 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         );
         root.commit();
     }
+
+    /**
+     * <p>
+     * reset the environment variables to be sure to use the latest root. {@code session, root, qe}
+     * <p>
+     * 
+     * @throws IOException
+     * @throws LoginException
+     * @throws NoSuchWorkspaceException
+     */
+    private void resetEnvVariables() throws IOException, LoginException, NoSuchWorkspaceException {
+        session.close();
+        session = repository.login(null, null);
+        root = session.getLatestRoot();
+        qe = root.getQueryEngine();
+    }
     
     @Test
     public void queryNotNullAscending() throws Exception {
+        setTraversalEnabled(false);
         // with 1k nodes we're sure to have all the 4 lanes due to probability
-        final int numberOfNodes = 999;
+        final int numberOfNodes = 10;
         final OrderDirection direction = ASC;
         final String unexistent  = formatNumber(numberOfNodes + 1);
-        
+        final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
+                                 + " IS NOT NULL";
         defineIndex(direction);
         
         Tree content = root.getTree("/").addChild("content").addChild("nodes");
@@ -192,37 +216,39 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
         root.commit();
         
-        // truncating the list on lane 0
-        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-        builder = builder.getChildNode(TEST_INDEX_NAME);
-        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-        
-        NodeBuilder truncated = builder.getChildNode(START);
-        String truncatedName;
-        
-        for (int i = 0; i < 4; i++) {
-            // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated);
-            truncated = builder.getChildNode(truncatedName);
-        }
-        
-        setPropertyNext(truncated, unexistent, 0);
-        
-        // re-basing should be fine as we're the only one changing the data
-        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        
-        // re-setting the env-variables
-        session.close();
-        session = repository.login(null, null);
-        root = session.getLatestRoot();
-        qe = root.getQueryEngine();
+//        // truncating the list on lane 0
+//        NodeBuilder rootBuilder = nodestore.getRoot().builder();
+//        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
+//        builder = builder.getChildNode(TEST_INDEX_NAME);
+//        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
+//        
+//        NodeBuilder truncated = builder.getChildNode(START);
+//        String truncatedName;
+//        
+//        for (int i = 0; i < 4; i++) {
+//            // changing the 4th element. No particular reasons on why the 4th.
+//            truncatedName = getPropertyNext(truncated);
+//            truncated = builder.getChildNode(truncatedName);
+//        }
+//        
+//        setPropertyNext(truncated, unexistent, 0);
+//        
+//        // re-basing should be fine as we're the only one changing the data
+//        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+//        
+//        resetEnvVariables();
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
-        // TODO check that the above doesn't break any previos tests.
+        Result result = executeQuery(statement, SQL2, null);
+        assertRightOrder(nodes, result.getRows().iterator());
+//        for (ResultRow row : result.getRows()) {
+//            LOG.debug("{}", row.getTree(null));
+//        }
+        
         // TODO perform a query
         // TODO ensure result ends at the right point
-        fail("complete the test");
+//        fail("complete the test");
+        setTraversalEnabled(true);
     }
     
     @Test @Ignore

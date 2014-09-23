@@ -133,9 +133,13 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
     }
 
     /**
+     * <p>
      * convenience method that adds a bunch of nodes in random order and return the order in which
-     * they should be presented by the OrderedIndex
-     *
+     * they should be presented by the OrderedIndex.
+     * </p>
+     * <p>
+     * The nodes will be created using the {@link #ORDERED_PROPERTY} as property for indexing
+     * </p>
      * @param values the values of the property that will be indexed
      * @param father the father under which add the nodes
      * @param direction the direction of the items to be added.
