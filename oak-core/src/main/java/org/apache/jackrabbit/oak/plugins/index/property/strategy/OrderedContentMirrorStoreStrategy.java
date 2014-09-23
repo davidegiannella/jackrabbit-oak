@@ -108,9 +108,15 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     private static final int MAX_RETRIES = LANES+1;
     
     /**
+     * static instance of logger callback to ease the memory footprint
+     */
+    private static DanglingLinkCallback LOGGING_DANGLING_CALLBACK = new LoggingDanglinLinkCallback();
+    
+    /**
      * the direction of the index.
      */
     private OrderDirection direction = OrderedIndex.DEFAULT_DIRECTION;
+    
 
     public OrderedContentMirrorStoreStrategy() {
         super();
@@ -653,6 +659,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         private NodeState start;
         NodeState current;
         private NodeState index;
+        private NodeBuilder builder;
         String currentName;
 
         public FullIterator(NodeState index, NodeState start, boolean includeStart,
@@ -661,12 +668,17 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             this.start = start;
             this.current = current;
             this.index = index;
+            this.builder = new ReadOnlyBuilder(index);
         }
 
         @Override
         public boolean hasNext() {
+            String next = getPropertyNext(current);
             boolean hasNext = (includeStart && start.equals(current))
-                || (!includeStart && !Strings.isNullOrEmpty(getPropertyNext(current)));
+                || (!includeStart && !Strings.isNullOrEmpty(next)
+                    && ensureAndCleanNode(
+                                  builder, next, (currentName == null ? "" : currentName), 0,
+                                  LOGGING_DANGLING_CALLBACK));
                         
             return hasNext;
         }
@@ -1253,7 +1265,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * implementors of this interface will deal with the dangling link cases along the list
      * (OAK-2077)
      */
-    private interface DanglingLinkCallback {
+    interface DanglingLinkCallback {
         /**
          * perform the required operation on the provided {@code current} node for the {@code next}
          * value on {@code lane}

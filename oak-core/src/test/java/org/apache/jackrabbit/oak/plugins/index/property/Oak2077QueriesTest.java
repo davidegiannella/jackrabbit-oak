@@ -216,34 +216,34 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
         root.commit();
         
-//        // truncating the list on lane 0
-//        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-//        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-//        builder = builder.getChildNode(TEST_INDEX_NAME);
-//        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-//        
-//        NodeBuilder truncated = builder.getChildNode(START);
-//        String truncatedName;
-//        
-//        for (int i = 0; i < 4; i++) {
-//            // changing the 4th element. No particular reasons on why the 4th.
-//            truncatedName = getPropertyNext(truncated);
-//            truncated = builder.getChildNode(truncatedName);
-//        }
-//        
-//        setPropertyNext(truncated, unexistent, 0);
-//        
-//        // re-basing should be fine as we're the only one changing the data
-//        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-//        
-//        resetEnvVariables();
+        // truncating the list on lane 0
+        NodeBuilder rootBuilder = nodestore.getRoot().builder();
+        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
+        builder = builder.getChildNode(TEST_INDEX_NAME);
+        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
+        
+        NodeBuilder truncated = builder.getChildNode(START);
+        String truncatedName;
+        
+        for (int i = 0; i < 4; i++) {
+            // changing the 4th element. No particular reasons on why the 4th.
+            truncatedName = getPropertyNext(truncated);
+            truncated = builder.getChildNode(truncatedName);
+        }
+        
+        setPropertyNext(truncated, unexistent, 0);
+        
+        // re-basing should be fine as we're the only one changing the data
+        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        
+        resetEnvVariables();
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         Result result = executeQuery(statement, SQL2, null);
-        assertRightOrder(nodes, result.getRows().iterator());
-//        for (ResultRow row : result.getRows()) {
-//            LOG.debug("{}", row.getTree(null));
-//        }
+//        assertRightOrder(nodes, result.getRows().iterator());
+        for (ResultRow row : result.getRows()) {
+            LOG.debug("{}", row.getTree(null));
+        }
         
         // TODO perform a query
         // TODO ensure result ends at the right point
