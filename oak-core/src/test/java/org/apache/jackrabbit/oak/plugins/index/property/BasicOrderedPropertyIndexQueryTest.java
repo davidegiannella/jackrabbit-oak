@@ -66,15 +66,29 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
     protected static final String ISO_8601_2000 = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"; 
 
     /**
+     * same as {@link #generateOrderedValues(int, int, OrderDirection)} by passing {@code 0} as
+     * {@code offset}
+     * 
+     * @param amount
+     * @param direction
+     * @return
+     */
+    protected static List<String> generateOrderedValues(int amount, OrderDirection direction) {
+        return generateOrderedValues(amount, 0, direction);
+    }
+
+    /**
+     * <p>
      * generate a list of values to be used as ordered set. Will return something like
      * {@code value000, value001, value002, ...}
+     * </p>
      *
-     *
-     * @param amount
+     * @param amount the values to be generated
+     * @param offset move the current counter by this provided amount.
      * @param direction the direction of the sorting
      * @return a list of {@code amount} values ordered as specified by {@code direction}
      */
-    protected static List<String> generateOrderedValues(int amount, OrderDirection direction) {
+    protected static List<String> generateOrderedValues(int amount, int offset , OrderDirection direction) {
         if (amount > 1000) {
             throw new RuntimeException("amount cannot be greater than 1000");
         }
@@ -83,11 +97,11 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
 
         if (OrderDirection.DESC.equals(direction)) {
             for (int i = amount; i > 0; i--) {
-                values.add(formatNumber(i));
+                values.add(formatNumber(i + offset));
             }
         } else {
             for (int i = 0; i < amount; i++) {
-                values.add(formatNumber(i));
+                values.add(formatNumber(i + offset));
             }
         }
         return values;

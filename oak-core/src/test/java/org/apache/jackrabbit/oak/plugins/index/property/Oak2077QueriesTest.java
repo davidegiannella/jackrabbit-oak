@@ -25,27 +25,26 @@ import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.Orde
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.START;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.getPropertyNext;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.setPropertyNext;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.StringReader;
 import java.util.List;
 import java.util.Random;
 
 import javax.annotation.Nonnull;
 import javax.jcr.NoSuchWorkspaceException;
 import javax.jcr.RepositoryException;
-import javax.jcr.query.Row;
 import javax.security.auth.login.LoginException;
 
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
-import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Result;
-import org.apache.jackrabbit.oak.api.ResultRow;
 import org.apache.jackrabbit.oak.api.Tree;
-import org.apache.jackrabbit.oak.api.Type;
-import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
@@ -57,7 +56,6 @@ import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
-import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -67,17 +65,82 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.encoder.PatternLayoutEncoder;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.OutputStreamAppender;
+
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
 public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
+    private static final LoggingTracker<ILoggingEvent> LOGGING_TRACKER;
     private static final Logger LOG = LoggerFactory.getLogger(Oak2077QueriesTest.class);
     private NodeStore nodestore;
     private ContentRepository repository;
+
+    static {
+
+        LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
+        
+        PatternLayoutEncoder encoder = new PatternLayoutEncoder();
+        encoder.setContext(lc);
+        encoder.setPattern("%msg%n");
+        encoder.start();
+        
+        LOGGING_TRACKER = new LoggingTracker<ILoggingEvent>();
+        LOGGING_TRACKER.setContext(lc);
+        LOGGING_TRACKER.setEncoder(encoder);
+        LOGGING_TRACKER.start();
+
+        // adding the new appender to the root logger
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME))
+            .addAppender(LOGGING_TRACKER);
+
+        //configuring the logging level to desired value
+        ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(LOGGING_TRACKER.getName()))
+            .setLevel(Level.WARN);
+    }
     
     // ------------------------------------------------------------------------ < utility classes >
+    private static class LoggingTracker<E> extends OutputStreamAppender<E> {
+        private ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        
+        @Override
+        public void start() {
+            setOutputStream(baos);
+            super.start();
+        }
+        
+        /**
+         * reset the inner OutputStream. 
+         */
+        public void reset() {
+            baos.reset();
+        }
+        
+        public BufferedReader toBufferedReader() {
+            return new BufferedReader(new StringReader(baos.toString()));
+        }
+        
+        public int countLinesTracked() throws IOException {
+            int lines = 0;
+            BufferedReader br = toBufferedReader();
+            while (br.readLine() != null) {
+                lines++;
+            }
+            return lines;
+        }
+
+        @Override
+        public String getName() {
+            return LoggingTracker.class.getName();
+        }
+    }
+    
     /**
      * used to return an instance of IndexEditor with a defined Random for a better reproducible
      * unit testing
@@ -233,12 +296,9 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             truncatedName = getPropertyNext(truncated);
             truncated = builder.getChildNode(truncatedName);
         }
-        
         setPropertyNext(truncated, unexistent, 0);
         
-        // re-basing should be fine as we're the only one changing the data
         nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        
         resetEnvVariables();
         
         //filtering out the part that should not be returned by the resultset.
@@ -256,18 +316,75 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             }));
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
+        LOGGING_TRACKER.reset();
         Result result = executeQuery(statement, SQL2, null);
         assertRightOrder(expected, result.getRows().iterator());
-        
+        assertEquals("We expect 1 warning message to be tracked", 1, LOGGING_TRACKER.countLinesTracked());
         // as the full iterable used in `property IS NOT NULL` cases walk the index on lane 0, any
         // other lanes doesn't matter.
         
         setTraversalEnabled(true);
     }
     
-    @Test @Ignore
-    public void queryNotNullDescending() {
-        fail();
+    @Test
+    public void queryNotNullDescending() throws Exception {
+        setTraversalEnabled(false);
+        // with 1k nodes we're sure to have all the 4 lanes due to probability
+        final int numberOfNodes = 20;
+        final OrderDirection direction = DESC; //changed
+        final String unexistent  = formatNumber(0); //changed
+        final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
+                                 + " IS NOT NULL";
+        defineIndex(direction);
+        
+        Tree content = root.getTree("/").addChild("content").addChild("nodes");
+        List<String> values = generateOrderedValues(numberOfNodes, 1, direction); //changed by offset
+        List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
+        root.commit();
+        
+        // truncating the list on lane 0
+        NodeBuilder rootBuilder = nodestore.getRoot().builder();
+        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
+        builder = builder.getChildNode(TEST_INDEX_NAME);
+        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
+        
+        NodeBuilder truncated = builder.getChildNode(START);
+        String truncatedName;
+        
+        for (int i = 0; i < 4; i++) {
+            // changing the 4th element. No particular reasons on why the 4th.
+            truncatedName = getPropertyNext(truncated);
+            truncated = builder.getChildNode(truncatedName);
+        }
+        setPropertyNext(truncated, unexistent, 0);
+        
+        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        resetEnvVariables();
+        
+        //filtering out the part that should not be returned by the resultset.
+        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
+            new Predicate<ValuePathTuple>() {
+                boolean stopHere;
+
+                @Override
+                public boolean apply(ValuePathTuple input) {
+                    if (!stopHere) {
+                        stopHere = unexistent.equals(input.getValue());
+                    }
+                    return !stopHere;
+                }
+            }));
+        
+        // pointing to a non-existent node in lane 0 we expect the result to be truncated
+        LOGGING_TRACKER.reset();
+        Result result = executeQuery(statement, SQL2, null);
+        assertRightOrder(expected, result.getRows().iterator());
+        assertEquals("We expect 1 warning message to be tracked", 1, LOGGING_TRACKER.countLinesTracked());
+
+        // as the full iterable used in `property IS NOT NULL` cases walk the index on lane 0, any
+        // other lanes doesn't matter.
+        
+        setTraversalEnabled(true);
     }
     
     @Test @Ignore
