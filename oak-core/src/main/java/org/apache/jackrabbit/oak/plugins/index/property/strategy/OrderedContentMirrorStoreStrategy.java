@@ -106,12 +106,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * maximum number of attempt for potential recursive processes like seek() 
      */
     private static final int MAX_RETRIES = LANES+1;
-    
-    /**
-     * static instance of logger callback to ease the memory footprint
-     */
-    private static DanglingLinkCallback LOGGING_DANGLING_CALLBACK = new LoggingDanglinLinkCallback();
-    
+        
     /**
      * the direction of the index.
      */
@@ -211,7 +206,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                             new PredicateEquals(key),
                             walkedLanes,
                             0,
-                            LOGGING_DANGLING_CALLBACK
+                            new LoggingDanglinLinkCallback()
                             );
                         lane0Next = getPropertyNext(index.getChildNode(walkedLanes[0]));
                         if (LOG.isDebugEnabled()) {
@@ -661,6 +656,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
         private NodeState index;
         private NodeBuilder builder;
         String currentName;
+        private DanglingLinkCallback dlc = new LoggingDanglinLinkCallback();
 
         public FullIterator(NodeState index, NodeState start, boolean includeStart,
                             NodeState current) {
@@ -680,7 +676,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                                   builder, next, 
                                   currentName == null ? "" : currentName, 
                                   0,
-                                  LOGGING_DANGLING_CALLBACK));
+                                  dlc));
                         
             return hasNext;
         }
@@ -810,7 +806,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
      * last argument
      */
     String seek(@Nonnull NodeBuilder index, @Nonnull Predicate<String> condition) {
-        return seek(index, condition, null, 0, LOGGING_DANGLING_CALLBACK);
+        return seek(index, condition, null, 0, new LoggingDanglinLinkCallback());
     }
     
     /**
