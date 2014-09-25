@@ -22,6 +22,7 @@ import java.util.Set;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
@@ -31,6 +32,7 @@ import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrat
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.stats.StopwatchLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +59,8 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
     private boolean properlyConfigured;
 
     private OrderDirection direction = OrderedIndex.DEFAULT_DIRECTION;
+    
+    private StopwatchLogger swl;
 
     public OrderedPropertyIndexEditor(NodeBuilder definition, NodeState root,
                                       IndexUpdateCallback callback) {
@@ -92,12 +96,16 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
                 this.direction = dir;
             }
         }
+        
+        // initialising the stopwatch.
+        swl = new StopwatchLogger(OrderedPropertyIndexEditor.class);
     }
 
     OrderedPropertyIndexEditor(OrderedPropertyIndexEditor parent, String name) {
         super(parent, name);
         this.propertyNames = parent.getPropertyNames();
         this.direction = parent.getDirection();
+        this.swl = parent.swl;
     }
 
     /**
@@ -135,5 +143,20 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
      */
     public OrderDirection getDirection() {
         return direction;
+    }
+
+    @Override
+    public void enter(NodeState before, NodeState after) {
+        // starting the stopwatch before any operation.
+        swl.start();
+        super.enter(before, after);
+    }
+
+    @Override
+    public void leave(NodeState before, NodeState after) throws CommitFailedException {
+        super.leave(before, after);
+        
+        // tracking down the time spent for the overall process
+        swl.stop(String.format("item added to the index - %s", getPropertyNames()));
     }
 }
