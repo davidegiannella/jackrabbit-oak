@@ -147,20 +147,38 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
 
     @Override
     public void enter(NodeState before, NodeState after) {
-        // starting the stopwatch before any operation.
-        swl.start();
         super.enter(before, after);
     }
 
+    private boolean isToProcess(NodeState state, Set<String> propertyNames) {
+        if (state == null || propertyNames == null) {
+            return false;
+        } else {
+            for (String p : propertyNames) {
+                if (state.getProperty(p) != null) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+    
     @Override
     public void leave(NodeState before, NodeState after) throws CommitFailedException {
-        super.leave(before, after);
-        
-        if (!swl.isStarted()) {
-            LOG.debug("", new Exception("clock not started yet"));
+        if (swl.isEnabled() && !swl.isStarted()) {
+            // perform extra operations for starting correctly the clock.
+            Set<String> pn = getPropertyNames();
+            if (isToProcess(before, pn) || isToProcess(after, pn)) {
+                swl.start();
+            }
         }
         
-        // tracking down the time spent for the overall process
-        swl.stop(String.format("item added to the index - %s", getPropertyNames()));
+        super.leave(before, after);
+        
+        if (swl.isStarted()) {
+            // if not started we will probably won't have processed anything
+            // tracking down the time spent for the overall process
+            swl.stop(String.format("item added to the index - %s", getPropertyNames()));
+        }        
     }
 }
