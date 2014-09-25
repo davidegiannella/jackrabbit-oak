@@ -156,6 +156,10 @@ public class OrderedPropertyIndexEditor extends PropertyIndexEditor {
     public void leave(NodeState before, NodeState after) throws CommitFailedException {
         super.leave(before, after);
         
+        if (!swl.isStarted()) {
+            LOG.debug("", new Exception("clock not started yet"));
+        }
+        
         // tracking down the time spent for the overall process
         swl.stop(String.format("item added to the index - %s", getPropertyNames()));
     }

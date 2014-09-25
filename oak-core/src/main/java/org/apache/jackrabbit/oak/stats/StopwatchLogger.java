@@ -142,4 +142,11 @@ public class StopwatchLogger implements Closeable {
             LOG.error("Error while shutting down the scheduler.", t);
         }
     }
+    
+    /**
+     * @return true if the clock has been started. False otherwise.
+     */
+    public boolean isStarted() {
+        return (clock != null);
+    }
 }
