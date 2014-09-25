@@ -147,6 +147,18 @@ public class StopwatchLogger implements Closeable {
      * @return true if the clock has been started. False otherwise.
      */
     public boolean isStarted() {
-        return (clock != null);
+        return clock != null;
+    }
+    
+    private Logger getLogger() {
+        return (customLog == null) ? LOG :  customLog;
+    }
+    
+    /**
+     * @return true whether the provided appender has DEBUG enabled and therefore asked to track
+     *         times.
+     */
+    public boolean isEnabled() {
+        return getLogger().isDebugEnabled();
     }
 }
