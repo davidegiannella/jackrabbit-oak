@@ -25,6 +25,7 @@ import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.Orde
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.START;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.getPropertyNext;
 import static org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy.setPropertyNext;
+import static org.apache.jackrabbit.oak.spi.query.PropertyValues.newString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -32,7 +33,9 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import javax.annotation.Nonnull;
@@ -43,6 +46,7 @@ import javax.security.auth.login.LoginException;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
+import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Result;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
@@ -55,6 +59,7 @@ import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
+import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -269,7 +274,6 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
     @Test
     public void queryNotNullAscending() throws Exception {
         setTraversalEnabled(false);
-        // with 1k nodes we're sure to have all the 4 lanes due to probability
         final int numberOfNodes = 20;
         final OrderDirection direction = ASC;
         final String unexistent  = formatNumber(numberOfNodes + 1);
@@ -329,7 +333,6 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
     @Test
     public void queryNotNullDescending() throws Exception {
         setTraversalEnabled(false);
-        // with 1k nodes we're sure to have all the 4 lanes due to probability
         final int numberOfNodes = 20;
         final OrderDirection direction = DESC; //changed
         final String unexistent  = formatNumber(0); //changed
@@ -387,9 +390,49 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         setTraversalEnabled(true);
     }
     
-    @Test @Ignore
-    public void queryEqualsAscending() {
-        fail();
+    @Test
+    public void queryEqualsAscending() throws Exception {
+        setTraversalEnabled(false);
+        
+        // with 100 items we know we have at least 5 lanes due to default probability
+        final int numberOfNodes = 100;
+        final OrderDirection direction = ASC;
+        final String unexistent  = formatNumber(numberOfNodes + 1);
+        final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY + " = $v ";
+        
+        defineIndex(direction);
+
+        Tree content = root.getTree("/").addChild("content").addChild("nodes");
+        List<String> values = generateOrderedValues(numberOfNodes, 0, direction); //changed by offset
+        List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
+        root.commit();
+
+        // truncate lane 0 before the seeked item. No results expected and 1 warning in the logs
+        NodeBuilder rootBuilder = nodestore.getRoot().builder();
+        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
+        builder = builder.getChildNode(TEST_INDEX_NAME);
+        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
+
+        NodeBuilder truncated = builder.getChildNode(START);
+        String truncatedName;
+        
+        int seekForPosition = 4;
+        String seekFor = nodes.get(seekForPosition).getValue();
+        for (int i = 0; i < seekForPosition; i++) {
+            // changing the 4th element. No particular reasons on why the 4th.
+            truncatedName = getPropertyNext(truncated);
+            truncated = builder.getChildNode(truncatedName);
+        }
+        setPropertyNext(truncated, unexistent, 0);
+        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        resetEnvVariables();
+
+        LOGGING_TRACKER.reset();
+        Map<String, PropertyValue> bindings = ImmutableMap.of("v", newString(seekFor));
+        Result result = executeQuery(statement, SQL2, bindings);
+        assertRightOrder(Collections.<ValuePathTuple> emptyList(), result.getRows().iterator());
+        assertEquals(1,  LOGGING_TRACKER.countLinesTracked());
+        setTraversalEnabled(true);
     }
 
     @Test @Ignore
