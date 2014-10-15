@@ -20,6 +20,8 @@ import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertTrue;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
 
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
@@ -184,22 +186,27 @@ public abstract class BasicOrderedPropertyIndexQueryTest extends AbstractQueryTe
     /**
      * assert the right order of the returned resultset
      *
-     * @param orderedSequence the right order in which the resultset should be returned
+     * @param expected the right order in which the resultset should be returned
      * @param resultset the resultset
      */
-    protected void assertRightOrder(@Nonnull final List<ValuePathTuple> orderedSequence,
+    protected void assertRightOrder(@Nonnull final List<ValuePathTuple> expected,
                                     @Nonnull final Iterator<? extends ResultRow> resultset) {
-        assertTrue("No results returned", resultset.hasNext());
-        int counter = 0;
-        while (resultset.hasNext() && counter < orderedSequence.size()) {
-            ResultRow row = resultset.next();
-            assertEquals(
-                String.format("Wrong path at the element '%d'", counter),
-                orderedSequence.get(counter).getPath(),
-                row.getPath()
-            );
-            counter++;
-        }
+        if (expected.isEmpty()) {
+            assertFalse("An empty resultset is expected but something has been returned.",
+                resultset.hasNext());
+        } else {
+            assertTrue("No results returned", resultset.hasNext());
+            int counter = 0;
+            while (resultset.hasNext() && counter < expected.size()) {
+                ResultRow row = resultset.next();
+                assertEquals(
+                    String.format("Wrong path at the element '%d'", counter),
+                    expected.get(counter).getPath(),
+                    row.getPath()
+                );
+                counter++;
+            }
+        }        
     }
 
     /**
