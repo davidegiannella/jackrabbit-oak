@@ -75,6 +75,7 @@ import org.apache.jackrabbit.oak.spi.security.authorization.permission.Permissio
 import org.apache.jackrabbit.oak.spi.security.authorization.permission.Permissions;
 import org.apache.jackrabbit.oak.spi.security.authorization.restriction.Restriction;
 import org.apache.jackrabbit.oak.spi.security.authorization.restriction.RestrictionProvider;
+import org.apache.jackrabbit.oak.spi.security.principal.AdminPrincipal;
 import org.apache.jackrabbit.oak.spi.security.principal.PrincipalConfiguration;
 import org.apache.jackrabbit.oak.spi.security.principal.PrincipalImpl;
 import org.apache.jackrabbit.oak.spi.security.privilege.PrivilegeBits;
@@ -562,8 +563,25 @@ public class AccessControlManagerImpl extends AbstractAccessControlManager imple
         }
 
         @Override
-        void checkValidPrincipal(Principal principal) throws AccessControlException {
-            Util.checkValidPrincipal(principal, principalManager, ImportBehavior.BESTEFFORT != Util.getImportBehavior(getConfig()));
+        boolean checkValidPrincipal(Principal principal) throws AccessControlException {
+            int importBehavior = Util.getImportBehavior(getConfig());
+            Util.checkValidPrincipal(principal, principalManager, ImportBehavior.BESTEFFORT != importBehavior);
+
+            if (principal instanceof AdminPrincipal) {
+                log.warn("Attempt to create an ACE for the admin principal which always has full access.");
+                switch (Util.getImportBehavior(getConfig())) {
+                    case ImportBehavior.ABORT:
+                        throw new AccessControlException("Attempt to create an ACE for the admin principal which always has full access.");
+                    case ImportBehavior.IGNORE:
+                        return false;
+                    case ImportBehavior.BESTEFFORT:
+                        // just log warning, no other action required.
+                        break;
+                    default :
+                        throw new IllegalArgumentException("Invalid import behavior" + importBehavior);
+                }
+            }
+            return true;
         }
 
         @Override
@@ -624,8 +642,9 @@ public class AccessControlManagerImpl extends AbstractAccessControlManager imple
         }
 
         @Override
-        void checkValidPrincipal(Principal principal) throws AccessControlException {
+        boolean checkValidPrincipal(Principal principal) throws AccessControlException {
             Util.checkValidPrincipal(principal, principalManager, true);
+            return true;
         }
 
         @Override

@@ -10,6 +10,7 @@ The following runmodes are currently available:
     * benchmark   : Run benchmark tests against different Oak repository fixtures.
     * debug       : Print status information about an Oak repository.
     * compact     : Segment compaction on a TarMK repository.
+    * upgrade     : Migrate existing Jackrabbit 2.x repository to Oak.
     * server      : Run the Oak Server.
     * console     : Start an interactive console.
     * explore     : Starts a GUI browser based on java swing.
@@ -17,7 +18,9 @@ The following runmodes are currently available:
     * syncslave   : Run a TarMK Cold Standby slave
     * scalability : Run scalability tests against different Oak repository fixtures.
     * recovery    : Run a _lastRev recovery on a MongoMK repository
+    * checkpoints : Manage checkpoints
     * help        : Print a list of available runmodes
+    
 
 Some of the features related to Jackrabbit 2.x are provided by oak-run-jr2 jar. See
 the [Oak Runnable JR2](#jr2) section for more details.

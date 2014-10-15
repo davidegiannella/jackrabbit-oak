@@ -36,6 +36,7 @@ import org.apache.jackrabbit.api.security.user.Authorizable;
 import org.apache.jackrabbit.api.security.user.User;
 import org.apache.jackrabbit.api.security.user.UserManager;
 import org.apache.jackrabbit.oak.api.AuthInfo;
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Root;
 import org.apache.jackrabbit.oak.api.Tree;
@@ -119,12 +120,16 @@ class UserAuthentication implements Authentication, UserConstants {
                 checkSuccess(success, "UserId/Password mismatch.");
 
                 if (isPasswordExpired(user)) {
-                    throw new CredentialExpiredException("User password has expired");
+                    // change the password if the credentials object has the
+                    // UserConstants.CREDENTIALS_ATTRIBUTE_NEWPASSWORD attribute set
+                    if (!changePassword(user, creds)) {
+                        throw new CredentialExpiredException("User password has expired");
+                    }
                 }
             } else if (credentials instanceof ImpersonationCredentials) {
                 ImpersonationCredentials ipCreds = (ImpersonationCredentials) credentials;
                 AuthInfo info = ipCreds.getImpersonatorInfo();
-                success = equalUserId(ipCreds) && impersonate(info, user);
+                success = equalUserId(ipCreds, userId) && impersonate(info, user);
                 checkSuccess(success, "Impersonation not allowed.");
             } else {
                 // guest login is allowed if an anonymous user exists in the content (see get user above)
@@ -143,9 +148,33 @@ class UserAuthentication implements Authentication, UserConstants {
         }
     }
 
-    private boolean equalUserId(ImpersonationCredentials creds) {
+    private static boolean equalUserId(@Nonnull ImpersonationCredentials creds, @Nonnull String userId) {
         Credentials base = creds.getBaseCredentials();
         return (base instanceof SimpleCredentials) && userId.equals(((SimpleCredentials) base).getUserID());
+    }
+
+    private boolean changePassword(User user, SimpleCredentials credentials) {
+        try {
+            Object newPasswordObject = credentials.getAttribute(CREDENTIALS_ATTRIBUTE_NEWPASSWORD);
+            if (newPasswordObject != null) {
+                if (newPasswordObject instanceof String) {
+                    user.changePassword((String) newPasswordObject);
+                    root.commit();
+                    log.debug("User " + userId + ": changed user password");
+                    return true;
+                } else {
+                    log.warn("Aborted password change for user " + userId
+                            + ": provided new password is of incompatible type "
+                            + newPasswordObject.getClass().getName());
+                }
+            }
+        } catch (RepositoryException e) {
+            log.error("Failed to change password for user " + userId, e.getMessage());
+        } catch (CommitFailedException e) {
+            root.refresh();
+            log.error("Failed to change password for user " + userId, e.getMessage());
+        }
+        return false;
     }
 
     private boolean impersonate(AuthInfo info, User user) {

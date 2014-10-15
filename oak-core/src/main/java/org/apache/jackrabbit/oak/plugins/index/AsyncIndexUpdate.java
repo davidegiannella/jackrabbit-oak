@@ -283,7 +283,7 @@ public class AsyncIndexUpdate implements Runnable {
         String afterCheckpoint = store.checkpoint(lifetime);
         NodeState after = store.retrieve(afterCheckpoint);
         if (after == null) {
-            log.warn("Unable to retrieve newly created checkpoint {},"
+            log.debug("Unable to retrieve newly created checkpoint {},"
                     + " skipping the {} index update", afterCheckpoint, name);
             return;
         }
@@ -319,7 +319,7 @@ public class AsyncIndexUpdate implements Runnable {
         } finally {
             if (checkpointToRelease != null) { // null during initial indexing
                 if (!store.release(checkpointToRelease)) {
-                    log.debug("Unable to reelase checkpoint {}",
+                    log.debug("Unable to release checkpoint {}",
                             checkpointToRelease);
                 }
             }
@@ -357,29 +357,30 @@ public class AsyncIndexUpdate implements Runnable {
                 } else {
                     postAsyncRunStatsStatus(indexStats);
                 }
-            } else if (switchOnSync) {
-                log.debug("No changes detected after diff; will try to"
-                        + " switch to synchronous updates on {}",
-                        reindexedDefinitions);
+            } else {
+                if (switchOnSync) {
+                    log.debug(
+                            "No changes detected after diff; will try to switch to synchronous updates on {}",
+                            reindexedDefinitions);
 
-                // no changes after diff, switch to sync on the async defs
-                for (String path : reindexedDefinitions) {
-                    NodeBuilder c = builder;
-                    for (String p : elements(path)) {
-                        c = c.getChildNode(p);
+                    // no changes after diff, switch to sync on the async defs
+                    for (String path : reindexedDefinitions) {
+                        NodeBuilder c = builder;
+                        for (String p : elements(path)) {
+                            c = c.getChildNode(p);
+                        }
+                        if (c.exists() && !c.getBoolean(REINDEX_PROPERTY_NAME)) {
+                            c.removeProperty(ASYNC_PROPERTY_NAME);
+                        }
                     }
-                    if (c.exists() && !c.getBoolean(REINDEX_PROPERTY_NAME)) {
-                        c.removeProperty(ASYNC_PROPERTY_NAME);
-                    }
+                    reindexedDefinitions.clear();
                 }
-                reindexedDefinitions.clear();
+                postAsyncRunStatsStatus(indexStats);
             }
             mergeWithConcurrencyCheck(builder, beforeCheckpoint, callback.lease);
         } finally {
             callback.close();
         }
-
-        postAsyncRunStatsStatus(indexStats);
     }
 
     private void mergeWithConcurrencyCheck(

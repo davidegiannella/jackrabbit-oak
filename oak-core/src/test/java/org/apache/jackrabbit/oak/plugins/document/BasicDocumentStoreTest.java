@@ -19,12 +19,22 @@ package org.apache.jackrabbit.oak.plugins.document;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.UnsupportedEncodingException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
@@ -116,7 +126,20 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
 
     @Test
     public void testInterestingPropLengths() {
-        int lengths[] = {1, 10, 100, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000, 14000, 15000, 16000, 20000};
+        int lengths[] = { 1, 10, 100, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000, 14000,
+                15000, 16000, 20000 };
+
+        for (int test : lengths) {
+            String id = this.getClass().getName() + ".testInterestingPropLengths-" + test;
+            String pval = generateString(test, true);
+            UpdateOp up = new UpdateOp(id, true);
+            up.set("_id", id);
+            up.set("foo", pval);
+            super.ds.remove(Collection.NODES, id);
+            boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
+            assertTrue("failed to insert a document with property of length " + test + "(ASCII) in " + super.dsname, success);
+            super.ds.remove(Collection.NODES, id);
+        }
 
         for (int test : lengths) {
             String id = this.getClass().getName() + ".testInterestingPropLengths-" + test;
@@ -126,7 +149,65 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
             up.set("foo", pval);
             super.ds.remove(Collection.NODES, id);
             boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
-            assertTrue("failed to insert a document with property of length " + test, success);
+            try {
+                assertTrue("failed to insert a document with property of length " + test
+                        + "(potentially non-ASCII, actual octet length in UTF-8: " + pval.getBytes("UTF-8").length + ") in "
+                        + super.dsname, success);
+            } catch (UnsupportedEncodingException e) {
+                // outch
+            }
+            super.ds.remove(Collection.NODES, id);
+        }
+    }
+
+    @Test
+    public void testModifiedMaxUpdate() {
+        String id = this.getClass().getName() + ".testModifiedMaxUpdate";
+        // create a test node
+        UpdateOp up = new UpdateOp(id, true);
+        up.set("_id", id);
+        up.set("_modified", 1000L);
+        boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
+        assertTrue(success);
+        removeMe.add(id);
+
+        // update with smaller _modified
+        UpdateOp up2 = new UpdateOp(id, true);
+        up2.max("_modified", 100L);
+        up2.set("_id", id);
+        super.ds.findAndUpdate(Collection.NODES, up2);
+
+        super.ds.invalidateCache();
+
+        // this should find the document; will fail if the MAX operation wasn't applied to the indexed property
+        List<NodeDocument> results = super.ds.query(Collection.NODES, this.getClass().getName() + ".testModifiedMaxUpdatd", this.getClass().getName() + ".testModifiedMaxUpdatf", "_modified", 1000, 1);
+        assertEquals("document not found, maybe indexed _modified property not properly updated", 1, results.size());
+    }
+
+    @Test
+    public void testInterestingStrings() {
+        // TODO see OAK-1913
+        Assume.assumeTrue(!(super.dsname.equals("RDB-MySQL")));
+
+        String[] tests = new String[] {
+            "simple:foo", "cr:a\n\b", "dquote:a\"b", "bs:a\\b", "euro:a\u201c", "gclef:\uD834\uDD1E", "tab:a\tb", "nul:a\u0000b"
+        };
+
+        for (String t : tests) {
+            int pos = t.indexOf(":");
+            String testname = t.substring(0, pos);
+            String test = t.substring(pos + 1);
+            String id = this.getClass().getName() + ".testInterestingStrings-" + testname;
+            UpdateOp up = new UpdateOp(id, true);
+            up.set("_id", id);
+            up.set("foo", test);
+            super.ds.remove(Collection.NODES, id);
+            boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
+            assertTrue("failed to insert a document with property value of " + test + " in " + super.dsname, success);
+            // re-read from persistence
+            super.ds.invalidateCache();
+            NodeDocument nd = super.ds.find(Collection.NODES, id);
+            assertEquals("failure to round-trip " + testname + " through " + super.dsname, test, nd.get("foo"));
             super.ds.remove(Collection.NODES, id);
         }
     }
@@ -159,6 +240,7 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
     public void testUpdateMultiple() {
         String id = this.getClass().getName() + ".testUpdateMultiple";
         // create a test node
+        super.ds.remove(Collection.NODES, id);
         UpdateOp up = new UpdateOp(id, true);
         up.set("_id", id);
         boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
@@ -178,7 +260,8 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
         ds.invalidateCache();
         Document d = ds.find(Collection.NODES, id);
         assertNotNull(d);
-        assertEquals(d.get("foo").toString(), "bar");
+        assertEquals(id, d.getId());
+        assertEquals("bar", d.get("foo").toString());
     }
 
     @Test
@@ -232,7 +315,7 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
         String base = "2:/" + this.getClass().getName() + ".testQueryCollation";
         List<UpdateOp> creates = new ArrayList<UpdateOp>();
 
-        List<String>expected = new ArrayList<String>();
+        List<String> expected = new ArrayList<String>();
         // test US-ASCII except control characters
         for (char c : "!\"#$%&'()*+,-./0123456789:;<=>?@AZ[\\]^_`az{|}~".toCharArray()) {
             String id = base + c;
@@ -255,14 +338,14 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
         List<String> diff = new ArrayList<String>();
         diff.addAll(result);
         diff.removeAll(expected);
-        if (! diff.isEmpty()) {
+        if (!diff.isEmpty()) {
             fail("unexpected query results (broken collation handling in persistence?): " + diff);
         }
 
         diff = new ArrayList<String>();
         diff.addAll(expected);
         diff.removeAll(result);
-        if (! diff.isEmpty()) {
+        if (!diff.isEmpty()) {
             fail("missing query results (broken collation handling in persistence?): " + diff);
         }
         assertEquals("incorrect result ordering in query result (broken collation handling in persistence?)", expected, result);
@@ -314,51 +397,338 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
             cnt += 1;
         }
 
-        LOG.info("document creation with property of size " + size + " and batch size " + amount + " for " + super.dsname + " was " + cnt + " in " + duration + "ms ("
-                + (cnt / (duration / 1000f)) + "/s)");
+        LOG.info("document creation with property of size " + size + " and batch size " + amount + " for " + super.dsname + " was "
+                + cnt + " in " + duration + "ms (" + (cnt / (duration / 1000f)) + "/s)");
+    }
+
+    @Test
+    public void testPerfLastRevBatch() {
+        String bid = this.getClass().getName() + ".testPerfLastRevBatch";
+        int nodecount = 100;
+        long duration = 5000;
+        int cnt = 0;
+        List<String> ids = new ArrayList<String>();
+        Revision cr = Revision.fromString("r0-0-1");
+
+        // create test nodes
+        for (int i = 0; i < nodecount; i++) {
+            String id = bid + "-" + i;
+            removeMe.add(id);
+            UpdateOp up = new UpdateOp(id, true);
+            up.set("_id", id);
+            up.set("testprop", generateString(100 * i, true));
+            up.setMapEntry("_lastRev", cr, "setup");
+            up.set("_modified", NodeDocument.getModifiedInSecs(System.currentTimeMillis()));
+            boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
+            assertTrue("creation failed for " + id + " in " + super.dsname, success);
+            ids.add(id);
+        }
+
+        long end = System.currentTimeMillis() + duration;
+        while (System.currentTimeMillis() < end) {
+            UpdateOp up = new UpdateOp(bid, true);
+            up.setMapEntry("_lastRev", cr, "iteration-" + cnt);
+            up.max("_modified", NodeDocument.getModifiedInSecs(System.currentTimeMillis()));
+            super.ds.update(Collection.NODES, ids, up);
+            cnt += 1;
+        }
+
+        // check postcondition
+        super.ds.invalidateCache();
+        for (int i = 0; i < nodecount; i++) {
+            NodeDocument d = super.ds.find(Collection.NODES, bid + "-" + i);
+            assertNotNull(d);
+            Map<Revision, String> m = (Map<Revision, String>)d.get("_lastRev");
+            assertEquals("iteration-" + (cnt - 1), m.get(cr));
+        }
+
+        LOG.info("batch update for _lastRev for " + super.dsname + " was "
+                + cnt + " in " + duration + "ms (" + (cnt / (duration / 1000f)) + "/s)");
     }
 
     @Test
     public void testUpdatePerfSmall() {
-        updatePerf(16);
+        updatePerf(16, false);
+    }
+
+    @Test
+    public void testUpdatePerfSmallGrowing() {
+        updatePerf(16, true);
     }
 
     @Test
     public void testUpdatePerfBig() {
-        updatePerf(32 * 1024);
+        updatePerf(32 * 1024, false);
     }
 
-    private void updatePerf(int size) {
+    private void updatePerf(int size, boolean growing) {
         String pval = generateString(size, true);
         long duration = 1000;
         long end = System.currentTimeMillis() + duration;
         long cnt = 0;
+        Set<Revision> expectedRevs = new HashSet<Revision>();
 
-        String id = this.getClass().getName() + ".testUpdatePerf-" + size;
+        String id = this.getClass().getName() + ".testUpdatePerf" + (growing ? "Growing" : "") + "-" + size;
         removeMe.add(id);
 
         while (System.currentTimeMillis() < end) {
             UpdateOp up = new UpdateOp(id, true);
             up.set("_id", id);
-            up.set("foo", pval);
-            super.ds.createOrUpdate(Collection.NODES, up);
+            if (growing) {
+                Revision r = new Revision(System.currentTimeMillis(), (int) cnt, 1);
+                up.setMapEntry("foo", r, pval);
+                up.setMapEntry("_commitRoot", r, "1");
+                up.increment("c", 1);
+                up.max("max", System.currentTimeMillis());
+                expectedRevs.add(r);
+            } else {
+                up.set("foo", pval);
+            }
+            NodeDocument old = super.ds.createOrUpdate(Collection.NODES, up);
+            if (cnt == 0) {
+                assertNull("expect null on create", old);
+            } else {
+                assertNotNull("fail on update " + cnt, old);
+            }
             cnt += 1;
         }
 
-        LOG.info("document updates with property of size " + size + " for " + super.dsname + " was " + cnt + " in " + duration + "ms ("
-                + (cnt / (duration / 1000f)) + "/s)");
+        if (growing) {
+            NodeDocument result = super.ds.find(Collection.NODES, id, 0);
+            Map<Revision, Object> m = (Map<Revision, Object>)result.get("foo");
+            assertEquals("number of revisions", expectedRevs.size(), m.size());
+            assertTrue(m.keySet().equals(expectedRevs));
+        }
+
+        LOG.info("document updates with property of size " + size + (growing ? " (growing)" : "") + " for " + super.dsname
+                + " was " + cnt + " in " + duration + "ms (" + (cnt / (duration / 1000f)) + "/s)");
     }
 
     private static String generateString(int length, boolean ascii) {
         char[] s = new char[length];
         for (int i = 0; i < length; i++) {
             if (ascii) {
-                s[i] = (char)(32 + (int) (95 * Math.random()));
-            }
-            else {
-                s[i] = (char)(32 + (int) ((0xd7ff - 32) * Math.random()));
+                s[i] = (char) (32 + (int) (95 * Math.random()));
+            } else {
+                s[i] = (char) (32 + (int) ((0xd7ff - 32) * Math.random()));
             }
         }
         return new String(s);
-   }
+    }
+
+    @Test
+    public void testPerfUpdateLimit() throws SQLException, UnsupportedEncodingException {
+        internalTestPerfUpdateLimit("testPerfUpdateLimit", "raw row update (set long)", 0);
+    }
+
+    @Test
+    public void testPerfUpdateLimitString() throws SQLException, UnsupportedEncodingException {
+        internalTestPerfUpdateLimit("testPerfUpdateLimitString", "raw row update (set long/string)", 1);
+    }
+
+    @Test
+    public void testPerfUpdateLimitStringBlob() throws SQLException, UnsupportedEncodingException {
+        internalTestPerfUpdateLimit("testPerfUpdateLimitStringBlob", "raw row update (set long/string/blob)", 2);
+    }
+
+    @Test
+    public void testPerfUpdateAppendString() throws SQLException, UnsupportedEncodingException {
+        internalTestPerfUpdateLimit("testPerfUpdateAppendString", "raw row update (append string)", 3);
+    }
+
+    @Test
+    public void testPerfUpdateGrowingDoc() throws SQLException, UnsupportedEncodingException {
+        internalTestPerfUpdateLimit("testPerfUpdateGrowingDoc", "raw row update (string + blob)", 4);
+    }
+
+    private void internalTestPerfUpdateLimit(String name, String desc, int mode) throws SQLException, UnsupportedEncodingException {
+        if (super.rdbDataSource != null) {
+            String key = name;
+            Connection connection = null;
+            String table = DocumentStoreFixture.TABLEPREFIX + "NODES";
+
+            // create test node
+            try {
+                connection = super.rdbDataSource.getConnection();
+                connection.setAutoCommit(false);
+                PreparedStatement stmt = connection.prepareStatement("insert into " + table
+                        + " (ID, MODCOUNT, DATA) values (?, ?, ?)");
+                try {
+                    stmt.setString(1, key);
+                    stmt.setLong(2, 0);
+                    stmt.setString(3, "X");
+                    stmt.executeUpdate();
+                    connection.commit();
+                } finally {
+                    stmt.close();
+                }
+            } catch (SQLException ex) {
+                // ignored
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        // ignored
+                    }
+                }
+            }
+
+            removeMe.add(key);
+            StringBuffer expect = new StringBuffer("X");
+
+            String appendString = generateString(32, true);
+
+            long duration = 1000;
+            long end = System.currentTimeMillis() + duration;
+            long cnt = 0;
+            byte bdata[] = new byte[65536];
+            String sdata = appendString;
+            int datalength = (super.dsname.contains("Oracle") ? 4000 : 16384) / 3;
+
+            while (System.currentTimeMillis() < end) {
+
+                try {
+                    connection = super.rdbDataSource.getConnection();
+                    connection.setAutoCommit(false);
+
+                    if (mode == 0) {
+                        PreparedStatement stmt = connection.prepareStatement("update " + table + " set MODCOUNT = ? where ID = ?");
+                        try {
+                            stmt.setLong(1, cnt);
+                            stmt.setString(2, key);
+                            assertEquals(1, stmt.executeUpdate());
+                            connection.commit();
+                        } finally {
+                            stmt.close();
+                        }
+                    } else if (mode == 1) {
+                        PreparedStatement stmt = connection.prepareStatement("update " + table
+                                + " set MODCOUNT = ?, DATA = ? where ID = ?");
+                        try {
+                            stmt.setLong(1, cnt);
+                            stmt.setString(2, "JSON data " + UUID.randomUUID());
+                            stmt.setString(3, key);
+                            assertEquals(1, stmt.executeUpdate());
+                            connection.commit();
+                        } finally {
+                            stmt.close();
+                        }
+                    } else if (mode == 2) {
+                        PreparedStatement stmt = connection.prepareStatement("update " + table
+                                + " set MODCOUNT = ?, DATA = ?, BDATA = ? where ID = ?");
+                        try {
+                            stmt.setLong(1, cnt);
+                            stmt.setString(2, "JSON data " + UUID.randomUUID());
+                            bdata[(int) cnt % bdata.length] = (byte) (cnt & 0xff);
+                            stmt.setString(2, "JSON data " + UUID.randomUUID());
+                            stmt.setBytes(3, bdata);
+                            stmt.setString(4, key);
+                            assertEquals(1, stmt.executeUpdate());
+                            connection.commit();
+                        } finally {
+                            stmt.close();
+                        }
+                    } else if (mode == 3) {
+                        PreparedStatement stmt = connection.prepareStatement("update " + table
+                                + " set DATA = DATA || ? where ID = ?");
+                        try {
+                            stmt.setString(1, appendString);
+                            stmt.setString(2, key);
+                            assertEquals(1, stmt.executeUpdate());
+                            connection.commit();
+                            expect.append(appendString);
+                        } catch (SQLException ex) {
+                            String state = ex.getSQLState();
+                            if ("22001".equals(state) /* everybody */ || ("72000".equals(state) && 1489 == ex.getErrorCode()) /* Oracle */) {
+                                // overflow
+                                connection.rollback();
+                                stmt = connection.prepareStatement("update " + table
+                                        + " set MODCOUNT = MODCOUNT + 1, DATA = ? where ID = ?");
+                                stmt.setString(1, "X");
+                                stmt.setString(2, key);
+                                assertEquals(1, stmt.executeUpdate());
+                                connection.commit();
+                                expect = new StringBuffer("X");
+                            } else {
+                                throw (ex);
+                            }
+                        } finally {
+                            stmt.close();
+                        }
+                    } else if (mode == 4) {
+                        PreparedStatement stmt = connection.prepareStatement("update " + table
+                                + " set MODIFIED = ?, HASBINARY = ?, MODCOUNT = ?, CMODCOUNT = ?, DSIZE = ?, DATA = ?, BDATA = ? where ID = ?");
+                        try {
+                            int si = 1;
+                            stmt.setObject(si++, System.currentTimeMillis() / 5, Types.BIGINT);
+                            stmt.setObject(si++, 0, Types.SMALLINT);
+                            stmt.setObject(si++, cnt, Types.BIGINT);
+                            stmt.setObject(si++, null, Types.BIGINT);
+                            stmt.setObject(si++, sdata.length(), Types.BIGINT);
+
+                            if (sdata.length() < datalength) {
+                                stmt.setString(si++, sdata);
+                                stmt.setBinaryStream(si++, null, 0);
+                            }
+                            else {
+                                stmt.setString(si++, "null");
+                                stmt.setBytes(si++, sdata.getBytes("UTF-8"));
+                            }
+                            stmt.setString(si++, key);
+                            assertEquals(1, stmt.executeUpdate());
+                            connection.commit();
+                            sdata += appendString;
+                        } finally {
+                            stmt.close();
+                        }
+
+                    }
+                } catch (SQLException ex) {
+                    LOG.error(ex.getMessage() + " " + ex.getSQLState() + " " + ex.getErrorCode(), ex);
+                } finally {
+                    if (connection != null) {
+                        try {
+                            connection.close();
+                        } catch (SQLException e) {
+                            // ignored
+                        }
+                    }
+                }
+
+                cnt += 1;
+            }
+
+            // check persisted values
+            if (mode == 3) {
+                try {
+                    connection = super.rdbDataSource.getConnection();
+                    connection.setAutoCommit(false);
+                    PreparedStatement stmt = connection.prepareStatement("select DATA, MODCOUNT from " + table + " where ID = ?");
+                    try {
+                        stmt.setString(1, key);
+                        ResultSet rs = stmt.executeQuery();
+                        assertTrue(rs.next());
+                        String got = rs.getString(1);
+                        long modc = rs.getLong(2);
+                        LOG.info("column reset " + modc + " times");
+                        assertEquals(expect.toString(), got);
+                    } finally {
+                        stmt.close();
+                    }
+                } finally {
+                    if (connection != null) {
+                        try {
+                            connection.close();
+                        } catch (SQLException e) {
+                            // ignored
+                        }
+                    }
+                }
+            }
+
+            LOG.info(desc + " for " + super.dsname + " was " + cnt + " in " + duration + "ms (" + (cnt / (duration / 1000f))
+                    + "/s)");
+        }
+    }
 }

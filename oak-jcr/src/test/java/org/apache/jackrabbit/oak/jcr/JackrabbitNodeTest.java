@@ -16,20 +16,27 @@
  */
 package org.apache.jackrabbit.oak.jcr;
 
+import static com.google.common.collect.Lists.newArrayList;
+import static java.util.concurrent.TimeUnit.SECONDS;
+
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.observation.Event;
+import javax.jcr.observation.EventIterator;
+import javax.jcr.observation.EventListener;
 import javax.jcr.observation.ObservationManager;
 
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.api.JackrabbitNode;
 import org.apache.jackrabbit.commons.cnd.CndImporter;
 import org.apache.jackrabbit.test.AbstractJCRTest;
-import org.apache.jackrabbit.test.api.observation.EventResult;
 
 /**
  * JackrabbitNodeTest: Copied and slightly adjusted from org.apache.jackrabbit.api.JackrabbitNodeTest,
@@ -86,13 +93,27 @@ public class JackrabbitNodeTest extends AbstractJCRTest {
         }
     }
 
-    public void testRenameEventHandling() throws RepositoryException {
+    public void testRenameEventHandling() throws RepositoryException, InterruptedException {
         Session s = getHelper().getSuperuserSession();
         ObservationManager mgr = s.getWorkspace().getObservationManager();
-        EventResult result = new EventResult(log);
+        final List<Event> events = newArrayList();
+        final CountDownLatch latch1 = new CountDownLatch(1);
+        final CountDownLatch latch2 = new CountDownLatch(1);
 
         try {
-            mgr.addEventListener(result, Event.PERSIST|Event.NODE_ADDED|Event.NODE_MOVED|Event.NODE_REMOVED, testRootNode.getPath(), true, null, null, false);
+            mgr.addEventListener(new EventListener() {
+                CountDownLatch latch = latch1;
+                @Override
+                public void onEvent(EventIterator eventIterator) {
+                    synchronized (events) {
+                        while (eventIterator.hasNext()) {
+                            events.add(eventIterator.nextEvent());
+                        }
+                        latch.countDown();
+                        latch = latch2;
+                    }
+                }
+            }, Event.PERSIST|Event.NODE_ADDED|Event.NODE_MOVED|Event.NODE_REMOVED, testRootNode.getPath(), true, null, null, false);
 
             NodeIterator it = testRootNode.getNodes();
 
@@ -103,20 +124,26 @@ public class JackrabbitNodeTest extends AbstractJCRTest {
             node.rename(name + 'X');
             superuser.save();
 
-            boolean foundMove = false;
-            StringBuffer diags = new StringBuffer();
-            for (Event event : result.getEvents(5000)) {
-                if (diags.length() != 0) {
-                    diags.append(", ");
-                }
-                diags.append("type " + event.getType() + " " + event.getDate() + "ms " + event.getPath());
-                if (Event.NODE_MOVED == event.getType()) {
-                    foundMove = true;
-                    break;
-                }
+            StringBuilder diags = new StringBuilder();
+            if (!latch1.await(60, SECONDS)) {
+                diags.append("latch1 timed out ");
             }
-            if (diags.length() == 0) {
-                diags.append("none");
+
+            boolean foundMove = false;
+            synchronized (events) {
+                for (Event event : events) {
+                    if (diags.length() != 0) {
+                        diags.append(", ");
+                    }
+                    diags.append("type " + event.getType() + " " + event.getDate() + "ms " + event.getPath());
+                    if (Event.NODE_MOVED == event.getType()) {
+                        foundMove = true;
+                        break;
+                    }
+                }
+                if (events.isEmpty()) {
+                    diags.append("none");
+                }
             }
 
             if (!foundMove) {
@@ -125,11 +152,17 @@ public class JackrabbitNodeTest extends AbstractJCRTest {
                 superuser.save();
 
                 StringBuffer addDiags = new StringBuffer();
-                for (Event event : result.getEvents(60000)) {
-                    if (addDiags.length() != 0) {
-                        addDiags.append(", ");
+                if (!latch2.await(60, SECONDS)) {
+                    addDiags.append("latch2 timed out ");
+                }
+
+                synchronized (events) {
+                    for (Event event : events) {
+                        if (addDiags.length() != 0) {
+                            addDiags.append(", ");
+                        }
+                        addDiags.append("type " + event.getType() + " " + event.getDate() + "ms " + event.getPath());
                     }
-                    addDiags.append("type " + event.getType() + " " + event.getDate() + "ms " + event.getPath());
                 }
 
                 if (addDiags.length() > 0) {
@@ -141,7 +174,6 @@ public class JackrabbitNodeTest extends AbstractJCRTest {
                 fail("Expected NODE_MOVED event upon renaming a node (received: " + diags + ")");
             }
         } finally {
-            mgr.removeEventListener(result);
             s.logout();
         }
     }

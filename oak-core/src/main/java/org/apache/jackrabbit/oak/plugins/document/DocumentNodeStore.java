@@ -19,7 +19,6 @@ package org.apache.jackrabbit.oak.plugins.document;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.api.CommitFailedException.MERGE;
-import static org.apache.jackrabbit.oak.plugins.document.Branch.BranchCommit;
 import static org.apache.jackrabbit.oak.plugins.document.Collection.NODES;
 import static org.apache.jackrabbit.oak.plugins.document.DocumentMK.FAST_DIFF;
 import static org.apache.jackrabbit.oak.plugins.document.DocumentMK.MANY_CHILDREN_THRESHOLD;
@@ -74,6 +73,7 @@ import org.apache.jackrabbit.oak.cache.CacheStats;
 import org.apache.jackrabbit.oak.cache.CacheValue;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.kernel.BlobSerializer;
+import org.apache.jackrabbit.oak.plugins.document.Branch.BranchCommit;
 import org.apache.jackrabbit.oak.plugins.document.util.LoggingDocumentStoreWrapper;
 import org.apache.jackrabbit.oak.plugins.document.util.StringValue;
 import org.apache.jackrabbit.oak.plugins.document.util.TimingDocumentStoreWrapper;
@@ -152,6 +152,12 @@ public final class DocumentNodeStore
      * cache update).
      */
     protected int asyncDelay = 1000;
+
+    /**
+     * The maximum back off time in milliseconds when merges are retried. The
+     * default value is twice the {@link #asyncDelay}.
+     */
+    protected int maxBackOffMillis = asyncDelay * 2;
 
     /**
      * Whether this instance is disposed.
@@ -448,6 +454,8 @@ public final class DocumentNodeStore
                 clusterNodeInfo.dispose();
             }
             store.dispose();
+            unsavedLastRevisions.close();
+
             LOG.info("Disposed DocumentNodeStore with clusterNodeId: {}", clusterId);
 
             if (blobStore instanceof Closeable) {
@@ -574,6 +582,14 @@ public final class DocumentNodeStore
         return asyncDelay;
     }
 
+    public void setMaxBackOffMillis(int time) {
+        maxBackOffMillis = time;
+    }
+
+    public int getMaxBackOffMillis() {
+        return maxBackOffMillis;
+    }
+
     @CheckForNull
     public ClusterNodeInfo getClusterInfo() {
         return clusterNodeInfo;
@@ -593,6 +609,10 @@ public final class DocumentNodeStore
 
     void invalidateDocChildrenCache() {
         docChildrenCache.invalidateAll();
+    }
+
+    void invalidateNodeCache(String path, Revision revision){
+        nodeCache.invalidate(new PathRev(path, revision));
     }
 
     public int getPendingWriteCount() {
@@ -1385,12 +1405,26 @@ public final class DocumentNodeStore
             return;
         }
         try {
+            long start = clock.getTime();
+            long time = start;
             // split documents (does not create new revisions)
             backgroundSplit();
+            long splitTime = clock.getTime() - time;
+            time = clock.getTime();
             // write back pending updates to _lastRev
             backgroundWrite();
+            long writeTime = clock.getTime() - time;
+            time = clock.getTime();
             // pull in changes from other cluster nodes
             backgroundRead(true);
+            long readTime = clock.getTime() - time;
+            String msg = "Background operations stats (split:{}, write:{}, read:{})";
+            if (clock.getTime() - start > TimeUnit.SECONDS.toMillis(10)) {
+                // log as info if it took more than 10 seconds
+                LOG.info(msg, splitTime, writeTime, readTime);
+            } else {
+                LOG.debug(msg, splitTime, writeTime, readTime);
+            }
         } catch (RuntimeException e) {
             if (isDisposed.get()) {
                 return;
