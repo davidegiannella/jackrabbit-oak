@@ -23,6 +23,8 @@ import static junit.framework.Assert.assertTrue;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
+import static org.apache.jackrabbit.oak.api.Type.NAME;
+import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
 import static org.apache.jackrabbit.oak.spi.query.PropertyValues.newString;
@@ -30,6 +32,7 @@ import static org.junit.Assert.assertNotNull;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Iterator;
@@ -960,6 +963,38 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
                 .getRows().iterator();
         assertRightOrder(nodes, results);
 
+        setTraversalEnabled(true);
+    }
+    
+    @Test
+    public void oak2219() throws Exception {
+        setTraversalEnabled(false);
+
+//        root.getTree("/" + INDEX_DEFINITIONS_NAME + "/" + TEST_INDEX_NAME).remove();
+//        IndexUtils.createIndexDefinition(new NodeUtil(root.getTree("/" + INDEX_DEFINITIONS_NAME)),
+//            TEST_INDEX_NAME, false, new String[] { ORDERED_PROPERTY }, null);
+//        root.commit();
+        
+        List<String> expected = new ArrayList<String>();
+        Tree content = root.getTree("/").addChild("content");
+ 
+        for (String s : of("a", "b")) {
+            Tree node = content.addChild(s);
+            node.setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+            node.addChild("sub").setProperty(ORDERED_PROPERTY, s + "value", STRING);
+            expected.add(node.getPath());            
+        }
+        
+        root.commit();
+        
+//        List<String> paths = executeQuery("//element(*, nt:unstructured)[(sub/@" + ORDERED_PROPERTY + ")]", "xpath");
+//        System.out.println(paths.isEmpty());
+//        for (String p : paths) {
+//            System.out.println(p);
+//        }
+        
+        assertQuery("//element(*, nt:unstructured)[(sub/@" + ORDERED_PROPERTY + ")]", "xpath", expected);
+        
         setTraversalEnabled(true);
     }
 }
