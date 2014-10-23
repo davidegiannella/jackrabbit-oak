@@ -22,6 +22,7 @@ import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.NT_FILE;
 import static org.apache.jackrabbit.JcrConstants.NT_FOLDER;
 import static org.apache.jackrabbit.JcrConstants.JCR_DATA;
+import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -35,7 +36,10 @@ import org.apache.jackrabbit.oak.plugins.index.aggregate.AggregateIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.aggregate.NodeAggregator;
 import org.apache.jackrabbit.oak.plugins.index.aggregate.SimpleNodeAggregator;
 
+import static org.apache.jackrabbit.oak.api.Type.NAME;
+import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.plugins.memory.BinaryPropertyState.binaryProperty;
+import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.NT_OAK_UNSTRUCTURED;
 
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.AbstractQueryTest;
@@ -400,4 +404,22 @@ public class LuceneIndexAggregationTest extends AbstractQueryTest {
                     "xpath", ImmutableList.of("/myFolder", "/myFolder/myFile", "/myFolder/myFile/jcr:content"));
     }
 
+    @Test
+    public void oak2226() throws Exception {
+        final String statement = "/jcr:root/content//element(*, nt:unstructured)[" +
+            "(jcr:contains(., 'mountain')) " +
+            "and (jcr:contains(jcr:content/metadata/@format, 'image'))]";
+        Tree content = root.getTree("/").addChild("content");
+        Tree expected = content.addChild("expected");
+        expected.setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+        Tree node = expected.addChild("jcr:content");
+        node.setProperty(JCR_PRIMARYTYPE, NT_OAK_UNSTRUCTURED, NAME);
+        node = node.addChild("metadata");
+        node.setProperty(JCR_PRIMARYTYPE, NT_OAK_UNSTRUCTURED, NAME);
+        node.setProperty("title", "Lorem mountain ipsum", STRING);
+        node.setProperty("format", "image/jpeg", STRING);
+        root.commit();
+
+        assertQuery(statement, "xpath", ImmutableList.of(expected.getPath()));
+    }
 }
