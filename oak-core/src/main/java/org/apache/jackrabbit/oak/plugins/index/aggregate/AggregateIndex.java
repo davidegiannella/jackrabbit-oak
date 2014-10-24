@@ -29,6 +29,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
+
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextAnd;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
@@ -42,6 +43,8 @@ import org.apache.jackrabbit.oak.spi.query.Cursors.AbstractCursor;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.IndexRow;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.jackrabbit.oak.spi.query.QueryIndex.AdvanceFulltextQueryIndex;
 
@@ -51,6 +54,8 @@ import static org.apache.jackrabbit.oak.spi.query.QueryIndex.AdvanceFulltextQuer
  */
 public class AggregateIndex implements AdvanceFulltextQueryIndex {
 
+    private static final Logger LOG = LoggerFactory.getLogger(AggregateIndex.class);
+    
     private final AdvanceFulltextQueryIndex baseIndex;
 
     public AggregateIndex(AdvanceFulltextQueryIndex baseIndex) {
@@ -304,6 +309,13 @@ public class AggregateIndex implements AdvanceFulltextQueryIndex {
                         Iterators.singletonIterator(path),
                         aggregator.getParents(rootState, path)), Predicates
                         .not(Predicates.in(seenPaths)));
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace("trying to push new path if matches Predicate: {}", path);
+                    LOG.trace("current aggregates");
+                    while (aggregates.hasNext()) {
+                        LOG.trace("{}", aggregates.next());
+                    }
+                }
                 fetchNext();
                 return;
             }
