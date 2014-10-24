@@ -26,6 +26,7 @@ import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.List;
 
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
@@ -48,6 +49,7 @@ import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 
 public class LuceneIndexAggregationTest extends AbstractQueryTest {
 
@@ -406,20 +408,37 @@ public class LuceneIndexAggregationTest extends AbstractQueryTest {
 
     @Test
     public void oak2226() throws Exception {
+        setTraversalEnabled(false);
         final String statement = "/jcr:root/content//element(*, nt:unstructured)[" +
             "(jcr:contains(., 'mountain')) " +
             "and (jcr:contains(jcr:content/metadata/@format, 'image'))]";
         Tree content = root.getTree("/").addChild("content");
-        Tree expected = content.addChild("expected");
-        expected.setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
-        Tree node = expected.addChild("jcr:content");
+        List<String> expected = Lists.newArrayList();
+        
+        // adding a node with 'mountain' property
+        Tree node = content.addChild("node");
+        node.setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+        expected.add(node.getPath());
+        node = node.addChild("jcr:content");
         node.setProperty(JCR_PRIMARYTYPE, NT_OAK_UNSTRUCTURED, NAME);
         node = node.addChild("metadata");
         node.setProperty(JCR_PRIMARYTYPE, NT_OAK_UNSTRUCTURED, NAME);
         node.setProperty("title", "Lorem mountain ipsum", STRING);
         node.setProperty("format", "image/jpeg", STRING);
+        
+        // adding a node with 'mountain' name but not property
+        node = content.addChild("mountain-node");
+        node.setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+        expected.add(node.getPath());
+        node = node.addChild("jcr:content");
+        node.setProperty(JCR_PRIMARYTYPE, NT_OAK_UNSTRUCTURED, NAME);
+        node = node.addChild("metadata");
+        node.setProperty(JCR_PRIMARYTYPE, NT_OAK_UNSTRUCTURED, NAME);
+        node.setProperty("format", "image/jpeg", STRING);
+        
         root.commit();
 
-        assertQuery(statement, "xpath", ImmutableList.of(expected.getPath()));
+        assertQuery(statement, "xpath", expected);
+        setTraversalEnabled(true);
     }
 }
