@@ -54,8 +54,6 @@ import static org.apache.jackrabbit.oak.spi.query.QueryIndex.AdvanceFulltextQuer
  */
 public class AggregateIndex implements AdvanceFulltextQueryIndex {
 
-    private static final Logger LOG = LoggerFactory.getLogger(AggregateIndex.class);
-    
     private final AdvanceFulltextQueryIndex baseIndex;
 
     public AggregateIndex(AdvanceFulltextQueryIndex baseIndex) {
@@ -101,8 +99,8 @@ public class AggregateIndex implements AdvanceFulltextQueryIndex {
         }
 
         IndexPlan newPlan = newPlanWithAggregationFilter(plan, null);
-        return new AggregationCursor(index.query(newPlan,
-                state), index.getNodeAggregator(), state);
+        Cursor indexCursor = index.query(newPlan, state);
+        return new AggregationCursor(indexCursor, index.getNodeAggregator(), state);
     }
 
     private static boolean hasCompositeExpression(FullTextExpression ft) {
@@ -309,13 +307,6 @@ public class AggregateIndex implements AdvanceFulltextQueryIndex {
                         Iterators.singletonIterator(path),
                         aggregator.getParents(rootState, path)), Predicates
                         .not(Predicates.in(seenPaths)));
-                if (LOG.isTraceEnabled()) {
-                    LOG.trace("trying to push new path if matches Predicate: {}", path);
-                    LOG.trace("current aggregates");
-                    while (aggregates.hasNext()) {
-                        LOG.trace("{}", aggregates.next());
-                    }
-                }
                 fetchNext();
                 return;
             }

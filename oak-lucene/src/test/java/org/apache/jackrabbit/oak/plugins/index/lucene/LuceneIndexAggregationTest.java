@@ -409,11 +409,43 @@ public class LuceneIndexAggregationTest extends AbstractQueryTest {
     @Test
     public void oak2226() throws Exception {
         setTraversalEnabled(false);
+//        final String statement = "/jcr:root/content//element(*, nt:unstructured)[" +
+//            "(jcr:contains(., 'mountain')) " +
+//            "and (jcr:contains(jcr:content/metadata/@format, 'image'))]";
         final String statement = "/jcr:root/content//element(*, nt:unstructured)[" +
-            "(jcr:contains(., 'mountain')) " +
-            "and (jcr:contains(jcr:content/metadata/@format, 'image'))]";
+            "(jcr:contains(., 'mountain'))]";
+//      final String statement = "/jcr:root/content//element(*, nt:unstructured)[" +
+//              "(jcr:contains(jcr:content/metadata/@format, 'image'))]";
         Tree content = root.getTree("/").addChild("content");
         List<String> expected = Lists.newArrayList();
+        
+        /*
+         * creating structure
+         *  "/content" : {
+         *      "node" : {
+         *          "jcr:primaryType" : "nt:unstructured",
+         *          "jcr:content" : {
+         *              "jcr:primaryType" : "oak:Unstructured",
+         *              "metadata" : {
+         *                  "jcr:primaryType" : "oak:Unstructured",
+         *                  "title" : "Lorem mountain ipsum",
+         *                  "format" : "image/jpeg"
+         *              }
+         *          }
+         *      },
+         *      "mountain-node" : {
+         *          "jcr:primaryType" : "nt:unstructured",
+         *          "jcr:content" : {
+         *              "jcr:primaryType" : "oak:Unstructured",
+         *              "metadata" : {
+         *                  "jcr:primaryType" : "oak:Unstructured",
+         *                  "format" : "image/jpeg"
+         *              }
+         *          }
+         *      }
+         *  }
+         */
+        
         
         // adding a node with 'mountain' property
         Tree node = content.addChild("node");
