@@ -22,11 +22,9 @@ import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.NT_FILE;
 import static org.apache.jackrabbit.JcrConstants.NT_FOLDER;
 import static org.apache.jackrabbit.JcrConstants.JCR_DATA;
-import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.List;
 
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
@@ -37,10 +35,7 @@ import org.apache.jackrabbit.oak.plugins.index.aggregate.AggregateIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.aggregate.NodeAggregator;
 import org.apache.jackrabbit.oak.plugins.index.aggregate.SimpleNodeAggregator;
 
-import static org.apache.jackrabbit.oak.api.Type.NAME;
-import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.plugins.memory.BinaryPropertyState.binaryProperty;
-import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.NT_OAK_UNSTRUCTURED;
 
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.AbstractQueryTest;
@@ -49,7 +44,6 @@ import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 
 public class LuceneIndexAggregationTest extends AbstractQueryTest {
 
@@ -405,4 +399,5 @@ public class LuceneIndexAggregationTest extends AbstractQueryTest {
                     "//*[(jcr:contains(., 'dog') or jcr:contains(jcr:content, 'dog') )]",
                     "xpath", ImmutableList.of("/myFolder", "/myFolder/myFile", "/myFolder/myFile/jcr:content"));
     }
+
 }

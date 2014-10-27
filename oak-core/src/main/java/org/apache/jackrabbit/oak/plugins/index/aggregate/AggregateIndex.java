@@ -29,7 +29,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
-
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextAnd;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
@@ -43,8 +42,6 @@ import org.apache.jackrabbit.oak.spi.query.Cursors.AbstractCursor;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.IndexRow;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.apache.jackrabbit.oak.spi.query.QueryIndex.AdvanceFulltextQueryIndex;
 
@@ -97,10 +94,10 @@ public class AggregateIndex implements AdvanceFulltextQueryIndex {
                 return c;
             }
         }
-
+        
         IndexPlan newPlan = newPlanWithAggregationFilter(plan, null);
-        Cursor indexCursor = index.query(newPlan, state);
-        return new AggregationCursor(indexCursor, index.getNodeAggregator(), state);
+        return new AggregationCursor(index.query(newPlan,
+            state), index.getNodeAggregator(), state);
     }
 
     private static boolean hasCompositeExpression(FullTextExpression ft) {
