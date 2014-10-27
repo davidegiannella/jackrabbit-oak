@@ -18,4 +18,18 @@
 <test='http://jackrabbit.apache.org/oak-test/ns/1.0'>
 
 
-[test:Page] > oak:Unstructured
+[test:PageContent] > nt:unstructured
+  orderable
+
+[test:Page] > nt:hierarchyNode
+  orderable primaryitem jcr:content
+  + jcr:content (nt:base) = nt:unstructured
+  + * (nt:base) = nt:base version
+
+[test:AssetContent] > nt:unstructured
+ + metadata (nt:unstructured)
+ + renditions (nt:folder)
+
+[test:Asset] > nt:hierarchyNode
+ + jcr:content (test:AssetContent) = test:AssetContent copy primary
+ + * (nt:base) = nt:base version
