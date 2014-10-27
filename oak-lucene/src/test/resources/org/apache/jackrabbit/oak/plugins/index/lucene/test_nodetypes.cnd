@@ -28,7 +28,6 @@
 
 [test:AssetContent] > nt:unstructured
  + metadata (nt:unstructured)
- + renditions (nt:folder)
 
 [test:Asset] > nt:hierarchyNode
  + jcr:content (test:AssetContent) = test:AssetContent copy primary

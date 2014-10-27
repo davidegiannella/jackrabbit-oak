@@ -18,11 +18,16 @@ package org.apache.jackrabbit.oak.plugins.index.lucene;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static org.apache.jackrabbit.JcrConstants.JCR_CONTENT;
+import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
 import static org.apache.jackrabbit.JcrConstants.NT_FILE;
 import static org.apache.jackrabbit.JcrConstants.NT_FOLDER;
+import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
+import static org.apache.jackrabbit.oak.api.Type.NAME;
+import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.plugins.name.NamespaceConstants.REP_NAMESPACES;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
+import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.NT_OAK_UNSTRUCTURED;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
@@ -34,6 +39,7 @@ import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.Root;
+import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.core.SystemRoot;
 import org.apache.jackrabbit.oak.plugins.index.aggregate.AggregateIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.aggregate.NodeAggregator;
@@ -62,6 +68,11 @@ import com.google.common.collect.Lists;
 
 public class LuceneIndexAggregationTest2 extends AbstractQueryTest {
     private static final Logger LOG = LoggerFactory.getLogger(LuceneIndexAggregationTest2.class);
+    
+    private static final String NT_TEST_PAGE = "test:Page";
+    private static final String NT_TEST_PAGECONTENT = "test:PageContent";
+    private static final String NT_TEST_ASSET = "test:Asset";
+    private static final String NT_TEST_ASSETCONTENT = "test:AssetContent";
     
     @Override
     protected ContentRepository createRepository() {
@@ -129,21 +140,88 @@ public class LuceneIndexAggregationTest2 extends AbstractQueryTest {
         }
     }
     
+    @Override
+    protected void createTestIndexNode() throws Exception {
+        Tree index = root.getTree("/");
+        createTestIndexNode(index, LuceneIndexConstants.TYPE_LUCENE);
+        root.commit();
+    }
+
     private static NodeAggregator getNodeAggregator() {
         return new SimpleNodeAggregator()
-            .newRuleWithName("nt:file", newArrayList("jcr:content"))
-            .newRuleWithName("test:Page", newArrayList("jcr:content"))
-            .newRuleWithName("test:PageContent", newArrayList("*", "*/*", "*/*/*", "*/*/*/*"))
-            .newRuleWithName("test:Asset", newArrayList("jcr:content"))
+            .newRuleWithName(NT_FILE, newArrayList("jcr:content"))
+            .newRuleWithName(NT_TEST_PAGE, newArrayList("jcr:content"))
+            .newRuleWithName(NT_TEST_PAGECONTENT, newArrayList("*", "*/*", "*/*/*", "*/*/*/*"))
+            .newRuleWithName(NT_TEST_ASSET, newArrayList("jcr:content"))
             .newRuleWithName(
-                "test:AssetContent",
+                NT_TEST_ASSETCONTENT,
                 newArrayList("metadata", "renditions", "renditions/original", "comments",
                     "renditions/original/jcr:content"))
             .newRuleWithName("rep:User", newArrayList("profile"));
     }
-    
+        
     @Test
-    public void dummy() {
-        // just for running the initialiser. Part of an investigation
+    public void oak2226() throws Exception {
+        setTraversalEnabled(false);
+        final String statement = "/jcr:root/content//element(*, test:Asset)[" +
+            "(jcr:contains(., 'mountain')) " +
+            "and (jcr:contains(jcr:content/metadata/@format, 'image'))]";
+        Tree content = root.getTree("/").addChild("content");
+        List<String> expected = Lists.newArrayList();
+        
+        /*
+         * creating structure
+         *  "/content" : {
+         *      "node" : {
+         *          "jcr:primaryType" : "test:Asset",
+         *          "jcr:content" : {
+         *              "jcr:primaryType" : "test:AssetContent",
+         *              "metadata" : {
+         *                  "jcr:primaryType" : "nt:unstructured",
+         *                  "title" : "Lorem mountain ipsum",
+         *                  "format" : "image/jpeg"
+         *              }
+         *          }
+         *      },
+         *      "mountain-node" : {
+         *          "jcr:primaryType" : "test:Asset",
+         *          "jcr:content" : {
+         *              "jcr:primaryType" : "test:AssetContent",
+         *              "metadata" : {
+         *                  "jcr:primaryType" : "nt:unstructured",
+         *                  "format" : "image/jpeg"
+         *              }
+         *          }
+         *      }
+         *  }
+         */
+        
+        
+        // adding a node with 'mountain' property
+        Tree node = content.addChild("node");
+        node.setProperty(JCR_PRIMARYTYPE, NT_TEST_ASSET, NAME);
+        expected.add(node.getPath());
+        node = node.addChild("jcr:content");
+        node.setProperty(JCR_PRIMARYTYPE, NT_TEST_ASSETCONTENT, NAME);
+        node = node.addChild("metadata");
+        node.setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+        node.setProperty("title", "Lorem mountain ipsum", STRING);
+        node.setProperty("format", "image/jpeg", STRING);
+        
+        // adding a node with 'mountain' name but not property
+        node = content.addChild("mountain-node");
+        node.setProperty(JCR_PRIMARYTYPE, NT_TEST_ASSET, NAME);
+        expected.add(node.getPath());
+        node = node.addChild("jcr:content");
+        node.setProperty(JCR_PRIMARYTYPE, NT_TEST_ASSETCONTENT, NAME);
+        node = node.addChild("metadata");
+        node.setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+        node.setProperty("format", "image/jpeg", STRING);
+        
+        root.commit();
+
+        assertQuery(statement, "xpath", expected);
+        setTraversalEnabled(true);
     }
+
 }
