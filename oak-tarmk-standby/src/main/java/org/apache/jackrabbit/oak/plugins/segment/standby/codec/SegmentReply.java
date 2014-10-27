@@ -14,10 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@Version("1.1.0")
-@Export(optional = "provide:=true")
-package org.apache.jackrabbit.oak.plugins.segment;
+package org.apache.jackrabbit.oak.plugins.segment.standby.codec;
 
-import aQute.bnd.annotation.Export;
-import aQute.bnd.annotation.Version;
+import org.apache.jackrabbit.oak.plugins.segment.Segment;
 
+public class SegmentReply {
+
+    private final Segment segment;
+
+    public SegmentReply(Segment segment) {
+        this.segment = segment;
+    }
+
+    public Segment getSegment() {
+        return this.segment;
+    }
+
+}

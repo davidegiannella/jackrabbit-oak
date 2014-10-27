@@ -202,14 +202,12 @@ public class RDBDocumentStore implements CachingDocumentStore {
 
     @Override
     public <T extends Document> List<T> query(Collection<T> collection, String fromKey, String toKey, int limit) {
-        // TODO cache
         return query(collection, fromKey, toKey, null, 0, limit);
     }
 
     @Override
     public <T extends Document> List<T> query(Collection<T> collection, String fromKey, String toKey, String indexedProperty,
             long startValue, int limit) {
-        // TODO cache
         return internalQuery(collection, fromKey, toKey, indexedProperty, startValue, limit);
     }
 
@@ -336,13 +334,16 @@ public class RDBDocumentStore implements CachingDocumentStore {
     private static int CHAR2OCTETRATIO = 3;
 
     // capacity of DATA column
-    private int datalimit = 16384 / CHAR2OCTETRATIO;
+    private int dataLimitInOctets = 16384;
 
     // number of retries for updates
     private static int RETRIES = 10;
 
     // for DBs that prefer "concat" over "||"
     private boolean needsConcat = false;
+
+    // for DBs that prefer "limit" over "fetch first"
+    private boolean needsLimit = false;
 
     // set of supported indexed properties
     private static Set<String> INDEXEDPROPERTIES = new HashSet<String>(Arrays.asList(new String[] { MODIFIED,
@@ -378,6 +379,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
             con.commit();
         } else if ("MySQL".equals(dbtype)) {
             this.needsConcat = true;
+            this.needsLimit = true;
         }
 
         try {
@@ -402,7 +404,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
             if (col.equals(Collection.NODES)) {
                 // try to discover size of DATA column
                 ResultSetMetaData met = rs.getMetaData();
-                this.datalimit = met.getPrecision(1) / CHAR2OCTETRATIO;
+                this.dataLimitInOctets = met.getPrecision(1);
             }
         } catch (SQLException ex) {
             // table does not appear to exist
@@ -428,7 +430,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
                         + " (ID varchar(512) not null primary key, MODIFIED bigint, HASBINARY smallint, MODCOUNT bigint, CMODCOUNT bigint, DSIZE bigint, DATA varchar(16384), BDATA mediumblob)");
             } else if ("Oracle".equals(dbtype)) {
                 // see https://issues.apache.org/jira/browse/OAK-1914
-                this.datalimit = 4000 / CHAR2OCTETRATIO;
+                this.dataLimitInOctets = 4000;
                 stmt.execute("create table "
                         + tableName
                         + " (ID varchar(512) not null primary key, MODIFIED number, HASBINARY number, MODCOUNT number, CMODCOUNT number, DSIZE number, DATA varchar(4000), BDATA blob)");
@@ -723,10 +725,8 @@ public class RDBDocumentStore implements CachingDocumentStore {
             connection = getConnection();
             List<RDBRow> dbresult = dbQuery(connection, tableName, fromKey, toKey, indexedProperty, startValue, limit);
             for (RDBRow r : dbresult) {
-                T doc = SR.fromRow(collection, r);
-                doc.seal();
+                T doc = runThroughCache(collection, r);
                 result.add(doc);
-                addToCacheIfNotNewer(collection, doc);
             }
         } catch (Exception ex) {
             LOG.error("SQL exception on query", ex);
@@ -810,7 +810,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
             // every 16th update is a full rewrite
             if (isAppendableUpdate(update) && modcount % 16 != 0) {
                 String appendData = SR.asString(update);
-                if (appendData.length() < datalimit) {
+                if (appendData.length() < this.dataLimitInOctets / CHAR2OCTETRATIO) {
                     try {
                         success = dbAppendingUpdate(connection, tableName, document.getId(), modified, hasBinary, modcount,
                                 cmodcount, oldmodcount, appendData);
@@ -916,6 +916,8 @@ public class RDBDocumentStore implements CachingDocumentStore {
     private static boolean NOGZIP = Boolean.getBoolean("org.apache.jackrabbit.oak.plugins.document.rdb.RDBDocumentStore.NOGZIP");
     // Number of documents to insert at once for batch create
     private static int CHUNKSIZE = Integer.getInteger("org.apache.jackrabbit.oak.plugins.document.rdb.RDBDocumentStore.CHUNKSIZE", 64);
+    // Whether to use cache for query results
+    private static boolean NOQUERYFROMCACHE = Boolean.getBoolean("org.apache.jackrabbit.oak.plugins.document.rdb.RDBDocumentStore.NOQUERYFROMCACHE");
 
     private static byte[] asBytes(String data) {
         byte[] bytes;
@@ -992,6 +994,9 @@ public class RDBDocumentStore implements CachingDocumentStore {
             }
         }
         t += " order by ID";
+        if (limit != Integer.MAX_VALUE) {
+            t += this.needsConcat ? (" LIMIT " + limit) : (" FETCH FIRST " + limit + " ROWS ONLY");
+        }
         PreparedStatement stmt = connection.prepareStatement(t);
         List<RDBRow> result = new ArrayList<RDBRow>();
         try {
@@ -1037,7 +1042,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
             stmt.setObject(si++, cmodcount == null ? 0 : cmodcount, Types.BIGINT);
             stmt.setObject(si++, data.length(), Types.BIGINT);
 
-            if (data.length() < datalimit) {
+            if (data.length() <  this.dataLimitInOctets / CHAR2OCTETRATIO) {
                 stmt.setString(si++, data);
                 stmt.setBinaryStream(si++, null, 0);
             } else {
@@ -1064,7 +1069,8 @@ public class RDBDocumentStore implements CachingDocumentStore {
             String appendData) throws SQLException {
         StringBuilder t = new StringBuilder();
         t.append("update " + tableName + " set MODIFIED = GREATEST(MODIFIED, ?), HASBINARY = ?, MODCOUNT = ?, CMODCOUNT = ?, DSIZE = DSIZE + ?, ");
-        t.append(this.needsConcat ? "DATA = CONCAT(DATA, ?) " : "DATA = DATA || ? ");
+        t.append(this.needsConcat ? "DATA = CONCAT(DATA, ?) " : "DATA = DATA || CAST(? AS varchar(" + this.dataLimitInOctets
+                + ")) ");
         t.append("where ID = ?");
         if (oldmodcount != null) {
             t.append(" and MODCOUNT = ?");
@@ -1096,7 +1102,8 @@ public class RDBDocumentStore implements CachingDocumentStore {
     private boolean dbBatchedAppendingUpdate(Connection connection, String tableName, List<String> ids, Long modified, String appendData) throws SQLException {
         StringBuilder t = new StringBuilder();
         t.append("update " + tableName + " set MODIFIED = GREATEST(MODIFIED, ?), MODCOUNT = MODCOUNT + 1, DSIZE = DSIZE + ?, ");
-        t.append(this.needsConcat ? "DATA = CONCAT(DATA, ?)" : "DATA = DATA || ? ");
+        t.append(this.needsConcat ? "DATA = CONCAT(DATA, ?) " : "DATA = DATA || CAST(? AS varchar(" + this.dataLimitInOctets
+                + ")) ");
         t.append("where ID in (");
         for (int i = 0; i < ids.size(); i++) {
             if (i != 0) {
@@ -1137,7 +1144,7 @@ public class RDBDocumentStore implements CachingDocumentStore {
             stmt.setObject(si++, modcount, Types.BIGINT);
             stmt.setObject(si++, cmodcount == null ? 0 : cmodcount, Types.BIGINT);
             stmt.setObject(si++, data.length(), Types.BIGINT);
-            if (data.length() < datalimit) {
+            if (data.length() <  this.dataLimitInOctets / CHAR2OCTETRATIO) {
                 stmt.setString(si++, data);
                 stmt.setBinaryStream(si++, null, 0);
             } else {
@@ -1297,32 +1304,59 @@ public class RDBDocumentStore implements CachingDocumentStore {
         }
     }
 
-    private <T extends Document> void addToCacheIfNotNewer(Collection<T> collection, T doc) {
-        if (collection == Collection.NODES) {
-            String id = doc.getId();
-            Lock lock = getAndLock(id);
-            CacheValue cacheKey = new StringValue(id);
-            try {
-                // do not overwrite document in cache if the
-                // existing one in the cache is newer
-                NodeDocument cached = nodesCache.getIfPresent(cacheKey);
-                if (cached != null && cached != NodeDocument.NULL) {
-                    // check mod count
-                    Number cachedModCount = cached.getModCount();
-                    Number modCount = doc.getModCount();
-                    if (cachedModCount == null || modCount == null) {
-                        throw new IllegalStateException("Missing " + Document.MOD_COUNT);
-                    }
-                    if (modCount.longValue() > cachedModCount.longValue()) {
-                        nodesCache.put(cacheKey, (NodeDocument) doc);
-                    }
-                } else {
-                    nodesCache.put(cacheKey, (NodeDocument) doc);
+    private <T extends Document> T runThroughCache(Collection<T> collection, RDBRow row) {
+
+        if (collection != Collection.NODES) {
+            // not in the cache anyway
+            return SR.fromRow(collection, row);
+        }
+
+        String id = row.getId();
+        CacheValue cacheKey = new StringValue(id);
+        NodeDocument inCache = nodesCache.getIfPresent(cacheKey);
+        Number modCount = row.getModcount();
+
+        if (! NOQUERYFROMCACHE) {
+            // do not overwrite document in cache if the
+            // existing one in the cache is newer
+            if (inCache != null && inCache != NodeDocument.NULL) {
+                // check mod count
+                Number cachedModCount = inCache.getModCount();
+                if (cachedModCount == null) {
+                    throw new IllegalStateException("Missing " + Document.MOD_COUNT);
                 }
-            } finally {
-                lock.unlock();
+                if (modCount.longValue() <= cachedModCount.longValue()) {
+                    // we can use the cached document
+                    return (T) inCache;
+                }
             }
         }
+
+        NodeDocument fresh = (NodeDocument) SR.fromRow(collection, row);
+        fresh.seal();
+
+        Lock lock = getAndLock(id);
+        try {
+            inCache = nodesCache.getIfPresent(cacheKey);
+            if (inCache != null && inCache != NodeDocument.NULL) {
+                // check mod count
+                Number cachedModCount = inCache.getModCount();
+                if (cachedModCount == null) {
+                    throw new IllegalStateException("Missing " + Document.MOD_COUNT);
+                }
+                if (modCount.longValue() > cachedModCount.longValue()) {
+                    nodesCache.put(cacheKey, fresh);
+                } else {
+                    fresh = inCache;
+                }
+            }
+            else {
+                nodesCache.put(cacheKey, fresh);
+            }
+        } finally {
+            lock.unlock();
+        }
+        return (T) fresh;
     }
 
     private Connection getConnection() throws SQLException {

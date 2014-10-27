@@ -14,10 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@Version("1.1.0")
-@Export(optional = "provide:=true")
-package org.apache.jackrabbit.oak.plugins.segment;
 
-import aQute.bnd.annotation.Export;
-import aQute.bnd.annotation.Version;
+package org.apache.jackrabbit.oak.plugins.segment.standby.jmx;
 
+import org.apache.jackrabbit.oak.commons.jmx.Description;
+
+public interface ClientStandbyStatusMBean extends StandbyStatusMBean {
+
+    @Description("number of consecutive failed requests")
+    int getFailedRequests();
+
+    @Description("number of seconds since last successful request")
+    int getSecondsSinceLastSuccess();
+
+    // expose the informations as operations, too
+
+    @Description("number of consecutive failed requests")
+    int calcFailedRequests();
+
+    @Description("number of seconds since last successful request")
+    int calcSecondsSinceLastSuccess();
+
+}

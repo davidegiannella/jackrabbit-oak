@@ -14,10 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@Version("1.1.0")
-@Export(optional = "provide:=true")
-package org.apache.jackrabbit.oak.plugins.segment;
+package org.apache.jackrabbit.oak.plugins.segment.standby.store;
 
-import aQute.bnd.annotation.Export;
-import aQute.bnd.annotation.Version;
+import org.apache.jackrabbit.oak.plugins.segment.Segment;
 
+public interface RemoteSegmentLoader {
+
+    Segment readSegment(String id);
+
+    void close();
+
+    boolean isClosed();
+
+}
