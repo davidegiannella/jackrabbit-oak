@@ -94,10 +94,10 @@ public class AggregateIndex implements AdvanceFulltextQueryIndex {
                 return c;
             }
         }
-        
+
         IndexPlan newPlan = newPlanWithAggregationFilter(plan, null);
         return new AggregationCursor(index.query(newPlan,
-            state), index.getNodeAggregator(), state);
+                state), index.getNodeAggregator(), state);
     }
 
     private static boolean hasCompositeExpression(FullTextExpression ft) {

@@ -76,7 +76,7 @@ public class LuceneIndexAggregationTest2 extends AbstractQueryTest {
     
     @Override
     protected ContentRepository createRepository() {
-        LowCostLuceneIndexProvider provider = new LowCostLuceneIndexProvider();
+        LuceneIndexProvider provider = new LuceneIndexProvider();
         
         return new Oak()
             .with(new InitialContent() {
