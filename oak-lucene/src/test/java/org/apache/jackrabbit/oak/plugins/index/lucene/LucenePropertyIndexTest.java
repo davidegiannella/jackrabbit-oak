@@ -29,6 +29,8 @@ import java.util.Set;
 import javax.jcr.PropertyType;
 
 import com.google.common.collect.ComparisonChain;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
@@ -36,7 +38,10 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelper;
+import org.apache.jackrabbit.oak.plugins.index.nodetype.NodeTypeIndexProvider;
+import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.AbstractQueryTest;
@@ -85,6 +90,8 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
                 .with((QueryIndexProvider) provider)
                 .with((Observer) provider)
                 .with(new LuceneIndexEditorProvider())
+                .with(new PropertyIndexEditorProvider())
+                .with(new NodeTypeIndexProvider())
                 .createContentRepository();
     }
 
@@ -108,6 +115,131 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         assertQuery(propaQuery, asList("/test/a", "/test/b"));
         assertQuery("select [jcr:path] from [nt:base] where [propa] = 'foo2'", asList("/test/c"));
         assertQuery("select [jcr:path] from [nt:base] where [propc] = 'foo'", asList("/test/d"));
+    }
+
+    @Test
+    public void indexSelectionVsNodeType() throws Exception {
+        Tree luceneIndex = createIndex("test1", of("propa"));
+        // decrease cost of lucene property index
+        luceneIndex.setProperty(IndexConstants.ENTRY_COUNT_PROPERTY_NAME, 5L, Type.LONG);
+
+        // Decrease cost of node type index
+        Tree nodeTypeIndex = root.getTree("/").getChild("oak:index").getChild("nodetype");
+        nodeTypeIndex.setProperty(IndexConstants.ENTRY_COUNT_PROPERTY_NAME, 50L, Type.LONG);
+        nodeTypeIndex.setProperty(IndexConstants.KEY_COUNT_PROPERTY_NAME, 10L, Type.LONG);
+
+        Tree test = root.getTree("/").addChild("test");
+        test.setProperty("jcr:primaryType", "nt:unstructured", Type.NAME);
+
+        List<String> paths = Lists.newArrayList();
+        for (int idx = 0; idx < 15; idx++) {
+            Tree a = test.addChild("n"+idx);
+            a.setProperty("jcr:primaryType", "nt:unstructured", Type.NAME);
+            a.setProperty("propa", "foo");
+            paths.add("/test/n" + idx);
+        }
+        root.commit();
+
+        String propaQuery = "select [jcr:path] from [nt:unstructured] where [propa] = 'foo'";
+        assertThat(explain(propaQuery), containsString("lucene:test1"));
+
+        assertQuery(propaQuery, paths);
+    }
+
+    @Test
+    public void declaringNodeTypeSameProp() throws Exception {
+        createIndex("test1", of("propa"));
+
+        Tree indexWithType = createIndex("test2", of("propa"));
+        indexWithType.setProperty(PropertyStates
+            .createProperty(IndexConstants.DECLARING_NODE_TYPES, of("nt:unstructured"),
+                Type.STRINGS));
+
+        Tree test = root.getTree("/").addChild("test");
+        test.setProperty("jcr:primaryType", "nt:unstructured", Type.NAME);
+        root.commit();
+
+        Tree a = test.addChild("a");
+        a.setProperty("jcr:primaryType", "nt:unstructured", Type.NAME);
+        a.setProperty("propa", "foo");
+        Tree b = test.addChild("b");
+        b.setProperty("jcr:primaryType", "nt:unstructured", Type.NAME);
+        b.setProperty("propa", "foo");
+
+        test.addChild("c").setProperty("propa", "foo");
+        test.addChild("d").setProperty("propa", "foo");
+
+        root.commit();
+
+        String propabQuery = "select [jcr:path] from [nt:unstructured] where [propa] = 'foo'";
+        assertThat(explain(propabQuery), containsString("lucene:test2"));
+        assertQuery(propabQuery, asList("/test/a", "/test/b"));
+
+        String propcdQuery = "select [jcr:path] from [nt:base] where [propa] = 'foo'";
+        assertThat(explain(propcdQuery), containsString("lucene:test1"));
+        assertQuery(propcdQuery, asList("/test/a", "/test/b", "/test/c", "/test/d"));
+    }
+
+    @Test
+    public void declaringNodeTypeSingleIndex() throws Exception {
+        Tree indexWithType = createIndex("test2", of("propa", "propb"));
+        indexWithType.setProperty(PropertyStates
+            .createProperty(IndexConstants.DECLARING_NODE_TYPES, of("nt:unstructured"),
+                Type.STRINGS));
+
+        Tree test = root.getTree("/").addChild("test");
+        test.setProperty("jcr:primaryType", "nt:unstructured", Type.NAME);
+        root.commit();
+
+        Tree a = test.addChild("a");
+        a.setProperty("jcr:primaryType", "nt:unstructured", Type.NAME);
+        a.setProperty("propa", "foo");
+        a.setProperty("propb", "baz");
+
+        Tree b = test.addChild("b");
+        b.setProperty("jcr:primaryType", "nt:unstructured", Type.NAME);
+        b.setProperty("propa", "foo");
+        b.setProperty("propb", "baz");
+
+        root.commit();
+
+        String propabQuery = "select [jcr:path] from [nt:unstructured] where [propb] = 'baz' and " +
+            "[propa] = 'foo'";
+        assertThat(explain(propabQuery), containsString("lucene:test2"));
+        assertQuery(propabQuery, asList("/test/a", "/test/b"));
+
+        String propNoIdxQuery = "select [jcr:path] from [nt:base] where [propb] = 'baz'";
+        assertThat(explain(propNoIdxQuery), containsString("no-index"));
+        assertQuery(propNoIdxQuery, ImmutableList.<String>of());
+    }
+
+    @Test
+    public void emptyIndex() throws Exception{
+        Tree idx = createIndex("test1", of("propa", "propb"));
+        idx.addChild(PROP_NODE).addChild("propa");
+        root.commit();
+
+        Tree test = root.getTree("/").addChild("test");
+        test.addChild("a");
+        test.addChild("b");
+        root.commit();
+
+        assertThat(explain("select [jcr:path] from [nt:base] where [propa] = 'foo'"), containsString("lucene:test1"));
+    }
+
+    @Test
+    public void propertyExistenceQuery() throws Exception {
+        Tree idx = createIndex("test1", of("propa", "propb"));
+        idx.addChild(PROP_NODE).addChild("propa");
+        root.commit();
+
+        Tree test = root.getTree("/").addChild("test");
+        test.addChild("a").setProperty("propa", "a");
+        test.addChild("b").setProperty("propa", "c");
+        test.addChild("c").setProperty("propb", "e");
+        root.commit();
+
+        assertQuery("select [jcr:path] from [nt:base] where propa is not null", asList("/test/a", "/test/b"));
     }
 
     @Test
@@ -135,6 +267,7 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         assertQuery("select [jcr:path] from [nt:base] where [propa] = 20 or [propa] = 10 ", asList("/test/b", "/test/a"));
         assertQuery("select [jcr:path] from [nt:base] where [propa] > 10 and [propa] < 30", asList("/test/b"));
         assertQuery("select [jcr:path] from [nt:base] where [propa] in (10,20)", asList("/test/b", "/test/a"));
+        assertQuery("select [jcr:path] from [nt:base] where propa is not null", asList("/test/a", "/test/b", "/test/c"));
     }
 
     @Test
@@ -157,6 +290,7 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         assertQuery("select [jcr:path] from [nt:base] where [propa] <= 20.5", asList("/test/b", "/test/a"));
         assertQuery("select [jcr:path] from [nt:base] where [propa] < 20.4", asList("/test/a"));
         assertQuery("select [jcr:path] from [nt:base] where [propa] > 10.5 and [propa] < 30", asList("/test/b"));
+        assertQuery("select [jcr:path] from [nt:base] where propa is not null", asList("/test/a", "/test/b", "/test/c"));
     }
 
     @Test
@@ -182,6 +316,7 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         assertQuery("select [jcr:path] from [nt:base] where [propb] <= 'f'", asList("/test/c", "/test/d"));
         assertQuery("select [jcr:path] from [nt:base] where [propb] > 'e'", asList("/test/d", "/test/e"));
         assertQuery("select [jcr:path] from [nt:base] where [propb] < 'g'", asList("/test/c", "/test/d"));
+        assertQuery("select [jcr:path] from [nt:base] where propa is not null", asList("/test/a", "/test/b", "/test/c"));
     }
 
 
@@ -204,6 +339,7 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         assertQuery("select [jcr:path] from [nt:base] where [propa] <=" + dt("15/03/2014"), asList("/test/b", "/test/a"));
         assertQuery("select [jcr:path] from [nt:base] where [propa] < " + dt("14/03/2014"), asList("/test/a"));
         assertQuery("select [jcr:path] from [nt:base] where [propa] > "+ dt("15/02/2014") + " and [propa] < " + dt("13/04/2014"), asList("/test/b"));
+        assertQuery("select [jcr:path] from [nt:base] where propa is not null", asList("/test/a", "/test/b", "/test/c"));
     }
 
     @Ignore("OAK-2190")
@@ -277,7 +413,28 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         assertSortedLong();
     }
 
+    @Test
+    public void sortQueriesWithLong_NotIndexed() throws Exception {
+        Tree idx = createIndex("test1", Collections.<String>emptySet());
+        idx.setProperty(createProperty(ORDERED_PROP_NAMES, of("foo"), STRINGS));
+        Tree propIdx = idx.addChild(PROP_NODE).addChild("foo");
+        propIdx.setProperty(LuceneIndexConstants.PROP_TYPE, PropertyType.TYPENAME_LONG);
+        root.commit();
+
+        assertThat(explain("select [jcr:path] from [nt:base] order by [foo]"), containsString("lucene:test1"));
+
+        List<Tuple> tuples = createDataForLongProp();
+        assertOrderedQuery("select [jcr:path] from [nt:base] order by [foo]", getSortedPaths(tuples, OrderDirection.ASC));
+        assertOrderedQuery("select [jcr:path] from [nt:base]  order by [foo] DESC", getSortedPaths(tuples, OrderDirection.DESC));
+    }
+
     void assertSortedLong() throws CommitFailedException {
+        List<Tuple> tuples = createDataForLongProp();
+        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo]", getSortedPaths(tuples, OrderDirection.ASC));
+        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo] DESC", getSortedPaths(tuples, OrderDirection.DESC));
+    }
+
+    private List<Tuple> createDataForLongProp() throws CommitFailedException {
         Tree test = root.getTree("/").addChild("test");
         List<Long> values = createLongs(NUMBER_OF_NODES);
         List<Tuple> tuples = Lists.newArrayListWithCapacity(values.size());
@@ -288,9 +445,7 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
             tuples.add(new Tuple(values.get(i), child.getPath()));
         }
         root.commit();
-
-        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo]", getSortedPaths(tuples, OrderDirection.ASC));
-        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo] DESC", getSortedPaths(tuples, OrderDirection.DESC));
+        return tuples;
     }
 
     @Test
@@ -328,7 +483,9 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         root.commit();
 
         assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo]", getSortedPaths(tuples, OrderDirection.ASC));
-        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo] DESC", getSortedPaths(tuples, OrderDirection.DESC));
+        assertOrderedQuery(
+            "select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo] DESC",
+            getSortedPaths(tuples, OrderDirection.DESC));
     }
 
     @Test
@@ -364,7 +521,9 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         root.commit();
 
         assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo]", getSortedPaths(tuples, OrderDirection.ASC));
-        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo] DESC", getSortedPaths(tuples, OrderDirection.DESC));
+        assertOrderedQuery(
+            "select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo] DESC",
+            getSortedPaths(tuples, OrderDirection.DESC));
     }
 
     @Test
@@ -401,8 +560,46 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         }
         root.commit();
 
-        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo]", getSortedPaths(tuples, OrderDirection.ASC));
-        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo] DESC", getSortedPaths(tuples, OrderDirection.DESC));
+        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo]",
+            getSortedPaths(tuples, OrderDirection.ASC));
+        assertOrderedQuery(
+            "select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo] DESC",
+            getSortedPaths(tuples, OrderDirection.DESC));
+    }
+
+    @Test
+    public void sortQueriesWithDateStringMixed_OrderedProps() throws Exception {
+        Tree idx = createIndex("test1", of("foo", "bar"));
+        idx.setProperty(createProperty(INCLUDE_PROPERTY_NAMES, of("bar"), STRINGS));
+        idx.setProperty(createProperty(ORDERED_PROP_NAMES, of("foo"), STRINGS));
+        Tree propIdx = idx.addChild(PROP_NODE).addChild("foo");
+        propIdx.setProperty(LuceneIndexConstants.PROP_TYPE, PropertyType.TYPENAME_DATE);
+        root.commit();
+
+        Tree test = root.getTree("/").addChild("test");
+        List<Calendar> values = createDates(NUMBER_OF_NODES);
+        List<Tuple> tuples = Lists.newArrayListWithCapacity(values.size());
+        for(int i = 0; i < values.size(); i++){
+            Tree child = test.addChild("n"+i);
+            child.setProperty("bar", "baz");
+            if (i != 0) {
+                child.setProperty("foo", values.get(i));
+                tuples.add(new Tuple(values.get(i), child.getPath()));
+            } else {
+                child.setProperty("foo", String.valueOf(values.get(i).getTimeInMillis()));
+            }
+        }
+        root.commit();
+
+        // Add the path of property added as timestamp string in the sorted list
+        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo]",
+            Lists.newArrayList(Iterables.concat(Lists.newArrayList("/test/n0"),
+                getSortedPaths(tuples, OrderDirection.ASC))));
+        // Append the path of property added as timestamp string to the sorted list
+        assertOrderedQuery(
+            "select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo] DESC", Lists
+            .newArrayList(Iterables.concat(getSortedPaths(tuples, OrderDirection.DESC),
+                Lists.newArrayList("/test/n0"))));
     }
 
     @Test

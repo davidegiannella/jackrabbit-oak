@@ -183,7 +183,7 @@ public class LucenePropertyIndex implements AdvanceFulltextQueryIndex {
 
     @Override
     public String getIndexName() {
-        return "lucene";
+        return "lucene-property";
     }
 
     @Override
@@ -194,7 +194,13 @@ public class LucenePropertyIndex implements AdvanceFulltextQueryIndex {
         for (String path : indexPaths) {
             try {
                 indexNode = tracker.acquireIndexNode(path);
+
                 if (indexNode != null) {
+                    //Ignore full text indexes
+                    if (indexNode.getDefinition().isFullTextEnabled()){
+                        continue;
+                    }
+
                     IndexPlan plan = new IndexPlanner(indexNode, path, filter, sortOrder).getPlan();
                     if (plan != null) {
                         plans.add(plan);
@@ -529,6 +535,23 @@ public class LucenePropertyIndex implements AdvanceFulltextQueryIndex {
             addNonFullTextConstraints(qs, filter, reader, analyzer,
                     defn);
         }
+
+        if (qs.size() == 0
+                && plan.getSortOrder() != null) {
+            //This case indicates that query just had order by and no
+            //property restriction defined. In this case property
+            //existence queries for each sort entry
+
+            for (OrderEntry oe : plan.getSortOrder()) {
+                PropertyRestriction orderRest = new PropertyRestriction();
+                orderRest.propertyName = oe.getPropertyName();
+                Query q = createQuery(orderRest, defn);
+                if (q != null) {
+                    qs.add(q);
+                }
+            }
+        }
+
         if (qs.size() == 0) {
             if (!defn.isFullTextEnabled()) {
                 throw new IllegalStateException("No query created for filter " + filter);
@@ -590,19 +613,6 @@ public class LucenePropertyIndex implements AdvanceFulltextQueryIndex {
         }
 
         for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
-
-            if (pr.first == null && pr.last == null && pr.list == null) {
-                // ignore property existence checks, Lucene can't to 'property
-                // is not null' queries (OAK-1208)
-
-                //TODO May be this can be relaxed if we have an index which
-                //maintains the list of propertyName present in a node say
-                //against :propNames. Only configured set of properties would
-                //be
-
-                continue;
-            }
-
             // check excluded properties and types
             if (isExcludedProperty(pr, indexDefinition)) {
                 continue;
@@ -723,6 +733,9 @@ public class LucenePropertyIndex implements AdvanceFulltextQueryIndex {
                         in.add(NumericRangeQuery.newLongRange(pr.propertyName, dateVal, dateVal, true, true), BooleanClause.Occur.SHOULD);
                     }
                     return in;
+                } else if (pr.first == null && pr.last == null ) {
+                    // not null. For date lower bound of zero can be used
+                    return NumericRangeQuery.newLongRange(pr.propertyName, 0L, Long.MAX_VALUE, true, true);
                 }
 
                 break;
@@ -750,6 +763,9 @@ public class LucenePropertyIndex implements AdvanceFulltextQueryIndex {
                         in.add(NumericRangeQuery.newDoubleRange(pr.propertyName, doubleVal, doubleVal, true, true), BooleanClause.Occur.SHOULD);
                     }
                     return in;
+                } else if (pr.first == null && pr.last == null ) {
+                    // not null.
+                    return NumericRangeQuery.newDoubleRange(pr.propertyName, Double.MIN_VALUE, Double.MAX_VALUE, true, true);
                 }
                 break;
             }
@@ -776,6 +792,9 @@ public class LucenePropertyIndex implements AdvanceFulltextQueryIndex {
                         in.add(NumericRangeQuery.newLongRange(pr.propertyName, longVal, longVal, true, true), BooleanClause.Occur.SHOULD);
                     }
                     return in;
+                } else if (pr.first == null && pr.last == null ) {
+                    // not null.
+                    return NumericRangeQuery.newLongRange(pr.propertyName, Long.MIN_VALUE, Long.MAX_VALUE, true, true);
                 }
                 break;
             }
@@ -805,6 +824,8 @@ public class LucenePropertyIndex implements AdvanceFulltextQueryIndex {
                         in.add(new TermQuery(new Term(pr.propertyName, strVal)), BooleanClause.Occur.SHOULD);
                     }
                     return in;
+                } else if (pr.first == null && pr.last == null ) {
+                    return new TermRangeQuery(pr.propertyName, null, null, true, true);
                 }
             }
         }
@@ -888,7 +909,10 @@ public class LucenePropertyIndex implements AdvanceFulltextQueryIndex {
                 bq.add(new TermQuery(new Term(JCR_MIXINTYPES, type)), SHOULD);
             }
         }
-        qs.add(bq);
+
+        if (bq.clauses().size() != 0) {
+            qs.add(bq);
+        }
     }
 
     static Query getFullTextQuery(FullTextExpression ft, final Analyzer analyzer, final IndexReader reader) {

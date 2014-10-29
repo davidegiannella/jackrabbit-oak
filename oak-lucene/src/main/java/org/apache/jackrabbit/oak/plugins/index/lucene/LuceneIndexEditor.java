@@ -29,6 +29,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.Blob;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
@@ -36,6 +38,8 @@ import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexEditor;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
+import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
+import org.apache.jackrabbit.oak.plugins.nodetype.TypePredicate;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -81,13 +85,23 @@ public class LuceneIndexEditor implements IndexEditor {
 
     private boolean propertiesChanged = false;
 
-    LuceneIndexEditor(NodeBuilder definition, Analyzer analyzer,
-            IndexUpdateCallback updateCallback) throws CommitFailedException {
+    private NodeState root;
+
+    private final Predicate<NodeState> typePredicate;
+
+    LuceneIndexEditor(NodeState root, NodeBuilder definition, Analyzer analyzer,
+        IndexUpdateCallback updateCallback) throws CommitFailedException {
         this.parent = null;
         this.name = null;
         this.path = "/";
         this.context = new LuceneIndexEditorContext(definition, analyzer,
                 updateCallback);
+        this.root = root;
+        if (context.getDefinition().hasDeclaredNodeTypes()) {
+            typePredicate = new TypePredicate(root, context.getDefinition().getDeclaringNodeTypes());
+        } else {
+            typePredicate = Predicates.alwaysTrue();
+        }
     }
 
     private LuceneIndexEditor(LuceneIndexEditor parent, String name) {
@@ -95,6 +109,8 @@ public class LuceneIndexEditor implements IndexEditor {
         this.name = name;
         this.path = null;
         this.context = parent.context;
+        this.root = parent.root;
+        this.typePredicate = parent.typePredicate;
     }
 
     public String getPath() {
@@ -107,6 +123,9 @@ public class LuceneIndexEditor implements IndexEditor {
     @Override
     public void enter(NodeState before, NodeState after)
             throws CommitFailedException {
+        if (EmptyNodeState.MISSING_NODE == before && parent == null){
+            context.enableReindexMode();
+        }
     }
 
     @Override
@@ -192,6 +211,9 @@ public class LuceneIndexEditor implements IndexEditor {
         } catch (IOException e) {
             throw new CommitFailedException("Lucene", 3,
                     "Failed to index the node " + path, e);
+        } catch (IllegalArgumentException ie) {
+            throw new CommitFailedException("Lucene", 3,
+                "Failed to index the node " + path, ie);
         }
         return false;
     }
@@ -199,6 +221,11 @@ public class LuceneIndexEditor implements IndexEditor {
     private Document makeDocument(String path, NodeState state, boolean isUpdate) throws CommitFailedException {
         //TODO Possibly we can add support for compound properties like foo/bar
         //i.e. support for relative path restrictions
+
+        // Check for declaringNodeType validity
+        if (!typePredicate.apply(state)) {
+            return null;
+        }
 
         List<Field> fields = new ArrayList<Field>();
         boolean dirty = false;
@@ -299,34 +326,63 @@ public class LuceneIndexEditor implements IndexEditor {
 
     private boolean addTypedOrderedFields(List<Field> fields, PropertyState property) throws CommitFailedException {
         int tag = property.getType().tag();
+
+        int idxDefinedTag = getIndexDefinitionType(property);
+        // Try converting type to the defined type in the index definition
+        if (tag != idxDefinedTag) {
+            log.debug(
+                "Ordered property defined with type {} differs from property {} with type {} in " +
+                    "path {}",
+                Type.fromTag(idxDefinedTag, false), property.toString(), Type.fromTag(tag, false),
+                getPath());
+            tag = idxDefinedTag;
+        }
+
         String name = FieldNames.createDocValFieldName(property.getName());
         boolean fieldAdded = false;
         for (int i = 0; i < property.count(); i++) {
             Field f = null;
-            if (tag == Type.LONG.tag()) {
-                //TODO Distinguish fields which need to be used for search and for sort
-                //If a field is only used for Sort then it can be stored with less precision
-                f = new NumericDocValuesField(name, property.getValue(Type.LONG, i));
-            } else if (tag == Type.DATE.tag()) {
-                String date = property.getValue(Type.DATE, i);
-                f = new NumericDocValuesField(name, FieldFactory.dateToLong(date));
-            } else if (tag == Type.DOUBLE.tag()) {
-                f = new DoubleDocValuesField(name, property.getValue(Type.DOUBLE, i));
-            } else if (tag == Type.BOOLEAN.tag()) {
-                f = new SortedDocValuesField(name,
+            try {
+                if (tag == Type.LONG.tag()) {
+                    //TODO Distinguish fields which need to be used for search and for sort
+                    //If a field is only used for Sort then it can be stored with less precision
+                    f = new NumericDocValuesField(name, property.getValue(Type.LONG, i));
+                } else if (tag == Type.DATE.tag()) {
+                    String date = property.getValue(Type.DATE, i);
+                    f = new NumericDocValuesField(name, FieldFactory.dateToLong(date));
+                } else if (tag == Type.DOUBLE.tag()) {
+                    f = new DoubleDocValuesField(name, property.getValue(Type.DOUBLE, i));
+                } else if (tag == Type.BOOLEAN.tag()) {
+                    f = new SortedDocValuesField(name,
                         new BytesRef(property.getValue(Type.BOOLEAN, i).toString()));
-            } else if (tag == Type.STRING.tag()) {
-                f = new SortedDocValuesField(name,
+                } else if (tag == Type.STRING.tag()) {
+                    f = new SortedDocValuesField(name,
                         new BytesRef(property.getValue(Type.STRING, i)));
-            }
+                }
 
-            if (f != null) {
-                this.context.indexUpdate();
-                fields.add(f);
-                fieldAdded = true;
+                if (f != null) {
+                    this.context.indexUpdate();
+                    fields.add(f);
+                    fieldAdded = true;
+                }
+            } catch (Exception e) {
+                log.warn(
+                    "Ignoring ordered property. Could not convert property {} of type {} to type " +
+                        "{} for path {}",
+                    property, Type.fromTag(property.getType().tag(), false),
+                    Type.fromTag(tag, false), getPath(), e);
             }
         }
         return fieldAdded;
+    }
+
+    private int getIndexDefinitionType(PropertyState property) {
+        int idxDefinedTag =
+            context.getDefinition().getPropDefn(property.getName()).getPropertyType();
+        if (idxDefinedTag == Type.UNDEFINED.tag()) {
+            idxDefinedTag = Type.STRING.tag();
+        }
+        return idxDefinedTag;
     }
 
     private static boolean isVisible(String name) {
