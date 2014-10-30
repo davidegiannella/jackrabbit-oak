@@ -21,6 +21,7 @@ import java.util.List;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.oak.plugins.index.aggregate.AggregateIndex;
 import org.apache.jackrabbit.oak.plugins.index.aggregate.NodeAggregator;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
@@ -75,9 +76,8 @@ public class LuceneIndexProvider implements QueryIndexProvider, Observer, Closea
     }
 
     protected LucenePropertyIndex newLucenePropertyIndex() {
-        return new LucenePropertyIndex(tracker, analyzer, aggregator);
+        return new LucenePropertyIndex(tracker, analyzer);
     }
-
 
     /**
      * sets the default analyzer that will be used at query time

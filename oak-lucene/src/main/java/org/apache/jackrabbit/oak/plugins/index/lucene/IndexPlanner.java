@@ -21,9 +21,10 @@ package org.apache.jackrabbit.oak.plugins.index.lucene;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
-import javax.annotation.CheckForNull;
 
+import com.google.common.collect.Sets;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.spi.query.Filter;
@@ -34,7 +35,7 @@ import static org.apache.jackrabbit.oak.spi.query.Filter.PropertyRestriction;
 import static org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
 import static org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry;
 
-public class IndexPlanner {
+class IndexPlanner {
     private final IndexDefinition defn;
     private final Filter filter;
     private final String indexPath;
@@ -56,9 +57,16 @@ public class IndexPlanner {
         return builder != null ? builder.build() : null;
     }
 
-    private IndexPlan.Builder getPlanBuilder() {
-        //TODO Support native functions
+    @Override
+    public String toString() {
+        return "IndexPlanner{" +
+                "indexPath='" + indexPath + '\'' +
+                ", filter=" + filter +
+                ", sortOrder=" + sortOrder +
+                '}';
+    }
 
+    private IndexPlan.Builder getPlanBuilder() {
         FullTextExpression ft = filter.getFullTextConstraint();
 
         //IndexPlanner is currently for property indexes only and does not
@@ -84,21 +92,43 @@ public class IndexPlanner {
             }
         }
 
-        if (!indexedProps.isEmpty()) {
+        List<OrderEntry> sortOrder = createSortOrder();
+        if (!indexedProps.isEmpty() || !sortOrder.isEmpty()) {
             //TODO Need a way to have better cost estimate to indicate that
             //this index can evaluate more propertyRestrictions natively (if more props are indexed)
             //For now we reduce cost per entry
-            IndexPlan.Builder plan = defaultPlan();
-            if (plan != null) {
-                return plan.setCostPerEntry(1.0 / indexedProps.size());
+            int costPerEntryFactor = indexedProps.size();
+            costPerEntryFactor += sortOrder.size();
+            
+            // Restrict matching index when declaringNodeTypes declared
+            if (defn.hasDeclaredNodeTypes()) {
+                if (supportsNodeTypes(filter)) {
+                    // Reduce cost per entry by a small factor because number of nodes would be less
+                    costPerEntryFactor += 1;
+                } else {
+                    return null;
+                }
             }
+            //this index can evaluate more propertyRestrictions natively (if more props are indexed)
+            //For now we reduce cost per entry
+            IndexPlan.Builder plan = defaultPlan();
+            if (!sortOrder.isEmpty()) {
+                plan.setSortOrder(sortOrder);
+            }
+            return plan.setCostPerEntry(1.0 / costPerEntryFactor);
         }
 
-        //TODO Support for path restrictions
-        //TODO support for NodeTypes
         //TODO Support for property existence queries
         //TODO support for nodeName queries
         return null;
+    }
+
+    /**
+     * Determines if NodeTypes as defined in Filter are supported by current index
+     */
+    private boolean supportsNodeTypes(Filter filter) {
+        return !Sets
+            .intersection(defn.getDeclaringNodeTypes(), getSuperTypes(filter)).isEmpty();
     }
 
     private IndexPlan.Builder defaultPlan() {
@@ -109,10 +139,9 @@ public class IndexPlanner {
                 .setIncludesNodeData(false) // we should not include node data
                 .setFilter(filter)
                 .setPathPrefix(getPathPrefix())
-                .setSortOrder(createSortOrder())
                 .setDelayed(true) //Lucene is always async
                 .setAttribute(LuceneIndex.ATTR_INDEX_PATH, indexPath)
-                .setEstimatedEntryCount(getReader().numDocs());
+                .setEstimatedEntryCount(Math.min(defn.getEntryCount(), getReader().numDocs()));
     }
 
     private String getPathPrefix() {
@@ -124,7 +153,6 @@ public class IndexPlanner {
         return indexNode.getSearcher().getIndexReader();
     }
 
-    @CheckForNull
     private List<OrderEntry> createSortOrder() {
         //TODO Refine later once we make mixed indexes having both
         //full text  and property index
@@ -133,14 +161,13 @@ public class IndexPlanner {
         }
 
         if (sortOrder == null) {
-            return null;
+            return Collections.emptyList();
         }
 
         List<OrderEntry> orderEntries = newArrayListWithCapacity(sortOrder.size());
         for (OrderEntry o : sortOrder) {
             //sorting can only be done for known/configured properties
             // and whose types are known
-            //TODO Can sorting be done for array properties
             if (defn.includeProperty(o.getPropertyName()) || defn.isOrdered(o.getPropertyName())
                     && o.getPropertyType() != null
                     && !o.getPropertyType().isArray()) {
@@ -148,5 +175,9 @@ public class IndexPlanner {
             }
         }
         return orderEntries;
+    }
+
+    private static Set<String> getSuperTypes(Filter filter) {
+        return filter.matchesAllTypes() ? Collections.<String>emptySet() : filter.getSupertypes();
     }
 }

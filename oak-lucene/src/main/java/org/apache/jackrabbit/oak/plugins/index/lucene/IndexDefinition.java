@@ -40,6 +40,9 @@ import org.apache.lucene.codecs.Codec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.DECLARING_NODE_TYPES;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.REINDEX_COUNT;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.BLOB_SIZE;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.EXCLUDE_PROPERTY_NAMES;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.EXPERIMENTAL_STORAGE;
@@ -48,7 +51,7 @@ import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstant
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.INCLUDE_PROPERTY_TYPES;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.ORDERED_PROP_NAMES;
 
-public class IndexDefinition {
+class IndexDefinition {
     private static final Logger log = LoggerFactory.getLogger(IndexDefinition.class);
 
     /**
@@ -57,6 +60,11 @@ public class IndexDefinition {
      */
     static final int DEFAULT_BLOB_SIZE = OakDirectory.DEFAULT_BLOB_SIZE - 300;
 
+    /**
+     * Default entry count to keep estimated entry count low.
+     */
+    static final long DEFAULT_ENTRY_COUNT = 1000;
+
     private final int propertyTypes;
 
     private final Set<String> excludes;
@@ -64,6 +72,8 @@ public class IndexDefinition {
     private final Set<String> includes;
 
     private final Set<String> orderedProps;
+
+    private final Set<String> declaringNodeTypes;
 
     private final boolean fullTextEnabled;
 
@@ -78,6 +88,12 @@ public class IndexDefinition {
     private final int blobSize;
 
     private final Codec codec;
+
+    /**
+     * Defines the maximum estimated entry count configured.
+     * Defaults to {#DEFAULT_ENTRY_COUNT}
+     */
+    private final long entryCount;
 
     public IndexDefinition(NodeBuilder defn) {
         this.definition = defn;
@@ -99,6 +115,8 @@ public class IndexDefinition {
         this.excludes = toLowerCase(getMultiProperty(defn, EXCLUDE_PROPERTY_NAMES));
         this.includes = getMultiProperty(defn, INCLUDE_PROPERTY_NAMES);
         this.orderedProps = getMultiProperty(defn, ORDERED_PROP_NAMES);
+        this.declaringNodeTypes = getMultiProperty(defn, DECLARING_NODE_TYPES);
+
         this.blobSize = getOptionalValue(defn, BLOB_SIZE, DEFAULT_BLOB_SIZE);
 
         this.fullTextEnabled = getOptionalValue(defn, FULL_TEXT_ENABLED, true);
@@ -118,6 +136,12 @@ public class IndexDefinition {
         this.funcName = functionName != null ? "native*" + functionName : null;
 
         this.codec = createCodec();
+
+        if (defn.hasProperty(ENTRY_COUNT_PROPERTY_NAME)) {
+            this.entryCount = defn.getProperty(ENTRY_COUNT_PROPERTY_NAME).getValue(Type.LONG);
+        } else {
+            this.entryCount = DEFAULT_ENTRY_COUNT;
+        }
     }
 
     boolean includeProperty(String name) {
@@ -150,6 +174,13 @@ public class IndexDefinition {
         return propertyTypes;
     }
 
+    public Set<String> getDeclaringNodeTypes() {
+        return declaringNodeTypes;
+    }
+
+    public boolean hasDeclaredNodeTypes(){
+        return !declaringNodeTypes.isEmpty();
+    }
     /**
      * Checks if a given property should be stored in the lucene index or not
      */
@@ -193,6 +224,17 @@ public class IndexDefinition {
 
     public Codec getCodec() {
         return codec;
+    }
+
+    public long getReindexCount(){
+        if(definition.hasProperty(REINDEX_COUNT)){
+            return definition.getProperty(REINDEX_COUNT).getValue(Type.LONG);
+        }
+        return 0;
+    }
+
+    public long getEntryCount() {
+        return entryCount;
     }
 
     //~------------------------------------------< Internal >
