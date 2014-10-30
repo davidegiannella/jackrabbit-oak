@@ -142,7 +142,8 @@ public class ScalabilityRunner {
                                         new MultiFilterSplitOrderByKeysetPageSearcher()),
                         new ScalabilityNodeRelationshipSuite(withStorage.value(options))
                                 .addBenchmarks(new AggregateNodeSearcher()),
-                        new ScalabilitySimpleNodeSuite()
+                        new ScalabilitySimpleNodeSuite(withStorage.value(options))
+                                .addBenchmarks(new PropertyEqualsValueSearcher())
                 };
 
         Set<String> argset = Sets.newHashSet(nonOption.values(options));

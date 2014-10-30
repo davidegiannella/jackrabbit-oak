@@ -17,25 +17,18 @@
 package org.apache.jackrabbit.oak.scalability;
 
 import javax.jcr.RepositoryException;
+import javax.jcr.query.Query;
+import javax.jcr.query.QueryManager;
 
-import org.apache.commons.math.stat.descriptive.SynchronizedDescriptiveStatistics;
+import org.apache.jackrabbit.oak.scalability.ScalabilityAbstractSuite.ExecutionContext;
 
-
-public class ScalabilitySimpleNodeSuite extends ScalabilityNodeSuite {
-    public ScalabilitySimpleNodeSuite(Boolean storageEnabled) {
-        super(storageEnabled);
-    }
+public class PropertyEqualsValueSearcher extends SearchScalabilityBenchmark {
 
     @Override
-    protected Writer getWriter(ExecutionContext context, 
-                               SynchronizedDescriptiveStatistics writeStats, int idx) throws RepositoryException {
-        return new Writer(context.getIncrement() + "-" + idx, context.getIncrement() / LOADERS,
-            writeStats) {
+    protected Query getQuery(QueryManager qm, ExecutionContext context) throws RepositoryException {
+        final String statement = "SELECT * FROM [nt:unstructured] WHERE property=$value";
 
-            @Override
-            public void run() {
-                System.out.println("Writer");
-            }
-        };
+        return null;
     }
+
 }
