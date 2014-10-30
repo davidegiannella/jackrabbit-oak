@@ -16,22 +16,18 @@
  */
 package org.apache.jackrabbit.oak.scalability;
 
-import javax.jcr.RepositoryException;
+public class ScalabilitySimpleNodeSuite extends ScalabilityAbstractSuite {
 
-import org.apache.commons.math.stat.descriptive.SynchronizedDescriptiveStatistics;
-
-
-public class ScalabilitySimpleNodeSuite extends ScalabilityNodeSuite {
-
-    public ScalabilitySimpleNodeSuite(Boolean storageEnabled) {
-        super(storageEnabled);
+    @Override
+    public ScalabilitySuite addBenchmarks(ScalabilityBenchmark... benchmarks) {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
-    protected Writer getWriter(ExecutionContext context, 
-                               SynchronizedDescriptiveStatistics writeStats, 
-                               int idx) throws RepositoryException {
+    protected void executeBenchmark(ScalabilityBenchmark benchmark, 
+                                    ExecutionContext context) throws Exception {
         // TODO Auto-generated method stub
-        return super.getWriter(context, writeStats, idx);
-    }    
+        
+    }
 }
