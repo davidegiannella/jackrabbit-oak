@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.apache.jackrabbit.oak.plugins.document.cache.CachingDocumentStore;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
 import org.junit.Assume;
 import org.junit.Test;
@@ -441,7 +442,15 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
         String sid = cid;
         int found = 0;
         while (System.currentTimeMillis() < end) {
+            long now = System.currentTimeMillis();
             List<NodeDocument> result = super.ds.query(Collection.NODES, sid, cid + "X", fetchcount);
+            if ((super.ds instanceof CachingDocumentStore) && result.size() > 0) {
+                // check freshness of returned documents
+                long created = result.get(0).getLastCheckTime();
+                assertTrue(
+                        "'getLastCheckTime' timestamp of NodeDocument too old (" + created + " vs " + now + ") (on " + super.dsname + ")",
+                        created >= now);
+            }
             found += result.size();
             if (result.size() < fetchcount) {
                 if (sid.equals(cid)) {
@@ -510,6 +519,31 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
         }
 
         LOG.info("batch update for _lastRev for " + super.dsname + " was "
+                + cnt + " in " + duration + "ms (" + (cnt / (duration / 1000f)) + "/s)");
+    }
+
+    @Test
+    public void testPerfReadBigDoc() {
+        String id = this.getClass().getName() + ".testReadBigDoc";
+        long duration = 1000;
+        int cnt = 0;
+
+        super.ds.remove(Collection.NODES, Collections.singletonList(id));
+        UpdateOp up = new UpdateOp(id, true);
+        up.set("_id", id);
+        for (int i = 0; i < 100; i++) {
+            up.set("foo" + i, generateString(1024, true));
+        }
+        assertTrue(super.ds.create(Collection.NODES, Collections.singletonList(up)));
+        removeMe.add(id);
+
+        long end = System.currentTimeMillis() + duration;
+        while (System.currentTimeMillis() < end) {
+            NodeDocument d = super.ds.find(Collection.NODES, id, 10); // allow 10ms old entries
+            cnt += 1;
+        }
+
+        LOG.info("big doc read from " + super.dsname + " was "
                 + cnt + " in " + duration + "ms (" + (cnt / (duration / 1000f)) + "/s)");
     }
 
