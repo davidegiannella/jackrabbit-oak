@@ -16,6 +16,8 @@
  */
 package org.apache.jackrabbit.oak.scalability;
 
+import static javax.jcr.query.Query.JCR_SQL2;
+
 import javax.jcr.RepositoryException;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
@@ -26,9 +28,10 @@ public class PropertyEqualsValueSearcher extends SearchScalabilityBenchmark {
 
     @Override
     protected Query getQuery(QueryManager qm, ExecutionContext context) throws RepositoryException {
-        final String statement = "SELECT * FROM [nt:unstructured] WHERE property=$value";
+//        final String statement = "SELECT * FROM [nt:unstructured] WHERE property=$value";
+        final String statement = "SELECT * FROM [nt:unstructured] WHERE property='abc'";
 
-        return null;
+        return qm.createQuery(statement, JCR_SQL2);
     }
 
 }

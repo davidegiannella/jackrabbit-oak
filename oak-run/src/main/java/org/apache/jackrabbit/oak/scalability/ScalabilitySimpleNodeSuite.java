@@ -26,16 +26,16 @@ public class ScalabilitySimpleNodeSuite extends ScalabilityNodeSuite {
         super(storageEnabled);
     }
 
-    @Override
-    protected Writer getWriter(ExecutionContext context, 
-                               SynchronizedDescriptiveStatistics writeStats, int idx) throws RepositoryException {
-        return new Writer(context.getIncrement() + "-" + idx, context.getIncrement() / LOADERS,
-            writeStats) {
-
-            @Override
-            public void run() {
-                System.out.println("Writer");
-            }
-        };
-    }
+//    @Override
+//    protected Writer getWriter(ExecutionContext context, 
+//                               SynchronizedDescriptiveStatistics writeStats, int idx) throws RepositoryException {
+//        return new Writer(context.getIncrement() + "-" + idx, context.getIncrement() / LOADERS,
+//            writeStats) {
+//
+//            @Override
+//            public void run() {
+//                System.out.println("Writer");
+//            }
+//        };
+//    }
 }
