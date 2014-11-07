@@ -18,16 +18,20 @@
  */
 package org.apache.jackrabbit.oak.scalability;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.newArrayListWithCapacity;
+import static org.apache.jackrabbit.JcrConstants.JCR_LASTMODIFIED;
 
 import java.util.Calendar;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
+import javax.annotation.Nonnull;
 import javax.jcr.Binary;
 import javax.jcr.Node;
+import javax.jcr.PathNotFoundException;
 import javax.jcr.Property;
 import javax.jcr.PropertyType;
 import javax.jcr.RepositoryException;
@@ -45,6 +49,7 @@ import com.google.common.collect.Lists;
 
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.math.stat.descriptive.SynchronizedDescriptiveStatistics;
+import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.commons.JcrUtils;
 import org.apache.jackrabbit.oak.benchmark.TestInputStream;
 import org.apache.jackrabbit.oak.benchmark.util.Date;
@@ -233,8 +238,12 @@ public class ScalabilityBlobSearchSuite extends ScalabilityNodeSuite {
     }
 
     private class BlobWriter extends Writer implements Runnable {
-        BlobWriter(String id, int maxAssets, SynchronizedDescriptiveStatistics writeStats)
-                throws RepositoryException {
+        public static final  String LAST_MODIFIED_VALUE_PROP = "BlobWriter.LastModifiedValueProp";
+
+        private final Random rndLastModifiedUpdate = new Random(7);
+
+        BlobWriter(String id, int maxAssets, SynchronizedDescriptiveStatistics writeStats
+            ) throws RepositoryException {
             super(id, maxAssets, writeStats);
         }
 
@@ -254,6 +263,7 @@ public class ScalabilityBlobSearchSuite extends ScalabilityNodeSuite {
                     Stopwatch watch = Stopwatch.createStarted();
 
                     Node file = putFile(fileNamePrefix, parentDir);
+                    setLastModifiedValue(file, context);
                     session.save();
 
                     if (stats != null) {
@@ -271,6 +281,22 @@ public class ScalabilityBlobSearchSuite extends ScalabilityNodeSuite {
                 }
             } catch (Exception e) {
                 LOG.error("Exception in load creation ", e);
+            }
+        }
+
+        private void setLastModifiedValue(@Nonnull final Node file,
+                                          @Nonnull final ExecutionContext context
+                                          ) throws RepositoryException {
+            checkNotNull(file);
+            checkNotNull(context);
+
+            // we should set in the ExecutionContext a lastModifiedValue if empty or every 10% of
+            // nodes. will this give us roughly a key that stands in the middle of the index? Finger
+            // in the air estimation.
+            if (Strings.isNullOrEmpty((String) context.getMap().get(LAST_MODIFIED_VALUE_PROP))
+                || rndLastModifiedUpdate.nextDouble() < 0.1) {
+                context.getMap().put(LAST_MODIFIED_VALUE_PROP,
+                    file.getProperty(JCR_LASTMODIFIED).getString());
             }
         }
 
