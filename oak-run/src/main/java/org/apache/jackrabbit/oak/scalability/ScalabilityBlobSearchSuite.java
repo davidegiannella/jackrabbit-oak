@@ -66,6 +66,8 @@ import org.apache.jackrabbit.oak.scalability.util.NodeTypeUtils;
  * 
  */
 public class ScalabilityBlobSearchSuite extends ScalabilityNodeSuite {
+    public static final  String LAST_MODIFIED_VALUE_PROP = "BlobWriter.LastModifiedValueProp";
+
     private static final int FILE_SIZE = Integer.getInteger("fileSize", 1);
 
     /**
@@ -238,8 +240,6 @@ public class ScalabilityBlobSearchSuite extends ScalabilityNodeSuite {
     }
 
     private class BlobWriter extends Writer implements Runnable {
-        public static final  String LAST_MODIFIED_VALUE_PROP = "BlobWriter.LastModifiedValueProp";
-
         private final Random rndLastModifiedUpdate = new Random(7);
 
         BlobWriter(String id, int maxAssets, SynchronizedDescriptiveStatistics writeStats
@@ -296,7 +296,7 @@ public class ScalabilityBlobSearchSuite extends ScalabilityNodeSuite {
             if (Strings.isNullOrEmpty((String) context.getMap().get(LAST_MODIFIED_VALUE_PROP))
                 || rndLastModifiedUpdate.nextDouble() < 0.1) {
                 context.getMap().put(LAST_MODIFIED_VALUE_PROP,
-                    file.getProperty(JCR_LASTMODIFIED).getString());
+                    file.getProperty("./jcr:content/jcr:lastModified").getString());
             }
         }
 

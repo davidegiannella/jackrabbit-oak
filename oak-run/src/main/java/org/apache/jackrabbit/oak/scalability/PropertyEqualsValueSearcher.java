@@ -28,10 +28,12 @@ public class PropertyEqualsValueSearcher extends SearchScalabilityBenchmark {
 
     @Override
     protected Query getQuery(QueryManager qm, ExecutionContext context) throws RepositoryException {
-//        final String statement = "SELECT * FROM [nt:unstructured] WHERE property=$value";
-        final String statement = "SELECT * FROM [nt:unstructured] WHERE property='abc'";
-
+        final String statement = String.format(
+            "SELECT * FROM [%s] WHERE [jcr:content/jcr:lastModified]=CAST('%s' AS Date)",
+            context.getMap().get(ScalabilityBlobSearchSuite.CTX_FILE_NODE_TYPE_PROP),
+            context.getMap().get(ScalabilityBlobSearchSuite.LAST_MODIFIED_VALUE_PROP)
+            );
+        LOG.debug("PropertyEqualsValueSearcher. executing {}", statement);
         return qm.createQuery(statement, JCR_SQL2);
     }
-
 }
