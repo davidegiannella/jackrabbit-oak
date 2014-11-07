@@ -126,7 +126,8 @@ public class ScalabilityRunner {
                                         new LastModifiedSearcher(Date.LAST_24_HRS),
                                         new LastModifiedSearcher(Date.LAST_7_DAYS),
                                         new LastModifiedSearcher(Date.LAST_MONTH),
-                                        new LastModifiedSearcher(Date.LAST_YEAR)),
+                                        new LastModifiedSearcher(Date.LAST_YEAR),
+                                        new PropertyEqualsValueSearcher()),
                         new ScalabilityNodeSuite(withStorage.value(options))
                                 .addBenchmarks(new OrderBySearcher(),
                                         new SplitOrderBySearcher(),
@@ -142,8 +143,6 @@ public class ScalabilityRunner {
                                         new MultiFilterSplitOrderByKeysetPageSearcher()),
                         new ScalabilityNodeRelationshipSuite(withStorage.value(options))
                                 .addBenchmarks(new AggregateNodeSearcher()),
-                        new ScalabilitySimpleNodeSuite(withStorage.value(options))
-                                .addBenchmarks(new PropertyEqualsValueSearcher())
                 };
 
         Set<String> argset = Sets.newHashSet(nonOption.values(options));
