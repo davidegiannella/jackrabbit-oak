@@ -21,6 +21,7 @@ package org.apache.jackrabbit.oak.scalability;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.newArrayListWithCapacity;
 
+import java.util.Calendar;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -88,6 +89,7 @@ public class ScalabilityBlobSearchSuite extends ScalabilityNodeSuite {
     private static final String CUSTOM_INDEX_TYPE = "AssetIndex";
 
     private final Random random = new Random(29);
+    private final Random dateSparser = new Random(7);
 
     private List<String> searchPaths;
 
@@ -303,7 +305,11 @@ public class ScalabilityBlobSearchSuite extends ScalabilityNodeSuite {
                     file.addMixin(CUSTOM_INDEX_TYPE);
                 }
                 content.setProperty(Property.JCR_MIMETYPE, MimeType.randomMimeType().getValue());
-                content.setProperty(Property.JCR_LAST_MODIFIED, Date.randomDate().getCalendar());
+                Calendar randomDate = Date.randomDate().getCalendar();
+                // adding random millis up to 24hrs for increasing the variety of dates in the
+                // index
+                randomDate.add(Calendar.MILLISECOND, dateSparser.nextInt(86400000));
+                content.setProperty(Property.JCR_LAST_MODIFIED, randomDate);
                 content.setProperty(Property.JCR_DATA, binary);
 
                 file.setProperty(CUSTOM_PATH_PROP, file.getPath());
