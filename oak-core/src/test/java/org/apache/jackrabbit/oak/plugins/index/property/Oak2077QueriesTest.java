@@ -389,56 +389,13 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         
         setTraversalEnabled(true);
     }
-    
-    @Test
-    public void queryEqualsAscending() throws Exception {
-        setTraversalEnabled(false);
-        
-        // with 100 items we know we have at least 5 lanes due to default probability
-        final int numberOfNodes = 100;
-        final OrderDirection direction = ASC;
-        final String unexistent  = formatNumber(numberOfNodes + 1);
-        final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY + " = $v ";
-        
-        defineIndex(direction);
 
-        Tree content = root.getTree("/").addChild("content").addChild("nodes");
-        List<String> values = generateOrderedValues(numberOfNodes, 0, direction); //changed by offset
-        List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
-        root.commit();
-
-        // truncate lane 0 before the seeked item. No results expected and 1 warning in the logs
-        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-        builder = builder.getChildNode(TEST_INDEX_NAME);
-        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-
-        NodeBuilder truncated = builder.getChildNode(START);
-        String truncatedName;
-        
-        int seekForPosition = 4;
-        String seekFor = nodes.get(seekForPosition).getValue();
-        for (int i = 0; i < seekForPosition; i++) {
-            // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated);
-            truncated = builder.getChildNode(truncatedName);
-        }
-        setPropertyNext(truncated, unexistent, 0);
-        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        resetEnvVariables();
-
-        LOGGING_TRACKER.reset();
-        Map<String, PropertyValue> bindings = ImmutableMap.of("v", newString(seekFor));
-        Result result = executeQuery(statement, SQL2, bindings);
-        assertRightOrder(Collections.<ValuePathTuple> emptyList(), result.getRows().iterator());
-        assertEquals(1,  LOGGING_TRACKER.countLinesTracked());
-        setTraversalEnabled(true);
-    }
-
-    @Test @Ignore
-    public void queryEqualsDescending() {
-        fail();
-    }
+    // As of OAK-2202 we don't use the skip list for returning a specific key item, so we're not
+    // affected by OAK-2077
+    // public void queryEqualsAscending() throws Exception {
+    // }
+    // public void queryEqualsDescending() {
+    // }
 
     @Test @Ignore
     public void queryGreaterThanAscending() {
