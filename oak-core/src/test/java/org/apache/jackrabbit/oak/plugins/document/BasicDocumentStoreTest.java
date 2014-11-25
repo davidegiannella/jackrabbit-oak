@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.apache.jackrabbit.oak.plugins.document.cache.CachingDocumentStore;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
 import org.junit.Assume;
 import org.junit.Test;
@@ -402,6 +403,81 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
     }
 
     @Test
+    public void testPerfCollectionPaging() {
+        testPerfCollectionPaging(this.getClass().getName() + ".testPerfCollectionPaging", false);
+    }
+
+    @Test
+    public void testPerfCollectionPagingUnCached() {
+        testPerfCollectionPaging(this.getClass().getName() + ".testPerfCollectionPagingUnCached", true);
+    }
+
+    private void testPerfCollectionPaging(String name, boolean invalidateCache) {
+        String cid = name;
+        int nodecount = 20000;
+        int initialFetchCount = 100;
+        int maxFetchCount = 1600;
+        int fetchcount = initialFetchCount;
+        long duration = 2000;
+        int cnt = 0;
+        List<UpdateOp> ups = new ArrayList<UpdateOp>();
+
+        UpdateOp container = new UpdateOp(cid, true);
+        container.set("_id", cid);
+        ups.add(container);
+        removeMe.add(cid);
+        for (int i = 0; i < nodecount; i++) {
+            String id = String.format("%s/%08d", cid, i);
+            removeMe.add(id);
+            UpdateOp u = new UpdateOp(id, true);
+            u.set("_id", id);
+            ups.add(u);
+        }
+
+        boolean success = super.ds.create(Collection.NODES, ups);
+        assertTrue(success);
+        super.ds.invalidateCache();
+
+        long end = System.currentTimeMillis() + duration;
+        String sid = cid;
+        int found = 0;
+        while (System.currentTimeMillis() < end) {
+            long now = System.currentTimeMillis();
+            List<NodeDocument> result = super.ds.query(Collection.NODES, sid, cid + "X", fetchcount);
+            if ((super.ds instanceof CachingDocumentStore) && result.size() > 0) {
+                // check freshness of returned documents
+                long created = result.get(0).getLastCheckTime();
+                assertTrue(
+                        "'getLastCheckTime' timestamp of NodeDocument too old (" + created + " vs " + now + ") (on " + super.dsname + ")",
+                        created >= now);
+            }
+            found += result.size();
+            if (result.size() < fetchcount) {
+                if (sid.equals(cid)) {
+                    fail("first page must not be empty");
+                }
+                sid = cid;
+                assertEquals(nodecount, found);
+                found = 0;
+                fetchcount = initialFetchCount;
+            }
+            else {
+                sid = result.get(result.size() -1).getId();
+                if (fetchcount < maxFetchCount) {
+                    fetchcount *= 2;
+                }
+            }
+            cnt += 1;
+            if (invalidateCache) {
+                super.ds.invalidateCache();
+            }
+        }
+
+        LOG.info("collection lookups " + (invalidateCache ? "(uncached) " : "") + super.dsname + " was " + cnt + " in " + duration
+                + "ms (" + (cnt / (duration / 1000f)) + "/s)");
+    }
+
+    @Test
     public void testPerfLastRevBatch() {
         String bid = this.getClass().getName() + ".testPerfLastRevBatch";
         int nodecount = 100;
@@ -443,6 +519,31 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
         }
 
         LOG.info("batch update for _lastRev for " + super.dsname + " was "
+                + cnt + " in " + duration + "ms (" + (cnt / (duration / 1000f)) + "/s)");
+    }
+
+    @Test
+    public void testPerfReadBigDoc() {
+        String id = this.getClass().getName() + ".testReadBigDoc";
+        long duration = 1000;
+        int cnt = 0;
+
+        super.ds.remove(Collection.NODES, Collections.singletonList(id));
+        UpdateOp up = new UpdateOp(id, true);
+        up.set("_id", id);
+        for (int i = 0; i < 100; i++) {
+            up.set("foo" + i, generateString(1024, true));
+        }
+        assertTrue(super.ds.create(Collection.NODES, Collections.singletonList(up)));
+        removeMe.add(id);
+
+        long end = System.currentTimeMillis() + duration;
+        while (System.currentTimeMillis() < end) {
+            NodeDocument d = super.ds.find(Collection.NODES, id, 10); // allow 10ms old entries
+            cnt += 1;
+        }
+
+        LOG.info("big doc read from " + super.dsname + " was "
                 + cnt + " in " + duration + "ms (" + (cnt / (duration / 1000f)) + "/s)");
     }
 
@@ -577,14 +678,16 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
             removeMe.add(key);
             StringBuffer expect = new StringBuffer("X");
 
-            String appendString = generateString(32, true);
+            String appendString = generateString(512, true);
 
             long duration = 1000;
             long end = System.currentTimeMillis() + duration;
             long cnt = 0;
             byte bdata[] = new byte[65536];
             String sdata = appendString;
-            int datalength = (super.dsname.contains("Oracle") ? 4000 : 16384) / 3;
+            boolean needsConcat = super.dsname.contains("MySQL");
+            int dataInChars = (super.dsname.contains("Oracle") ? 4000 : 16384);
+            int dataInBytes = dataInChars / 3;
 
             while (System.currentTimeMillis() < end) {
 
@@ -630,8 +733,11 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
                             stmt.close();
                         }
                     } else if (mode == 3) {
-                        PreparedStatement stmt = connection.prepareStatement("update " + table
-                                + " set DATA = DATA || ? where ID = ?");
+                        PreparedStatement stmt = connection.prepareStatement("update "
+                                + table
+                                + " set "
+                                + (needsConcat ? "DATA = CONCAT(DATA, ?)" : "DATA = DATA || CAST(? as varchar(" + dataInChars
+                                        + "))") + " where ID = ?");
                         try {
                             stmt.setString(1, appendString);
                             stmt.setString(2, key);
@@ -667,7 +773,7 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
                             stmt.setObject(si++, null, Types.BIGINT);
                             stmt.setObject(si++, sdata.length(), Types.BIGINT);
 
-                            if (sdata.length() < datalength) {
+                            if (sdata.length() < dataInBytes) {
                                 stmt.setString(si++, sdata);
                                 stmt.setBinaryStream(si++, null, 0);
                             }

@@ -16,7 +16,6 @@
  */
 package org.apache.jackrabbit.oak.spi.security.authorization.cug.impl;
 
-import java.lang.IllegalArgumentException;
 import java.security.AccessControlException;
 import java.security.Principal;
 import java.util.HashSet;
@@ -24,6 +23,7 @@ import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import javax.jcr.nodetype.ConstraintViolationException;
 import javax.jcr.nodetype.PropertyDefinition;
 
 import org.apache.jackrabbit.api.JackrabbitSession;
@@ -45,13 +45,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * CugImporter... TODO
+ * CUG specific implementation of the {@code ProtectedPropertyImporter}.
  */
 class CugImporter implements ProtectedPropertyImporter, CugConstants {
 
-    /**
-     * logger instance
-     */
     private static final Logger log = LoggerFactory.getLogger(CugImporter.class);
 
     private boolean initialized;
@@ -101,11 +98,12 @@ class CugImporter implements ProtectedPropertyImporter, CugConstants {
                 if (principal == null) {
                     switch (importBehavior) {
                         case ImportBehavior.IGNORE:
-                            log.debug("Unknown principal " + principalName + " -> Ignoring this ACE.");
+                            log.debug("Ignoring unknown principal with name '" + principalName + "'.");
                             break;
                         case ImportBehavior.ABORT:
-                            throw new AccessControlException("Unknown principal " + principalName);
+                            throw new AccessControlException("Unknown principal '" + principalName + "'.");
                         case ImportBehavior.BESTEFFORT:
+                            log.debug("Importing unknown principal '" + principalName + '\'');
                             principalNames.add(principalName);
                             break;
                         default:
@@ -120,6 +118,11 @@ class CugImporter implements ProtectedPropertyImporter, CugConstants {
         } else {
             return false;
         }
+    }
+
+    @Override
+    public void propertiesCompleted(@Nonnull Tree protectedParent) throws IllegalStateException, ConstraintViolationException, RepositoryException {
+        // nothing to do
     }
 
     //--------------------------------------------------------------------------

@@ -23,6 +23,7 @@ import static com.google.common.collect.Lists.newArrayListWithCapacity;
 
 import java.util.Calendar;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
@@ -34,8 +35,11 @@ import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
 import com.google.common.base.Splitter;
+import com.google.common.base.StandardSystemProperty;
 import com.google.common.base.Stopwatch;
 
+import com.google.common.base.Strings;
+import com.google.common.collect.Maps;
 import org.apache.commons.math.stat.descriptive.SynchronizedDescriptiveStatistics;
 import org.apache.jackrabbit.commons.JcrUtils;
 import org.apache.jackrabbit.oak.Oak;
@@ -46,6 +50,7 @@ import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
 import org.apache.jackrabbit.oak.jcr.Jcr;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
+import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelper;
@@ -81,7 +86,7 @@ public class ScalabilityNodeSuite extends ScalabilityAbstractSuite {
      * Controls the number of nodes at each level
      */
     protected static final List<String> NODE_LEVELS = Splitter.on(",").trimResults()
-            .omitEmptyStrings().splitToList(System.getProperty("nodeLevels", "100,10,5"));
+            .omitEmptyStrings().splitToList(System.getProperty("nodeLevels", "10,5,2"));
 
     /**
      * Controls the number of concurrent thread for searching
@@ -147,11 +152,12 @@ public class ScalabilityNodeSuite extends ScalabilityAbstractSuite {
             "LongevitySearchAssets" + TEST_ID;
 
     public enum Index {
-        PROPERTY, ORDERED, LUCENE
+        PROPERTY, ORDERED, LUCENE, LUCENE_DOC, LUCENE_FILE, LUCENE_FILE_DOC
     }
 
     /** Type of index to be created */
-    public final Index INDEX_TYPE = Index.valueOf(System.getProperty("indexType", Index.PROPERTY.toString()));
+    public final Index INDEX_TYPE =
+        Index.valueOf(System.getProperty("indexType", Index.PROPERTY.toString()));
 
     protected final Boolean storageEnabled;
 
@@ -206,19 +212,44 @@ public class ScalabilityNodeSuite extends ScalabilityAbstractSuite {
     }
 
     protected void createIndexes(Session session) throws RepositoryException {
+        Map<String, Map<String, String>> orderedMap = Maps.newHashMap();
+        String persistencePath = "";
+
         switch (INDEX_TYPE) {
             case ORDERED:
                 // define ordered indexes on properties
                 OakIndexUtils.orderedIndexDefinition(session, "customIndexParent", ASYNC_INDEX,
-                        new String[]{DATE_PROP}, false,
-                        new String[]{CUSTOM_ROOT_NODE_TYPE},
-                        OrderedIndex.OrderDirection.DESC.getDirection());
+                    new String[] {DATE_PROP}, false,
+                    (nodeTypes.isEmpty() ? new String[0] : new String[] {nodeTypes.get(0)}),
+                    OrderedIndex.OrderDirection.DESC.getDirection());
                 OakIndexUtils.orderedIndexDefinition(session, "customIndexDescendant", ASYNC_INDEX,
                         new String[]{DATE_PROP}, false,
-                        new String[]{CUSTOM_DESC_NODE_TYPE},
+                        (nodeTypes.isEmpty() ? new String[0]: new String[] {nodeTypes.get(1)}),
                         OrderedIndex.OrderDirection.DESC.getDirection());
                 break;
+            // define lucene index on properties
+            case LUCENE_FILE:
+                persistencePath =
+                    "target" + StandardSystemProperty.FILE_SEPARATOR.value() + "lucene" + String
+                        .valueOf(System.currentTimeMillis());
+                OakIndexUtils.luceneIndexDefinition(session, "customIndex", ASYNC_INDEX,
+                    new String[] {FILTER_PROP, DATE_PROP},
+                    new String[] {PropertyType.TYPENAME_STRING, PropertyType.TYPENAME_DATE},
+                    null, persistencePath);
+                break;
+            case LUCENE_FILE_DOC:
+                persistencePath =
+                    "target" + StandardSystemProperty.FILE_SEPARATOR.value() + "lucene" + String
+                        .valueOf(System.currentTimeMillis());
+            case LUCENE_DOC:
+                Map<String, String> propMap = Maps.newHashMap();
+                propMap.put(LuceneIndexConstants.PROP_TYPE, PropertyType.TYPENAME_DATE);
+                orderedMap.put(DATE_PROP, propMap);
             case LUCENE:
+                OakIndexUtils.luceneIndexDefinition(session, "customIndex", ASYNC_INDEX,
+                    new String[] {FILTER_PROP, DATE_PROP},
+                    new String[] {PropertyType.TYPENAME_STRING, PropertyType.TYPENAME_DATE},
+                    orderedMap, persistencePath);
                 break;
             case PROPERTY:
                 break;
@@ -276,6 +307,10 @@ public class ScalabilityNodeSuite extends ScalabilityAbstractSuite {
                 }
                 lastIndexedTime = indexStatsMBean.getLastIndexedTime();
             }
+
+            LOG.info("Execution Count {}", indexStatsMBean.getExecutionCount());
+            LOG.info("Execution Time {}", indexStatsMBean.getExecutionTime());
+            LOG.info("Consolidated Execution Stats {}", indexStatsMBean.getConsolidatedExecutionStats());
         }
     }
 
@@ -375,7 +410,8 @@ public class ScalabilityNodeSuite extends ScalabilityAbstractSuite {
                             .with((Observer) provider)
                             .with(new LuceneIndexEditorProvider());
 
-                    if (ASYNC_INDEX.equals(IndexConstants.ASYNC_PROPERTY_NAME)) {
+                    if (!Strings.isNullOrEmpty(ASYNC_INDEX) && ASYNC_INDEX
+                        .equals(IndexConstants.ASYNC_PROPERTY_NAME)) {
                         oak.withAsyncIndexing();
                     }
 

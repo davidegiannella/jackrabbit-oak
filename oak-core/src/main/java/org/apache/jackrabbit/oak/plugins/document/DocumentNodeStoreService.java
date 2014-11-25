@@ -18,6 +18,12 @@
  */
 package org.apache.jackrabbit.oak.plugins.document;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.jackrabbit.oak.commons.PropertiesUtil.toBoolean;
+import static org.apache.jackrabbit.oak.commons.PropertiesUtil.toInteger;
+import static org.apache.jackrabbit.oak.commons.PropertiesUtil.toLong;
+import static org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils.registerMBean;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Dictionary;
@@ -42,6 +48,7 @@ import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.jackrabbit.oak.api.jmx.CacheStatsMBean;
+import org.apache.jackrabbit.oak.api.jmx.CheckpointMBean;
 import org.apache.jackrabbit.oak.commons.PropertiesUtil;
 import org.apache.jackrabbit.oak.kernel.KernelNodeStore;
 import org.apache.jackrabbit.oak.osgi.ObserverTracker;
@@ -66,12 +73,6 @@ import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static org.apache.jackrabbit.oak.commons.PropertiesUtil.toBoolean;
-import static org.apache.jackrabbit.oak.commons.PropertiesUtil.toInteger;
-import static org.apache.jackrabbit.oak.commons.PropertiesUtil.toLong;
-import static org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils.registerMBean;
-
 /**
  * The OSGi service to start/stop a DocumentNodeStore instance.
  */
@@ -83,6 +84,7 @@ public class DocumentNodeStoreService {
     private static final int DEFAULT_CHANGES_SIZE = 256;
     private static final int DEFAULT_BLOB_CACHE_SIZE = 16;
     private static final String DEFAULT_DB = "oak";
+    private static final String DEFAULT_PERSISTENT_CACHE = "";
     private static final String PREFIX = "oak.documentstore.";
 
     /**
@@ -118,6 +120,9 @@ public class DocumentNodeStoreService {
 
     @Property(intValue =  DEFAULT_BLOB_CACHE_SIZE)
     private static final String PROP_BLOB_CACHE_SIZE = "blobCacheSize";
+    
+    @Property(value =  DEFAULT_PERSISTENT_CACHE)
+    private static final String PROP_PERSISTENT_CACHE = "persistentCache";
 
     /**
      * Boolean value indicating a blobStore is to be used
@@ -238,12 +243,17 @@ public class DocumentNodeStoreService {
         int cacheSize = toInteger(prop(PROP_CACHE), DEFAULT_CACHE);
         int changesSize = toInteger(prop(PROP_CHANGES_SIZE), DEFAULT_CHANGES_SIZE);
         int blobCacheSize = toInteger(prop(PROP_BLOB_CACHE_SIZE), DEFAULT_BLOB_CACHE_SIZE);
+        String persistentCache = PropertiesUtil.toString(prop(PROP_PERSISTENT_CACHE), DEFAULT_PERSISTENT_CACHE);
         boolean useMK = toBoolean(context.getProperties().get(PROP_USE_MK), false);
 
         DocumentMK.Builder mkBuilder =
                 new DocumentMK.Builder().
                 memoryCacheSize(cacheSize * MB).
                 offHeapCacheSize(offHeapCache * MB);
+        
+        if (persistentCache != null && persistentCache.length() > 0) {
+            mkBuilder.setPersistentCache(persistentCache);
+        }
 
         //Set blobstore before setting the DB
         if (customBlobStore) {
@@ -404,6 +414,13 @@ public class DocumentNodeStoreService {
                         store.getDocChildrenCacheStats(),
                         CacheStatsMBean.TYPE,
                         store.getDocChildrenCacheStats().getName())
+        );
+        registrations.add(
+                registerMBean(whiteboard,
+                        CheckpointMBean.class,
+                        new DocumentCheckpointMBean(store),
+                        CheckpointMBean.TYPE,
+                        "Document node store checkpoint management")
         );
         DiffCache cl = store.getDiffCache();
         if (cl instanceof MemoryDiffCache) {

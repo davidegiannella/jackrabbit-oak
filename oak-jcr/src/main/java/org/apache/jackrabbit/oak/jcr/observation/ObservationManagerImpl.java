@@ -20,7 +20,6 @@ package org.apache.jackrabbit.oak.jcr.observation;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Sets.newHashSet;
-import static java.util.Collections.emptySet;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.jackrabbit.oak.commons.PathUtils.concat;
 import static org.apache.jackrabbit.oak.commons.PathUtils.isAncestor;
@@ -48,6 +47,7 @@ import org.apache.jackrabbit.api.observation.JackrabbitObservationManager;
 import org.apache.jackrabbit.commons.iterator.EventListenerIteratorAdapter;
 import org.apache.jackrabbit.commons.observation.ListenerTracker;
 import org.apache.jackrabbit.oak.api.ContentSession;
+import org.apache.jackrabbit.oak.api.Root;
 import org.apache.jackrabbit.oak.jcr.delegate.SessionDelegate;
 import org.apache.jackrabbit.oak.jcr.session.SessionContext;
 import org.apache.jackrabbit.oak.namepath.NamePathMapper;
@@ -118,9 +118,9 @@ public class ObservationManagerImpl implements JackrabbitObservationManager {
             Set<Principal> principals = sessionDelegate.getAuthInfo().getPrincipals();
             @Nonnull
             @Override
-            public PermissionProvider create() {
-                return authorizationConfig.getPermissionProvider(
-                        sessionDelegate.getRoot(), sessionDelegate.getWorkspaceName(), principals);
+            public PermissionProvider create(Root root) {
+                return authorizationConfig.getPermissionProvider(root,
+                        sessionDelegate.getWorkspaceName(), principals);
             }
         };
     }

@@ -32,6 +32,7 @@ import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryChildNodeEntry;
 import org.apache.jackrabbit.oak.query.FilterIterators;
+import org.apache.jackrabbit.oak.query.QueryEngineSettings;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -69,6 +70,11 @@ import com.google.common.collect.Sets;
 public class ContentMirrorStoreStrategy implements IndexStoreStrategy {
 
     static final Logger LOG = LoggerFactory.getLogger(ContentMirrorStoreStrategy.class);
+    
+    /**
+     * logging a warning every {@code oak.traversing.warn} traversed nodes. Default {@code 10000}
+     */
+    static final int TRAVERSING_WARN = Integer.getInteger("oak.traversing.warn", 10000);
 
     @Override
     public void update(
@@ -262,7 +268,7 @@ public class ContentMirrorStoreStrategy implements IndexStoreStrategy {
          * Keep the returned path, to avoid returning duplicate entries.
          */
         private final Set<String> knownPaths = Sets.newHashSet();
-        private final long maxMemoryEntries;
+        private final QueryEngineSettings settings;
 
         PathIterator(Filter filter, String indexName, String pathPrefix) {
             this.filter = filter;
@@ -279,7 +285,7 @@ public class ContentMirrorStoreStrategy implements IndexStoreStrategy {
             }            
             parentPath = "";
             currentPath = "/";
-            this.maxMemoryEntries = filter.getQueryEngineSettings().getLimitInMemory();
+            this.settings = filter.getQueryEngineSettings();
         }
 
         void enqueue(Iterator<? extends ChildNodeEntry> it) {
@@ -329,8 +335,8 @@ public class ContentMirrorStoreStrategy implements IndexStoreStrategy {
                     ChildNodeEntry entry = iterator.next();
 
                     readCount++;
-                    if (readCount % 1000 == 0) {
-                        FilterIterators.checkReadLimit(readCount, maxMemoryEntries);
+                    if (readCount % TRAVERSING_WARN == 0) {
+                        FilterIterators.checkReadLimit(readCount, settings);
                         LOG.warn("Traversed " + readCount + " nodes using index " + indexName + " with filter " + filter);
                     }
 

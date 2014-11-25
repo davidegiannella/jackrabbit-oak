@@ -162,7 +162,7 @@ public class SegmentBlob extends Record implements Blob {
         }
     }
 
-    public SegmentBlob clone(SegmentWriter writer) throws IOException {
+    public SegmentBlob clone(SegmentWriter writer, boolean cloneLargeBinaries) throws IOException {
         Segment segment = getSegment();
         int offset = getOffset();
         byte head = segment.readByte(offset);
@@ -174,11 +174,18 @@ public class SegmentBlob extends Record implements Blob {
             return writer.writeStream(new BufferedInputStream(getNewStream()));
         } else if ((head & 0xe0) == 0xc0) {
             // 110x xxxx: long value
-            long length = (segment.readLong(offset) & 0x1fffffffffffffffL) + MEDIUM_LIMIT;
-            int listSize = (int) ((length + BLOCK_SIZE - 1) / BLOCK_SIZE);
-            ListRecord list = new ListRecord(
-                    segment.readRecordId(offset + 8), listSize);
-            return writer.writeLargeBlob(length, list.getEntries());
+            if (cloneLargeBinaries) {
+                return writer.writeStream(new BufferedInputStream(
+                        getNewStream()));
+            } else {
+                // this was the previous (default) behavior
+                long length = (segment.readLong(offset) & 0x1fffffffffffffffL)
+                        + MEDIUM_LIMIT;
+                int listSize = (int) ((length + BLOCK_SIZE - 1) / BLOCK_SIZE);
+                ListRecord list = new ListRecord(
+                        segment.readRecordId(offset + 8), listSize);
+                return writer.writeLargeBlob(length, list.getEntries());
+            }
         } else if ((head & 0xf0) == 0xe0) {
             // 1110 xxxx: external value
             return writer.writeExternalBlob(getBlobId());
@@ -194,13 +201,14 @@ public class SegmentBlob extends Record implements Blob {
     public boolean equals(Object object) {
         if (object == this || fastEquals(this, object)) {
             return true;
-        } else if (object instanceof SegmentBlob
-                && wasCompactedTo((SegmentBlob) object)) {
-            return true;
-        } else {
-            return object instanceof Blob
-                    && AbstractBlob.equal(this, (Blob) object);
+        } else if (object instanceof SegmentBlob) {
+            SegmentBlob that = (SegmentBlob) object;
+            if (this.wasCompactedTo(that) || that.wasCompactedTo(this)) {
+                return true;
+            }
         }
+        return object instanceof Blob
+                && AbstractBlob.equal(this, (Blob) object);
     }
 
     @Override

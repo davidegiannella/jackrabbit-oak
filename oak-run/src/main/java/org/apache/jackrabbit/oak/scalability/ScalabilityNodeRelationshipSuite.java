@@ -18,11 +18,17 @@
  */
 package org.apache.jackrabbit.oak.scalability;
 
-import java.util.*;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
 
-import javax.jcr.*;
-
-import com.google.common.collect.*;
+import javax.jcr.Node;
+import javax.jcr.NodeIterator;
+import javax.jcr.PropertyType;
+import javax.jcr.RepositoryException;
+import javax.jcr.Session;
 
 import org.apache.commons.math.stat.descriptive.SynchronizedDescriptiveStatistics;
 import org.apache.jackrabbit.api.JackrabbitSession;
@@ -32,12 +38,18 @@ import org.apache.jackrabbit.api.security.user.User;
 import org.apache.jackrabbit.api.security.user.UserManager;
 import org.apache.jackrabbit.commons.JcrUtils;
 import org.apache.jackrabbit.oak.benchmark.util.OakIndexUtils;
+import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex;
 import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.apache.jackrabbit.oak.scalability.util.NodeTypeUtils;
 import org.apache.jackrabbit.util.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Splitter;
+import com.google.common.base.StandardSystemProperty;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
 /**
  * The suite test will incrementally increase the load and execute searches.
@@ -77,6 +89,9 @@ public class ScalabilityNodeRelationshipSuite extends ScalabilityNodeSuite {
     public static final String OBJECT = "object";
     public static final String OBJECT_ID = "objectId";
     public static final String TARGET = "target";
+
+    protected static final List<String> NODE_LEVELS = Splitter.on(",").trimResults()
+        .omitEmptyStrings().splitToList(System.getProperty("nodeLevels", "10,5,2,1"));
 
     private static final int NUM_USERS = Integer.parseInt(NODE_LEVELS.get(0));
 
@@ -134,29 +149,54 @@ public class ScalabilityNodeRelationshipSuite extends ScalabilityNodeSuite {
     }
 
     protected void createIndexes(Session session) throws RepositoryException {
+        Map<String, Map<String, String>> orderedMap = Maps.newHashMap();
+        String persistencePath = "";
+
         // define indexes on properties
         switch (INDEX_TYPE) {
             case PROPERTY:
-                OakIndexUtils
-                        .propertyIndexDefinition(session, "customIndexActivity",
-                                new String[]{SOURCE_ID}, false, new String[]{CUSTOM_ACT_NODE_TYPE});
-                OakIndexUtils
-                        .propertyIndexDefinition(session, "customIndexRelationship",
-                                new String[]{SOURCE_ID},
-                                false, new String[]{CUSTOM_REL_NODE_TYPE});
+                OakIndexUtils.propertyIndexDefinition(session, "customIndexActivity",
+                    new String[] {SOURCE_ID}, false,
+                    (!CUSTOM_TYPE ? new String[0] : new String[] {CUSTOM_ACT_NODE_TYPE}));
+                OakIndexUtils.propertyIndexDefinition(session, "customIndexRelationship",
+                    new String[] {SOURCE_ID}, false,
+                    (!CUSTOM_TYPE ? new String[0] : new String[] {CUSTOM_REL_NODE_TYPE}));
                 break;
+            // define ordered indexes on properties
             case ORDERED:
-                // define ordered indexes on properties
                 OakIndexUtils.orderedIndexDefinition(session, "customIndexActivity", ASYNC_INDEX,
-                        new String[]{CREATED}, false,
-                        new String[]{CUSTOM_ACT_NODE_TYPE},
-                        OrderedIndex.OrderDirection.DESC.getDirection());
-                OakIndexUtils.orderedIndexDefinition(session, "customIndexRelationship", ASYNC_INDEX,
-                        new String[]{CREATED}, false,
-                        new String[]{CUSTOM_REL_NODE_TYPE},
+                    new String[] {CREATED}, false,
+                    (!CUSTOM_TYPE ? new String[0] : new String[] {CUSTOM_ACT_NODE_TYPE}),
+                    OrderedIndex.OrderDirection.DESC.getDirection());
+                OakIndexUtils
+                    .orderedIndexDefinition(session, "customIndexRelationship", ASYNC_INDEX,
+                        new String[] {CREATED}, false,
+                        (!CUSTOM_TYPE ? new String[0] : new String[] {CUSTOM_REL_NODE_TYPE}),
                         OrderedIndex.OrderDirection.DESC.getDirection());
                 break;
+            // define lucene index on properties
+            case LUCENE_FILE:
+                persistencePath =
+                    "target" + StandardSystemProperty.FILE_SEPARATOR.value() + "lucene" + String
+                        .valueOf(System.currentTimeMillis());
+                OakIndexUtils.luceneIndexDefinition(session, "customIndexActivity", ASYNC_INDEX,
+                    new String[] {SOURCE_ID, CREATED},
+                    new String[] {PropertyType.TYPENAME_STRING, PropertyType.TYPENAME_DATE},
+                    orderedMap, persistencePath);
+                break;
+            case LUCENE_FILE_DOC:
+                persistencePath =
+                    "target" + StandardSystemProperty.FILE_SEPARATOR.value() + "lucene" + String
+                        .valueOf(System.currentTimeMillis());
+            case LUCENE_DOC:
+                Map<String, String> propMap = Maps.newHashMap();
+                propMap.put(LuceneIndexConstants.PROP_TYPE, PropertyType.TYPENAME_DATE);
+                orderedMap.put(CREATED, propMap);
             case LUCENE:
+                OakIndexUtils.luceneIndexDefinition(session, "customIndexActivity", ASYNC_INDEX,
+                    new String[] {SOURCE_ID, CREATED},
+                    new String[] {PropertyType.TYPENAME_STRING, PropertyType.TYPENAME_DATE},
+                    orderedMap, persistencePath);
                 break;
         }
     }

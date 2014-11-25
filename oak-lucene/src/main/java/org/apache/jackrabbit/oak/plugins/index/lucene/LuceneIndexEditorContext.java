@@ -29,6 +29,7 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.util.ISO8601;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.index.IndexWriter;
@@ -46,7 +47,7 @@ public class LuceneIndexEditorContext {
     private static final Logger log = LoggerFactory
             .getLogger(LuceneIndexEditorContext.class);
 
-    private static IndexWriterConfig getIndexWriterConfig(Analyzer analyzer) {
+    private static IndexWriterConfig getIndexWriterConfig(Analyzer analyzer, IndexDefinition definition) {
         // FIXME: Hack needed to make Lucene work in an OSGi environment
         Thread thread = Thread.currentThread();
         ClassLoader loader = thread.getContextClassLoader();
@@ -54,19 +55,20 @@ public class LuceneIndexEditorContext {
         try {
             IndexWriterConfig config = new IndexWriterConfig(VERSION, analyzer);
             config.setMergeScheduler(new SerialMergeScheduler());
-            //TODO Use default codec for index where full text index is not stored
-            config.setCodec(new OakCodec());
+            if (definition.getCodec() != null) {
+                config.setCodec(definition.getCodec());
+            }
             return config;
         } finally {
             thread.setContextClassLoader(loader);
         }
     }
 
-    private static Directory newIndexDirectory(NodeBuilder definition)
+    private static Directory newIndexDirectory(IndexDefinition indexDefinition, NodeBuilder definition)
             throws IOException {
         String path = definition.getString(PERSISTENCE_PATH);
         if (path == null) {
-            return new OakDirectory(definition.child(INDEX_DATA_CHILD_NAME));
+            return new OakDirectory(definition.child(INDEX_DATA_CHILD_NAME), indexDefinition);
         } else {
             // try {
             File file = new File(path);
@@ -100,20 +102,18 @@ public class LuceneIndexEditorContext {
 
     private final IndexUpdateCallback updateCallback;
 
-    LuceneIndexEditorContext(NodeBuilder definition, Analyzer analyzer, IndexUpdateCallback updateCallback) {
+    private boolean reindex;
+
+    LuceneIndexEditorContext(NodeState root, NodeBuilder definition, Analyzer analyzer, IndexUpdateCallback updateCallback) {
         this.definitionBuilder = definition;
-        this.definition = new IndexDefinition(definitionBuilder);
-        this.config = getIndexWriterConfig(analyzer);
+        this.definition = new IndexDefinition(root, definition);
+        this.config = getIndexWriterConfig(analyzer, this.definition);
         this.indexedNodes = 0;
         this.updateCallback = updateCallback;
-    }
 
-    boolean includeProperty(String name) {
-        return definition.includeProperty(name);
-    }
-
-    boolean includePropertyType(int type){
-        return definition.includePropertyType(type);
+        if (this.definition.isOfOldFormat()){
+            IndexDefinition.updateDefinition(definition);
+        }
     }
 
     Parser getParser() {
@@ -122,7 +122,7 @@ public class LuceneIndexEditorContext {
 
     IndexWriter getWriter() throws IOException {
         if (writer == null) {
-            writer = new IndexWriter(newIndexDirectory(definitionBuilder), config);
+            writer = new IndexWriter(newIndexDirectory(definition, definitionBuilder), config);
         }
         return writer;
     }
@@ -131,6 +131,14 @@ public class LuceneIndexEditorContext {
      * close writer if it's not null
      */
     void closeWriter() throws IOException {
+        //If reindex or fresh index and write is null on close
+        //it indicates that the index is empty. In such a case trigger
+        //creation of write such that an empty Lucene index state is persisted
+        //in directory
+        if (reindex && writer == null){
+            getWriter();
+        }
+
         if (writer != null) {
             writer.close();
 
@@ -141,6 +149,12 @@ public class LuceneIndexEditorContext {
             status.setProperty("lastUpdated", ISO8601.format(Calendar.getInstance()), Type.DATE);
             status.setProperty("indexedNodes",indexedNodes);
         }
+    }
+
+    public void enableReindexMode(){
+        reindex = true;
+        definitionBuilder.setProperty(IndexDefinition.INDEX_VERSION,
+                IndexFormatVersion.getCurrent().getVersion());
     }
 
     public long incIndexedNodes() {
@@ -156,22 +170,7 @@ public class LuceneIndexEditorContext {
         updateCallback.indexUpdate();
     }
 
-    /**
-     * Checks if a given property should be stored in the lucene index or not
-     */
-    public boolean isStored(String name) {
-        return definition.isStored(name);
-    }
-
-    public boolean isFullTextEnabled() {
-        return definition.isFullTextEnabled();
-    }
-
-    public boolean skipTokenization(String propertyName){
-        return definition.skipTokenization(propertyName);
-    }
-
-    public int getPropertyTypes() {
-        return definition.getPropertyTypes();
+    public IndexDefinition getDefinition() {
+        return definition;
     }
 }

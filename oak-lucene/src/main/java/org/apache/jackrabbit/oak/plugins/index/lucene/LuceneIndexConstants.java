@@ -68,8 +68,85 @@ public interface LuceneIndexConstants {
 
     /**
      * Type of the property being indexed defined as part of property definition
-     * under the given index definition. Refer to {@ling javax.jcr.PropertyType}
+     * under the given index definition. Refer to {@link javax.jcr.PropertyType}
      * contants for the possible values
      */
-    String PROP_TYPE = "propertyType";
+    String PROP_TYPE = "type";
+
+    /**
+     * Defines properties which would be used for ordering. If range queries are to
+     * be performed with same property then it must be part of include list also
+     */
+    String ORDERED_PROP_NAMES = "orderedProps";
+
+    /**
+     * Size in bytes used for splitting the index files when storing them in NodeStore
+     */
+    String BLOB_SIZE = "blobSize";
+
+    /**
+     * Native function name associated with this index definition. Any query can
+     * use this as the function name to ensure that this index gets used for invoking
+     * the index
+     */
+    String FUNC_NAME = "functionName";
+
+    /**
+     * Name of the codec to be used for indexing
+     */
+    String CODEC_NAME = "codec";
+
+    /**
+     * Child node name under which property details are provided
+     */
+    String PROP_NODE = "properties";
+
+    String INDEX_RULES = "indexRules";
+
+    /**
+     * Field boost factor
+     */
+    String FIELD_BOOST = "boost";
+
+    /**
+     * Property name defined explicitly. Mostly used in case of relative property names
+     */
+    String PROP_NAME = "name";
+
+    String PROP_IS_REGEX = "isRegexp";
+
+    String PROP_INDEX = "index";
+
+    String PROP_USE_IN_EXCERPT = "useInExcerpt";
+
+    String PROP_NODE_SCOPE_INDEX = "nodeScopeIndex";
+
+    String PROP_PROPERTY_INDEX = "propertyIndex";
+
+    String PROP_ANALYZED = "analyzed";
+
+    String RULE_INHERITED = "inherited";
+
+    String PROP_ORDERED = "ordered";
+
+    /**
+     * Integer property indicating that LuceneIndex should be
+     * used in compat mode to specific version
+     */
+    String COMPAT_MODE = "compatVersion";
+
+    /**
+     * Boolean property to indicate that LuceneIndex is being used in testMode
+     * and it should participate in every test
+     */
+    String TEST_MODE = "testMode";
+
+    String EVALUATE_PATH_RESTRICTION = "oak.experimental.evaluatePathRestrictions";
+
+    /**
+     * Experimental config to restrict which property type gets indexed at
+     * property definition level. Mostly index rule level #INCLUDE_PROPERTY_TYPES
+     * should be sufficient
+     */
+    String PROP_INCLUDED_TYPE = "oak.experimental.includePropertyTypes";
 }

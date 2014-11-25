@@ -89,9 +89,9 @@ import org.apache.jackrabbit.oak.plugins.segment.Segment;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentId;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeState;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStore;
-import org.apache.jackrabbit.oak.plugins.segment.failover.client.FailoverClient;
-import org.apache.jackrabbit.oak.plugins.segment.failover.server.FailoverServer;
 import org.apache.jackrabbit.oak.plugins.segment.file.FileStore;
+import org.apache.jackrabbit.oak.plugins.segment.standby.client.StandbyClient;
+import org.apache.jackrabbit.oak.plugins.segment.standby.server.StandbyServer;
 import org.apache.jackrabbit.oak.scalability.ScalabilityRunner;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -164,11 +164,11 @@ public class Main {
             case EXPLORE:
                 Explorer.main(args);
                 break;
-            case SYNCSLAVE:
-                syncSlave(args);
+            case STANDBY:
+                standbyInstance(args);
                 break;
-            case SYNCMASTER:
-                syncMaster(args);
+            case PRIMARY:
+                primaryInstance(args);
                 break;
             case CHECKPOINTS:
                 checkpoints(args);
@@ -248,10 +248,10 @@ public class Main {
     //TODO react to state changes of FailoverClient (triggered via JMX), once the state model of FailoverClient is complete.
     private static class ScheduledSyncService extends AbstractScheduledService {
 
-        private final FailoverClient failoverClient;
+        private final StandbyClient failoverClient;
         private final int interval;
 
-        public ScheduledSyncService(FailoverClient failoverClient, int interval) {
+        public ScheduledSyncService(StandbyClient failoverClient, int interval) {
             this.failoverClient = failoverClient;
             this.interval = interval;
         }
@@ -268,7 +268,7 @@ public class Main {
     }
 
 
-    private static void syncSlave(String[] args) throws Exception {
+    private static void standbyInstance(String[] args) throws Exception {
 
         final String defaultHost = "127.0.0.1";
         final int defaultPort = 8023;
@@ -279,7 +279,7 @@ public class Main {
         final OptionSpec<Integer> interval = parser.accepts("interval", "interval between successive executions").withRequiredArg().ofType(Integer.class);
         final OptionSpec<Boolean> secure = parser.accepts("secure", "use secure connections").withRequiredArg().ofType(Boolean.class);
         final OptionSpec<?> help = parser.acceptsAll(asList("h", "?", "help"), "show help").forHelp();
-        final OptionSpec<String> nonOption = parser.nonOptions(Mode.SYNCSLAVE + " <path to repository>");
+        final OptionSpec<String> nonOption = parser.nonOptions(Mode.STANDBY + " <path to repository>");
 
         final OptionSet options = parser.parse(args);
         final List<String> nonOptions = nonOption.values(options);
@@ -295,10 +295,10 @@ public class Main {
         }
 
         FileStore store = null;
-        FailoverClient failoverClient = null;
+        StandbyClient failoverClient = null;
         try {
             store = new FileStore(new File(nonOptions.get(0)), 256);
-            failoverClient = new FailoverClient(
+            failoverClient = new StandbyClient(
                     options.has(host)? options.valueOf(host) : defaultHost,
                     options.has(port)? options.valueOf(port) : defaultPort,
                     store,
@@ -320,7 +320,7 @@ public class Main {
         }
     }
 
-    private static void syncMaster(String[] args) throws Exception {
+    private static void primaryInstance(String[] args) throws Exception {
 
         final int defaultPort = 8023;
 
@@ -329,7 +329,7 @@ public class Main {
         final OptionSpec<Boolean> secure = parser.accepts("secure", "use secure connections").withRequiredArg().ofType(Boolean.class);
         final OptionSpec<String> admissible = parser.accepts("admissible", "list of admissible slave host names or ip ranges").withRequiredArg().ofType(String.class);
         final OptionSpec<?> help = parser.acceptsAll(asList("h", "?", "help"), "show help").forHelp();
-        final OptionSpec<String> nonOption = parser.nonOptions(Mode.SYNCMASTER + " <path to repository>");
+        final OptionSpec<String> nonOption = parser.nonOptions(Mode.PRIMARY + " <path to repository>");
 
         final OptionSet options = parser.parse(args);
         final List<String> nonOptions = nonOption.values(options);
@@ -348,10 +348,10 @@ public class Main {
         List<String> admissibleSlaves = options.has(admissible) ? options.valuesOf(admissible) : Collections.EMPTY_LIST;
 
         FileStore store = null;
-        FailoverServer failoverServer = null;
+        StandbyServer failoverServer = null;
         try {
             store = new FileStore(new File(nonOptions.get(0)), 256);
-            failoverServer = new FailoverServer(
+            failoverServer = new StandbyServer(
                     options.has(port)? options.valueOf(port) : defaultPort,
                     store,
                     admissibleSlaves.toArray(new String[0]),
@@ -691,6 +691,18 @@ public class Main {
             } else {
                 System.out.println("No references to " + f);
             }
+
+            try {
+                Map<UUID, List<UUID>> graph = store.getTarGraph(f);
+                System.out.println();
+                System.out.println("Tar graph:");
+                for (Entry<UUID, List<UUID>> entry : graph.entrySet()) {
+                    System.out.println("" + entry.getKey() + '=' + entry.getValue());
+                }
+            } catch (IOException e) {
+                System.out.println("Error getting tar graph:");
+            }
+
         }
     }
 
@@ -1082,8 +1094,8 @@ public class Main {
         UPGRADE("upgrade"),
         SCALABILITY("scalability"),
         EXPLORE("explore"),
-        SYNCSLAVE("syncSlave"),
-        SYNCMASTER("syncmaster"),
+        PRIMARY("primary"),
+        STANDBY("standy"),
         HELP("help"),
         CHECKPOINTS("checkpoints"),
         RECOVERY("recovery");

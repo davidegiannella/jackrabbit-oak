@@ -16,18 +16,23 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import static com.google.common.collect.ImmutableList.of;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.Assert.assertTrue;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
+import static org.apache.jackrabbit.oak.api.Type.NAME;
+import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
+import static org.apache.jackrabbit.oak.spi.query.PropertyValues.newString;
 import static org.junit.Assert.assertNotNull;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Iterator;
@@ -35,11 +40,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.jcr.RepositoryException;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
@@ -69,6 +69,12 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Predicate;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 
 public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQueryTest {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexQueryTest.class);
@@ -149,6 +155,42 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         assertEquals("wrong path returned", searchfor.getPath(), results.next().getPath());
         assertFalse("there should be not any more items", results.hasNext());
 
+        setTraversalEnabled(true);
+    }
+    
+    /**
+     * checks the {@code OR} and {@code IN} conditions in queries.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void queryOrIn() throws Exception {
+        setTraversalEnabled(false);
+
+        // index automatically created by the framework:
+        // {@code createTestIndexNode()}
+        
+        // generates: 
+        //  /test/n0, /test/n1, /test/n2
+        Tree rTree = root.getTree("/");
+        Tree test = rTree.addChild("test");
+        List<ValuePathTuple> nodes = addChildNodes(generateOrderedValues(3), test,
+            OrderDirection.ASC, Type.STRING);
+        root.commit();
+        
+        String statementOr = "SELECT * FROM [nt:unstructured] " + 
+            "WHERE " + ORDERED_PROPERTY + " = $or1 " + 
+            "OR " + ORDERED_PROPERTY + " = $or2";
+        String statementIn = "SELECT * FROM [nt:unstructured] WHERE " + ORDERED_PROPERTY
+                             + " IN($or1, $or2)";
+        List<ValuePathTuple> expected = of(nodes.get(0), nodes.get(1));
+        Map<String, PropertyValue> bindings = ImmutableMap.of(
+            "or1", newString(expected.get(0).getValue()),
+            "or2", newString(expected.get(1).getValue()));
+        
+        assertRightOrder(expected, executeQuery(statementOr, SQL2, bindings).getRows().iterator());
+        assertRightOrder(expected, executeQuery(statementIn, SQL2, bindings).getRows().iterator());
+        
         setTraversalEnabled(true);
     }
 
@@ -921,6 +963,78 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         results = executeQuery(String.format("SELECT * FROM [%s] as s WHERE ISDESCENDANTNODE(s, '/test') ORDER BY s.foo", NT_UNSTRUCTURED), SQL2, null)
                 .getRows().iterator();
         assertRightOrder(nodes, results);
+
+        setTraversalEnabled(true);
+    }
+    
+    @Test
+    public void oak2219() throws Exception {
+        setTraversalEnabled(false);
+        
+        List<String> expected = new ArrayList<String>();
+        Tree content = root.getTree("/").addChild("content");
+ 
+        for (String s : of("a", "b", "c")) {
+            Tree node = content.addChild(s);
+            node.setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+            node.addChild("sub").setProperty(ORDERED_PROPERTY, s + "value", STRING);
+            expected.add(node.getPath());            
+        }
+        
+        root.commit();
+                
+        assertQuery("//element(*, nt:unstructured)[(sub/@" + ORDERED_PROPERTY + ")]", "xpath",
+            expected);
+        
+        assertQuery("//element(*, nt:unstructured)[(sub/@" + ORDERED_PROPERTY + " > 'avalue')]",
+            "xpath", Lists.newArrayList(Iterables.filter(expected, new Predicate<String>() {
+                @Override
+                public boolean apply(String path) {
+                    return "a".compareTo(PathUtils.getName(path)) < 0;
+                }
+            })));
+
+        assertQuery("//element(*, nt:unstructured)[(sub/@" + ORDERED_PROPERTY + " >= 'bvalue')]",
+            "xpath", Lists.newArrayList(Iterables.filter(expected, new Predicate<String>() {
+                @Override
+                public boolean apply(String path) {
+                    return "b".compareTo(PathUtils.getName(path)) <= 0;
+                }
+            })));
+
+        assertQuery("//element(*, nt:unstructured)[(sub/@" + ORDERED_PROPERTY + " <= 'bvalue')]",
+            "xpath", Lists.newArrayList(Iterables.filter(expected, new Predicate<String>() {
+                @Override
+                public boolean apply(String path) {
+                    return "b".compareTo(PathUtils.getName(path)) >= 0;
+                }
+            })));
+
+        assertQuery("//element(*, nt:unstructured)[(sub/@" + ORDERED_PROPERTY + " < 'cvalue')]",
+            "xpath", Lists.newArrayList(Iterables.filter(expected, new Predicate<String>() {
+                @Override
+                public boolean apply(String path) {
+                    return "c".compareTo(PathUtils.getName(path)) > 0;
+                }
+            })));
+
+        assertQuery("//element(*, nt:unstructured)[(sub/@" + ORDERED_PROPERTY
+                    + " > 'avalue' and sub/@" + ORDERED_PROPERTY + " < 'cvalue')]", "xpath",
+            Lists.newArrayList(Iterables.filter(expected, new Predicate<String>() {
+                @Override
+                public boolean apply(String path) {
+                    return "c".compareTo(PathUtils.getName(path)) > 0
+                           && "a".compareTo(PathUtils.getName(path)) < 0;
+                }
+            })));
+
+        assertQuery("//element(*, nt:unstructured)[(sub/@" + ORDERED_PROPERTY + " = 'bvalue')]",
+            "xpath", Lists.newArrayList(Iterables.filter(expected, new Predicate<String>() {
+                @Override
+                public boolean apply(String path) {
+                    return "b".compareTo(PathUtils.getName(path)) == 0;
+                }
+            })));
 
         setTraversalEnabled(true);
     }

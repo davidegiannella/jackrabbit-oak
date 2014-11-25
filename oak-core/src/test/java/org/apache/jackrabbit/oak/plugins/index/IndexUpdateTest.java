@@ -35,6 +35,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Set;
 
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
@@ -45,6 +46,7 @@ import org.apache.jackrabbit.oak.query.QueryEngineSettings;
 import org.apache.jackrabbit.oak.query.ast.SelectorImpl;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
+import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
@@ -357,6 +359,74 @@ public class IndexUpdateTest {
         "abc"));
     }
 
+    /**
+     * OAK-2203 Test reindex behavior on a sync index when the index provider is missing
+     * for a given type
+     */
+    @Test
+    public void testReindexSyncMissingProvider() throws Exception {
+        EditorHook hook = new EditorHook(new IndexUpdateProvider(
+                emptyProvider()));
+        NodeState before = builder.getNodeState();
+
+        createIndexDefinition(builder.child(INDEX_DEFINITIONS_NAME),
+                "rootIndex", true, false, ImmutableSet.of("foo"), null);
+        builder.child(INDEX_DEFINITIONS_NAME).child("azerty");
+        builder.child("testRoot").setProperty("foo", "abc");
+        NodeState after = builder.getNodeState();
+
+        NodeState indexed = hook.processCommit(before, after, CommitInfo.EMPTY);
+        NodeState rootIndex = checkPathExists(indexed, INDEX_DEFINITIONS_NAME,
+                "rootIndex");
+        PropertyState ps = rootIndex.getProperty(REINDEX_PROPERTY_NAME);
+        assertNotNull(ps);
+        assertTrue(ps.getValue(Type.BOOLEAN));
+
+        NodeState azerty = checkPathExists(indexed, INDEX_DEFINITIONS_NAME,
+                "azerty");
+        assertNull("Node should be ignored by reindexer",
+                azerty.getProperty(REINDEX_PROPERTY_NAME));
+    }
+
+    @Test
+    public void testReindexCount() throws Exception{
+        builder.child("testRoot").setProperty("foo", "abc");
+        NodeState before = builder.getNodeState();
+
+        createIndexDefinition(builder.child(INDEX_DEFINITIONS_NAME),
+                "rootIndex", false, false, ImmutableSet.of("foo"), null);
+
+        NodeState after = builder.getNodeState();
+
+        NodeState indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
+        long t1 = getReindexCount(indexed);
+
+        NodeBuilder b2 = indexed.builder();
+        b2.child(INDEX_DEFINITIONS_NAME).child("rootIndex").setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true);
+        indexed = HOOK.processCommit(indexed, b2.getNodeState(), CommitInfo.EMPTY);
+        long t2 = getReindexCount(indexed);
+
+        assertTrue(t2 > t1);
+    }
+
+
+    long getReindexCount(NodeState indexed) {
+        return indexed.getChildNode(INDEX_DEFINITIONS_NAME)
+                .getChildNode("rootIndex")
+                .getProperty(IndexConstants.REINDEX_COUNT).getValue(Type.LONG);
+    }
+
+    private static IndexEditorProvider emptyProvider() {
+        return new IndexEditorProvider() {
+            @Override
+            public Editor getIndexEditor(String type, NodeBuilder definition,
+                    NodeState root, IndexUpdateCallback callback)
+                    throws CommitFailedException {
+                return null;
+            }
+        };
+    }
+
     private Set<String> find(PropertyIndexLookup lookup, String name,
             String value) {
         NodeState system = root.getChildNode(JCR_SYSTEM);
@@ -376,5 +446,7 @@ public class IndexUpdateTest {
         }
         return c;
     }
+
+
 
 }
