@@ -3319,7 +3319,7 @@ public class OrderedContentMirrorStorageStrategyTest {
      * 
      * @param index
      */
-    private static void printSkipList(NodeState index) {
+    public static void printSkipList(NodeState index) {
         final String marker = "->o-";
         final String filler = "----";
         StringBuffer sb = new StringBuffer();
