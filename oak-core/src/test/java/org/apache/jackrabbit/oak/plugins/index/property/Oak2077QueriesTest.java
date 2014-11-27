@@ -724,9 +724,63 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         setTraversalEnabled(true);
     }
     
-    @Test @Ignore
-    public void queryLessThanAscending() {
-        fail();
+    @Test
+    public void queryLessThanAscending() throws Exception {
+        setTraversalEnabled(false);
+        final int numberOfNodes = 20;
+        final OrderDirection direction = ASC;
+        final String unexistent  = formatNumber(numberOfNodes + 1);
+        final String whereCondition = formatNumber(numberOfNodes + 2);
+        final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
+                                 + " < '%s'";
+        defineIndex(direction);
+        
+        Tree content = root.getTree("/").addChild("content").addChild("nodes");
+        List<String> values = generateOrderedValues(numberOfNodes, direction);
+        List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
+        root.commit();
+        
+        // truncating the list on lane 0
+        NodeBuilder rootBuilder = nodestore.getRoot().builder();
+        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
+        builder = builder.getChildNode(TEST_INDEX_NAME);
+        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
+        
+        NodeBuilder truncated = builder.getChildNode(START);
+        String truncatedName;
+                
+        for (int i = 0; i < 4; i++) {
+            // changing the 4th element. No particular reasons on why the 4th.
+            truncatedName = getPropertyNext(truncated);
+            truncated = builder.getChildNode(truncatedName);
+        }
+        setPropertyNext(truncated, unexistent, 0);
+        
+        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        resetEnvVariables();
+        
+        //filtering out the part that should not be returned by the resultset.
+        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
+            new Predicate<ValuePathTuple>() {
+                boolean stopHere;
+
+                @Override
+                public boolean apply(ValuePathTuple input) {
+                    if (!stopHere) {
+                        stopHere = unexistent.equals(input.getValue());
+                    }
+                    return !stopHere && input.getValue().compareTo(whereCondition) < 0;
+                }
+            }));
+        
+        // pointing to a non-existent node in lane 0 we expect the result to be truncated
+        LOGGING_TRACKER.reset();
+        Result result = executeQuery(String.format(statement, whereCondition), SQL2, null);
+        assertRightOrder(expected, result.getRows().iterator());
+        assertTrue("We expect at least 1 warning message to be tracked",
+            LOGGING_TRACKER.countLinesTracked() >= 1);
+        
+        setTraversalEnabled(true);
     }
     
     @Test @Ignore
