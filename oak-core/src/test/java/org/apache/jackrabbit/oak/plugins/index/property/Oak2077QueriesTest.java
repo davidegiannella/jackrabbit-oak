@@ -289,6 +289,19 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         qe = root.getQueryEngine();
     }
     
+    
+    private List<ValuePathTuple> createContent(final int numberOfNodes,
+                                                final int offset,
+                                               @Nonnull final OrderDirection direction) 
+                                                   throws CommitFailedException {
+        Tree content = root.getTree("/").addChild("content").addChild("nodes");
+        List<String> values = generateOrderedValues(numberOfNodes, offset, direction);
+        List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
+        root.commit();
+        
+        return nodes;
+    }
+    
     @Test
     public void queryNotNullAscending() throws Exception {
         setTraversalEnabled(false);
@@ -299,11 +312,8 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
                                  + " IS NOT NULL";
         defineIndex(direction);
         
-        Tree content = root.getTree("/").addChild("content").addChild("nodes");
-        List<String> values = generateOrderedValues(numberOfNodes, direction);
-        List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
-        root.commit();
-        
+        List<ValuePathTuple> nodes = createContent(numberOfNodes, 0, direction);
+                
         // truncating the list on lane 0
         NodeBuilder rootBuilder = nodestore.getRoot().builder();
         NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
@@ -358,10 +368,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
                                  + " IS NOT NULL";
         defineIndex(direction);
         
-        Tree content = root.getTree("/").addChild("content").addChild("nodes");
-        List<String> values = generateOrderedValues(numberOfNodes, 1, direction); //changed by offset
-        List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
-        root.commit();
+        List<ValuePathTuple> nodes = createContent(numberOfNodes, 1, direction);
         
         // truncating the list on lane 0
         NodeBuilder rootBuilder = nodestore.getRoot().builder();
@@ -426,11 +433,8 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
                                  + " > '%s'";
         defineIndex(direction);
-        
-        Tree content = root.getTree("/").addChild("content").addChild("nodes");
-        List<String> values = generateOrderedValues(numberOfNodes, direction);
-        List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
-        root.commit();
+                
+        List<ValuePathTuple> nodes = createContent(numberOfNodes, 0, direction);
         
         // truncating the list on lane 0
         NodeBuilder rootBuilder = nodestore.getRoot().builder();
@@ -841,35 +845,5 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             LOGGING_TRACKER.countLinesTracked() >= 1);
         
         setTraversalEnabled(true);
-    }
-    
-    @Test @Ignore
-    public void queryLessThanEqualAscending() {
-        fail();
-    }
-    
-    @Test @Ignore
-    public void queryLessThanEqualDescending() {
-        fail();
-    }
-    
-    @Test @Ignore
-    public void queryBetweenAscending() {
-        fail();
-    }
-    
-    @Test @Ignore
-    public void queryBetweenDescending() {
-        fail();
-    }
-    
-    @Test @Ignore
-    public void queryBetweenWithBoundariesAscending() {
-        fail();
-    }
-
-    @Test @Ignore
-    public void queryBetweenWithBoundariesDescending() {
-        fail();
     }
 }
