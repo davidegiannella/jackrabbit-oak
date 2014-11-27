@@ -422,7 +422,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         final OrderDirection direction = ASC;
         final String unexistent  = formatNumber(numberOfNodes + 1);
         // as 'values' will start from 0, we're excluding first entry(ies)
-        String whereCondition = formatNumber(1);
+        final String whereCondition = formatNumber(1);
         final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
                                  + " > '%s'";
         defineIndex(direction);
@@ -440,9 +440,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         
         NodeBuilder truncated = builder.getChildNode(START);
         String truncatedName;
-        
-        OrderedContentMirrorStorageStrategyTest.printSkipList(builder.getNodeState());
-        
+                
         for (int i = 0; i < 4; i++) {
             // changing the 4th element. No particular reasons on why the 4th.
             truncatedName = getPropertyNext(truncated);
@@ -454,7 +452,6 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         resetEnvVariables();
         
         //filtering out the part that should not be returned by the resultset.
-        final String wc = whereCondition;
         List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
             new Predicate<ValuePathTuple>() {
                 boolean stopHere;
@@ -464,7 +461,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
                     if (!stopHere) {
                         stopHere = unexistent.equals(input.getValue());
                     }
-                    return !stopHere && input.getValue().compareTo(wc) > 0;
+                    return !stopHere && input.getValue().compareTo(whereCondition) > 0;
                 }
             }));
         
@@ -475,6 +472,9 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         assertTrue("We expect at least 1 warning message to be tracked",
             LOGGING_TRACKER.countLinesTracked() >= 1);
         
+        // for sake of simplicity we check the just the second lane but it should be the same for
+        // all other higher ones.
+
         setTraversalEnabled(true);
     }
     
