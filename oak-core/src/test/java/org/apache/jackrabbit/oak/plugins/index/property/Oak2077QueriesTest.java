@@ -484,7 +484,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         setTraversalEnabled(false);
         final int numberOfNodes = 20;
         final OrderDirection direction = ASC;
-        final String unexistent  = formatNumber(numberOfNodes + 1);
+        String unexistent  = formatNumber(numberOfNodes + 1);
         String whereCondition;
         final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
                                  + " > '%s'";
@@ -504,7 +504,6 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         OrderedContentMirrorStorageStrategyTest.printSkipList(builder.getNodeState());
         
         NodeBuilder truncated = builder.getChildNode(START);
-        LOG.debug(":start's :next {}", truncated.getProperty(OrderedContentMirrorStoreStrategy.NEXT));
         String truncatedName = "";
         
         // truncating on the 4th element and taking the 5th as where condition
@@ -515,15 +514,13 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         }
         whereCondition = getPropertyNext(truncated, 1);
         setPropertyNext(truncated, unexistent, 1);
-        LOG.debug("whereCondition: {}", whereCondition);
-        LOG.debug("truncatedName: {}", truncatedName);
-        LOG.debug("Unexistent: {}", getPropertyNext(truncated, 1));
         
         nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
         resetEnvVariables();
         
         //filtering out the part that should not be returned by the resultset.
         final String wc = whereCondition;
+        final String un = unexistent;
         List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
             new Predicate<ValuePathTuple>() {
                 boolean stopHere;
@@ -531,20 +528,19 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
                 @Override
                 public boolean apply(ValuePathTuple input) {
                     if (!stopHere) {
-                        stopHere = unexistent.equals(input.getValue());
+                        stopHere = un.equals(input.getValue());
                     }
                     return !stopHere && input.getValue().compareTo(wc) > 0;
                 }
             }));
 
-        LOGGING_TRACKER.reset();
+        // no logging should be applied as the missing item does not match the seek condition
+        // we don't care about the logging then.
         String st = String.format(statement, whereCondition);
         LOG.debug(st);
         Result result = executeQuery(st, SQL2, null);
         assertRightOrder(expected, result.getRows().iterator());
-        assertTrue("We expect at least 1 warning message to be tracked",
-            LOGGING_TRACKER.countLinesTracked() >= 1);
-        
+
         setTraversalEnabled(true);
     }
 
