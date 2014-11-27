@@ -472,12 +472,82 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         assertTrue("We expect at least 1 warning message to be tracked",
             LOGGING_TRACKER.countLinesTracked() >= 1);
         
-        // for sake of simplicity we check the just the second lane but it should be the same for
-        // all other higher ones.
-
         setTraversalEnabled(true);
     }
-    
+
+    /*
+     * for sake of simplicity we check the just the second lane but it should be the same for all
+     * other higher ones.
+     */
+    @Test
+    public void queryGreaterThanAscendingLane1() throws Exception {
+        setTraversalEnabled(false);
+        final int numberOfNodes = 20;
+        final OrderDirection direction = ASC;
+        final String unexistent  = formatNumber(numberOfNodes + 1);
+        String whereCondition;
+        final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
+                                 + " > '%s'";
+        defineIndex(direction);
+        
+        Tree content = root.getTree("/").addChild("content").addChild("nodes");
+        List<String> values = generateOrderedValues(numberOfNodes, direction);
+        List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
+        root.commit();
+        
+        // truncating the list
+        NodeBuilder rootBuilder = nodestore.getRoot().builder();
+        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
+        builder = builder.getChildNode(TEST_INDEX_NAME);
+        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
+        
+        OrderedContentMirrorStorageStrategyTest.printSkipList(builder.getNodeState());
+        
+        NodeBuilder truncated = builder.getChildNode(START);
+        LOG.debug(":start's :next {}", truncated.getProperty(OrderedContentMirrorStoreStrategy.NEXT));
+        String truncatedName = "";
+        
+        // truncating on the 4th element and taking the 5th as where condition
+        for (int i = 0; i < 4; i++) {
+            // changing the 4th element. No particular reasons on why the 4th.
+            truncatedName = getPropertyNext(truncated, 1);
+            truncated = builder.getChildNode(truncatedName);
+        }
+        whereCondition = getPropertyNext(truncated, 1);
+        setPropertyNext(truncated, unexistent, 1);
+        LOG.debug("whereCondition: {}", whereCondition);
+        LOG.debug("truncatedName: {}", truncatedName);
+        LOG.debug("Unexistent: {}", getPropertyNext(truncated, 1));
+        
+        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        resetEnvVariables();
+        
+        //filtering out the part that should not be returned by the resultset.
+        final String wc = whereCondition;
+        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
+            new Predicate<ValuePathTuple>() {
+                boolean stopHere;
+
+                @Override
+                public boolean apply(ValuePathTuple input) {
+                    if (!stopHere) {
+                        stopHere = unexistent.equals(input.getValue());
+                    }
+                    return !stopHere && input.getValue().compareTo(wc) > 0;
+                }
+            }));
+
+        LOGGING_TRACKER.reset();
+        String st = String.format(statement, whereCondition);
+        LOG.debug(st);
+        Result result = executeQuery(st, SQL2, null);
+        assertRightOrder(expected, result.getRows().iterator());
+        assertTrue("We expect at least 1 warning message to be tracked",
+            LOGGING_TRACKER.countLinesTracked() >= 1);
+        
+        setTraversalEnabled(true);
+    }
+
     @Test @Ignore
     public void queryGreaterThenDescending() {
         fail();
