@@ -22,10 +22,10 @@ package org.apache.jackrabbit.oak.plugins.index.lucene;
 import javax.jcr.PropertyType;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.commons.PathUtils;
+import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.tree.ImmutableTree;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -141,25 +141,12 @@ public class IndexDefinitionTest {
     }
 
     @Test
-    public void relativeProperty() throws Exception{
-        builder.setProperty(createProperty(INCLUDE_PROPERTY_NAMES, of("foo" , "foo1/bar"), STRINGS));
-        IndexDefinition idxDefn = new IndexDefinition(root, builder.getNodeState());
-        IndexingRule rule = idxDefn.getApplicableIndexingRule(NT_BASE);
-
-        assertEquals(1, rule.getRelativeProps().size());
-        assertEquals("foo1/bar", Iterables.getFirst(rule.getRelativeProps(), null).propertyPath);
-        assertTrue(idxDefn.hasRelativeProperty("bar"));
-        assertFalse(idxDefn.hasRelativeProperty("foo"));
-    }
-
-    @Test
     public void relativePropertyConfig() throws Exception{
         builder.child(PROP_NODE).child("foo1").child("bar").setProperty(LuceneIndexConstants.PROP_TYPE, PropertyType.TYPENAME_DATE);
         builder.child(PROP_NODE).child("foo2").child("bar2").child("baz").setProperty(LuceneIndexConstants.PROP_TYPE, PropertyType.TYPENAME_LONG);
         builder.setProperty(createProperty(INCLUDE_PROPERTY_NAMES, of("foo", "foo1/bar", "foo2/bar2/baz"), STRINGS));
         IndexDefinition defn = new IndexDefinition(root, builder.getNodeState());
         IndexingRule rule = defn.getApplicableIndexingRule(newTree(newNode("nt:folder")));
-        assertEquals(2, defn.getRelativeProps().size());
         assertNotNull(rule.getConfig("foo1/bar"));
         assertEquals(PropertyType.DATE, rule.getConfig("foo1/bar").getType());
         assertEquals(PropertyType.LONG, rule.getConfig("foo2/bar2/baz").getType());
@@ -363,7 +350,7 @@ public class IndexDefinitionTest {
                 "lucene", of(TYPENAME_STRING));
 
         IndexDefinition defn = new IndexDefinition(root, defnb.getNodeState());
-        assertEquals(IndexFormatVersion.getCurrent(), defn.getVersion());
+        assertEquals(IndexFormatVersion.getDefault(), defn.getVersion());
     }
 
     @Test
@@ -392,6 +379,71 @@ public class IndexDefinitionTest {
         assertFalse(rule.getConfig("foo").index);
     }
 
+    @Test
+    public void propertyRegExAndRelativeProperty() throws Exception{
+        NodeBuilder defnb = newLuceneIndexDefinition(builder.child(INDEX_DEFINITIONS_NAME),
+                "lucene", of(TYPENAME_STRING), of("foo"), "async");
+        IndexDefinition defn = new IndexDefinition(root, defnb.getNodeState());
+        assertTrue(defn.isOfOldFormat());
+
+        NodeBuilder updated = IndexDefinition.updateDefinition(defnb.getNodeState().builder());
+        IndexDefinition defn2 = new IndexDefinition(root, updated.getNodeState());
+
+        IndexingRule rule = defn2.getApplicableIndexingRule(newTree(newNode("nt:base")));
+        assertNotNull(rule.getConfig("foo"));
+        assertNull("Property regex used should not allow relative properties", rule.getConfig("foo/bar"));
+    }
+
+    @Test
+    public void fulltextEnabledAndAggregate() throws Exception{
+        NodeBuilder defnb = newLucenePropertyIndexDefinition(builder.child(INDEX_DEFINITIONS_NAME),
+                "lucene", of("foo"), "async");
+        IndexDefinition defn = new IndexDefinition(root, defnb.getNodeState());
+        assertFalse(defn.isFullTextEnabled());
+
+        NodeBuilder aggregates = defnb.child(LuceneIndexConstants.AGGREGATES);
+        NodeBuilder aggFolder = aggregates.child("nt:base");
+        aggFolder.child("i1").setProperty(LuceneIndexConstants.AGG_PATH, "*");
+
+        defn = new IndexDefinition(root, defnb.getNodeState());
+        assertTrue(defn.isFullTextEnabled());
+    }
+
+    @Test
+    public void costConfig() throws Exception{
+        NodeBuilder defnb = newLucenePropertyIndexDefinition(builder.child(INDEX_DEFINITIONS_NAME),
+                "lucene", of("foo"), "async");
+        IndexDefinition defn = new IndexDefinition(root, defnb.getNodeState());
+        assertEquals(1.0, defn.getCostPerEntry(), 0);
+        assertEquals(1.0, defn.getCostPerExecution(), 0);
+        assertEquals(IndexDefinition.DEFAULT_ENTRY_COUNT, defn.getEntryCount());
+        assertFalse(defn.isEntryCountDefined());
+
+        defnb.setProperty(LuceneIndexConstants.COST_PER_ENTRY, 2.0);
+        defnb.setProperty(LuceneIndexConstants.COST_PER_EXECUTION, 3.0);
+        defnb.setProperty(IndexConstants.ENTRY_COUNT_PROPERTY_NAME, 500);
+
+        IndexDefinition defn2 = new IndexDefinition(root, defnb.getNodeState());
+        assertEquals(2.0, defn2.getCostPerEntry(), 0);
+        assertEquals(3.0, defn2.getCostPerExecution(), 0);
+        assertEquals(500, defn2.getEntryCount());
+    }
+
+    @Test
+    public void fulltextCost() throws Exception{
+        NodeBuilder defnb = newLucenePropertyIndexDefinition(builder.child(INDEX_DEFINITIONS_NAME),
+                "lucene", of("foo"), "async");
+        IndexDefinition defn = new IndexDefinition(root, defnb.getNodeState());
+        assertEquals(300, defn.getFulltextEntryCount(300));
+        assertEquals(IndexDefinition.DEFAULT_ENTRY_COUNT + 100,
+                defn.getFulltextEntryCount(IndexDefinition.DEFAULT_ENTRY_COUNT + 100));
+
+        //Once count is explicitly defined then it would influence the cost
+        defnb.setProperty(IndexConstants.ENTRY_COUNT_PROPERTY_NAME, 100);
+        defn = new IndexDefinition(root, defnb.getNodeState());
+        assertEquals(100, defn.getFulltextEntryCount(300));
+        assertEquals(50, defn.getFulltextEntryCount(50));
+    }
 
     private static IndexingRule getRule(IndexDefinition defn, String typeName){
         return defn.getApplicableIndexingRule(newTree(newNode(typeName)));

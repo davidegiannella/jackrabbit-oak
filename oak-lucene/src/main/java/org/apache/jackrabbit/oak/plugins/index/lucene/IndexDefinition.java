@@ -20,7 +20,6 @@
 package org.apache.jackrabbit.oak.plugins.index.lucene;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -39,10 +38,12 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
+import com.google.common.primitives.Ints;
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.namepath.NamePathMapper;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.plugins.nodetype.ReadOnlyNodeTypeManager;
@@ -61,10 +62,12 @@ import static com.google.common.collect.Maps.newHashMap;
 import static com.google.common.collect.Sets.newHashSet;
 import static org.apache.jackrabbit.JcrConstants.NT_BASE;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
+import static org.apache.jackrabbit.oak.commons.PathUtils.isAbsolute;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.DECLARING_NODE_TYPES;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.REINDEX_COUNT;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.BLOB_SIZE;
+import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.COMPAT_MODE;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.EVALUATE_PATH_RESTRICTION;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.EXCLUDE_PROPERTY_NAMES;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.EXPERIMENTAL_STORAGE;
@@ -82,7 +85,7 @@ import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.NODE_TYPES_PATH;
 import static org.apache.jackrabbit.oak.plugins.tree.TreeConstants.OAK_CHILD_ORDER;
 
-class IndexDefinition {
+class IndexDefinition implements Aggregate.AggregateMapper{
     private static final Logger log = LoggerFactory.getLogger(IndexDefinition.class);
 
     /**
@@ -109,8 +112,6 @@ class IndexDefinition {
 
     private final boolean fullTextEnabled;
 
-    private final boolean propertyIndexEnabled;
-
     private final NodeState definition;
 
     private final NodeState root;
@@ -121,17 +122,17 @@ class IndexDefinition {
 
     private final Codec codec;
 
-    private final Set<String> relativePropNames;
-
-    private final List<RelativeProperty> relativeProperties;
-
-    private final int relativePropsMaxLevels;
-
     /**
      * Defines the maximum estimated entry count configured.
      * Defaults to {#DEFAULT_ENTRY_COUNT}
      */
     private final long entryCount;
+
+    private final boolean entryCountDefined;
+
+    private final double costPerEntry;
+
+    private final double costPerExecution;
 
     /**
      * The {@link IndexingRule}s inside this configuration. Keys being the NodeType names
@@ -147,6 +148,10 @@ class IndexDefinition {
     private final boolean evaluatePathRestrictions;
 
     private final IndexFormatVersion version;
+
+    private final Map<String, Aggregate> aggregates;
+
+    private final boolean indexesAllTypes;
 
     public IndexDefinition(NodeState root, NodeState defn) {
         this(root, defn, null);
@@ -168,6 +173,8 @@ class IndexDefinition {
         this.blobSize = getOptionalValue(defn, BLOB_SIZE, DEFAULT_BLOB_SIZE);
         this.testMode = getOptionalValue(defn, LuceneIndexConstants.TEST_MODE, false);
 
+        this.aggregates = collectAggregates(defn);
+
         NodeState rulesState = defn.getChildNode(LuceneIndexConstants.INDEX_RULES);
         if (!rulesState.exists()){
             rulesState = createIndexRules(defn).getNodeState();
@@ -177,12 +184,7 @@ class IndexDefinition {
         this.indexRules = collectIndexRules(rulesState, definedIndexRules);
         this.definedRules = ImmutableList.copyOf(definedIndexRules);
 
-        this.relativeProperties = collectRelativeProperties(definedIndexRules);
         this.fullTextEnabled = hasFulltextEnabledIndexRule(definedIndexRules);
-        this.propertyIndexEnabled = hasPropertyIndexEnabledIndexRule(definedIndexRules);
-
-        this.relativePropNames = collectRelPropertyNames(relativeProperties);
-        this.relativePropsMaxLevels = getRelPropertyMaxLevels(relativeProperties);
         this.evaluatePathRestrictions = getOptionalValue(defn, EVALUATE_PATH_RESTRICTION, false);
 
         String functionName = getOptionalValue(defn, LuceneIndexConstants.FUNC_NAME, null);
@@ -194,18 +196,20 @@ class IndexDefinition {
         this.codec = createCodec();
 
         if (defn.hasProperty(ENTRY_COUNT_PROPERTY_NAME)) {
+            this.entryCountDefined = true;
             this.entryCount = defn.getProperty(ENTRY_COUNT_PROPERTY_NAME).getValue(Type.LONG);
         } else {
+            this.entryCountDefined = false;
             this.entryCount = DEFAULT_ENTRY_COUNT;
         }
+
+        this.costPerEntry = getOptionalValue(defn, LuceneIndexConstants.COST_PER_ENTRY, 1.0);
+        this.costPerExecution = getOptionalValue(defn, LuceneIndexConstants.COST_PER_EXECUTION, 1.0);
+        this.indexesAllTypes = areAllTypesIndexed();
     }
 
     public boolean isFullTextEnabled() {
         return fullTextEnabled;
-    }
-
-    public boolean isPropertyIndexEnabled() {
-        return propertyIndexEnabled;
     }
 
     public String getFunctionName(){
@@ -239,34 +243,23 @@ class IndexDefinition {
         return entryCount;
     }
 
-    public Collection<RelativeProperty> getRelativeProps() {
-        return relativeProperties;
+    public boolean isEntryCountDefined() {
+        return entryCountDefined;
     }
 
-    /**
-     * Collects the relative properties where the property name matches given name. Note
-     * that multiple relative properties can end with same name e.g. foo/bar, baz/bar
-     *
-     * @param name property name without path
-     * @param relProps matching relative properties where the relative property path ends
-     *                 with given name
-     */
-    public void collectRelPropsForName(String name, Collection<RelativeProperty> relProps){
-        if(hasRelativeProperty(name)){
-            for(RelativeProperty rp : relativeProperties){
-                if(rp.name.equals(name)){
-                    relProps.add(rp);
-                }
-            }
+    public double getCostPerEntry() {
+        return costPerEntry;
+    }
+
+    public double getCostPerExecution() {
+        return costPerExecution;
+    }
+
+    public long getFulltextEntryCount(long numOfDocs){
+        if (isEntryCountDefined()){
+            return Math.min(getEntryCount(), numOfDocs);
         }
-    }
-
-    boolean hasRelativeProperties(){
-        return !relativeProperties.isEmpty();
-    }
-
-    boolean hasRelativeProperty(String name) {
-        return relativePropNames.contains(name);
+        return numOfDocs;
     }
 
     public IndexFormatVersion getVersion() {
@@ -285,34 +278,48 @@ class IndexDefinition {
         return evaluatePathRestrictions;
     }
 
+    public boolean indexesAllTypes() {
+        return indexesAllTypes;
+    }
+
     @Override
     public String toString() {
         return "IndexDefinition : " + indexName;
     }
 
-    //~------------------------------------------< Internal >
+    //~---------------------------------------------------< Aggregates >
 
-    private int getRelPropertyMaxLevels(Collection<RelativeProperty> props) {
-        int max = -1;
-        for (RelativeProperty prop : props) {
-            max = Math.max(max, prop.ancestors.length);
-        }
-        return max;
+    @CheckForNull
+    public Aggregate getAggregate(String nodeType){
+        Aggregate agg = aggregates.get(nodeType);
+        return agg != null ? agg : null;
     }
 
-    public int getRelPropertyMaxLevels() {
-        return relativePropsMaxLevels;
-    }
+    private Map<String, Aggregate> collectAggregates(NodeState defn) {
+        Map<String, Aggregate> aggregateMap = newHashMap();
 
-    private Codec createCodec() {
-        String codecName = getOptionalValue(definition, LuceneIndexConstants.CODEC_NAME, null);
-        Codec codec = null;
-        if (codecName != null) {
-            codec = Codec.forName(codecName);
-        } else if (fullTextEnabled) {
-            codec = new OakCodec();
+        for (ChildNodeEntry cne : defn.getChildNode(LuceneIndexConstants.AGGREGATES).getChildNodeEntries()) {
+            String nodeType = cne.getName();
+            int recursionLimit = getOptionalValue(cne.getNodeState(), LuceneIndexConstants.AGG_RECURSIVE_LIMIT,
+                    Aggregate.RECURSIVE_AGGREGATION_LIMIT_DEFAULT);
+
+            List<Aggregate.Include> includes = newArrayList();
+            for (ChildNodeEntry include : cne.getNodeState().getChildNodeEntries()) {
+                NodeState is = include.getNodeState();
+                String primaryType = is.getString(LuceneIndexConstants.AGG_PRIMARY_TYPE);
+                String path = is.getString(LuceneIndexConstants.AGG_PATH);
+                boolean relativeNode = getOptionalValue(is, LuceneIndexConstants.AGG_RELATIVE_NODE, false);
+                if (path == null) {
+                    log.warn("Aggregate pattern in {} does not have required property [{}]. {} aggregate rule would " +
+                            "be ignored", this, LuceneIndexConstants.AGG_PATH, include.getName());
+                    continue;
+                }
+                includes.add(new Aggregate.NodeInclude(this, primaryType, path, relativeNode));
+            }
+            aggregateMap.put(nodeType, new Aggregate(nodeType, includes, recursionLimit));
         }
-        return codec;
+
+        return ImmutableMap.copyOf(aggregateMap);
     }
 
     //~---------------------------------------------------< IndexRule >
@@ -409,7 +416,7 @@ class IndexDefinition {
             definedIndexRules.add(rule);
 
             // register under node type and all its sub types
-            log.debug("Found rule '{}' for NodeType '{}'", rule, rule.getNodeTypeName());
+            log.trace("Found rule '{}' for NodeType '{}'", rule, rule.getNodeTypeName());
 
             List<String> ntNames = allNames;
             if (!rule.inherited){
@@ -425,7 +432,7 @@ class IndexDefinition {
                         perNtConfig = new ArrayList<IndexingRule>();
                         nt2rules.put(ntName, perNtConfig);
                     }
-                    log.debug("Registering it for name '{}'", ntName);
+                    log.trace("Registering rule '{}' for name '{}'", rule, ntName);
                     perNtConfig.add(new IndexingRule(rule, ntName));
                 }
             }
@@ -436,6 +443,11 @@ class IndexDefinition {
         }
 
         return ImmutableMap.copyOf(nt2rules);
+    }
+
+    private boolean areAllTypesIndexed() {
+        IndexingRule ntBaseRule = getApplicableIndexingRule(NT_BASE);
+        return ntBaseRule != null;
     }
 
     public class IndexingRule {
@@ -451,9 +463,8 @@ class IndexDefinition {
         final boolean fulltextEnabled;
         final boolean propertyIndexEnabled;
 
-        //TODO To be relooked with support for aggregation
-        final Map<String,RelativeProperty> relativeProps;
-        final Set<String> relativePropNames;
+        final Aggregate aggregate;
+        final Aggregate propAggregate;
 
 
         IndexingRule(String nodeTypeName, NodeState config) {
@@ -467,14 +478,14 @@ class IndexDefinition {
             this.propertyTypes = getSupportedTypes(config, INCLUDE_PROPERTY_TYPES, TYPES_ALLOW_ALL);
 
             List<NamePattern> namePatterns = newArrayList();
-            Map<String,RelativeProperty> relativeProps = newHashMap();
-            this.propConfigs = collectPropConfigs(config, namePatterns, relativeProps);
+            List<Aggregate.Include> propIncludes = newArrayList();
+            this.propConfigs = collectPropConfigs(config, namePatterns, propIncludes);
+            this.propAggregate = new Aggregate(nodeTypeName, propIncludes);
+            this.aggregate = combine(propAggregate, nodeTypeName);
 
             this.namePatterns = ImmutableList.copyOf(namePatterns);
-            this.fulltextEnabled = hasAnyFullTextEnabledProperty();
+            this.fulltextEnabled = aggregate.hasNodeAggregates() || hasAnyFullTextEnabledProperty();
             this.propertyIndexEnabled = hasAnyPropertyIndexConfigured();
-            this.relativeProps = ImmutableMap.copyOf(relativeProps);
-            this.relativePropNames = collectRelPropertyNames(this.relativeProps.values());
         }
 
         /**
@@ -494,10 +505,10 @@ class IndexDefinition {
             this.defaultStorageEnabled = original.defaultStorageEnabled;
             this.inherited = original.inherited;
             this.propertyTypes = original.propertyTypes;
-            this.fulltextEnabled = original.fulltextEnabled;
-            this.relativeProps = original.relativeProps;
-            this.relativePropNames = original.relativePropNames;
             this.propertyIndexEnabled = original.propertyIndexEnabled;
+            this.propAggregate = original.propAggregate;
+            this.aggregate = combine(propAggregate, nodeTypeName);
+            this.fulltextEnabled = aggregate.hasNodeAggregates() || original.fulltextEnabled;
         }
 
         /**
@@ -529,6 +540,10 @@ class IndexDefinition {
                 str += "(" + baseNodeType + ")";
             }
             return str;
+        }
+
+        public boolean isAggregated(String nodePath) {
+            return aggregate.hasRelativeNodeInclude(nodePath);
         }
 
         /**
@@ -588,12 +603,12 @@ class IndexDefinition {
            return IndexDefinition.includePropertyType(propertyTypes, type);
         }
 
-        public Collection<RelativeProperty> getRelativeProps() {
-            return relativeProps.values();
+        public Aggregate getAggregate() {
+            return aggregate;
         }
 
         private Map<String, PropertyDefinition> collectPropConfigs(NodeState config, List<NamePattern> patterns,
-                                                                   Map<String,RelativeProperty> relativeProps) {
+                                                                   List<Aggregate.Include> propAggregate) {
             Map<String, PropertyDefinition> propDefns = newHashMap();
             NodeState propNode = config.getChildNode(LuceneIndexConstants.PROP_NODE);
 
@@ -619,8 +634,8 @@ class IndexDefinition {
                         propDefns.put(pd.name, pd);
                     }
 
-                    if (RelativeProperty.isRelativeProperty(pd.name)){
-                        relativeProps.put(pd.name, new RelativeProperty(pd.name, pd));
+                    if (isRelativeProperty(pd.name)){
+                        propAggregate.add(new Aggregate.PropertyInclude(pd));
                     }
                 }
             }
@@ -655,6 +670,16 @@ class IndexDefinition {
                 }
             }
             return false;
+        }
+
+        private Aggregate combine(Aggregate propAggregate, String nodeTypeName){
+            Aggregate nodeTypeAgg = IndexDefinition.this.getAggregate(nodeTypeName);
+            List<Aggregate.Include> includes = newArrayList();
+            includes.addAll(propAggregate.getIncludes());
+            if (nodeTypeAgg != null){
+                includes.addAll(nodeTypeAgg.getIncludes());
+            }
+            return new Aggregate(nodeTypeName, includes);
         }
     }
 
@@ -706,7 +731,7 @@ class IndexDefinition {
         if (!hasIndexingRules(defn)){
             NodeState rulesState = createIndexRules(defn).getNodeState();
             indexDefn.setChildNode(LuceneIndexConstants.INDEX_RULES, rulesState);
-            indexDefn.setProperty(INDEX_VERSION, determineIndexFormatVersion(defn).getVersion());
+            indexDefn.setProperty(INDEX_VERSION, determineIndexFormatVersion(defn, indexDefn).getVersion());
 
             indexDefn.removeProperty(DECLARING_NODE_TYPES);
             indexDefn.removeProperty(INCLUDE_PROPERTY_NAMES);
@@ -752,7 +777,7 @@ class IndexDefinition {
 
         List<String> propNames = new ArrayList<String>(propNamesSet);
 
-        final String includeAllProp = ".*";
+        final String includeAllProp = LuceneIndexConstants.REGEX_ALL_PROPS;
         if (fullTextEnabled
                 && includes.isEmpty()){
             //Add the regEx for including all properties at the end
@@ -770,7 +795,7 @@ class IndexDefinition {
                 String propNodeName = propName;
 
                 //For proper propName use the propName as childNode name
-                if(RelativeProperty.isRelativeProperty(propName)
+                if(isRelativeProperty(propName)
                         || propName.equals(includeAllProp)){
                     propNodeName = "prop" + i++;
                 }
@@ -832,16 +857,30 @@ class IndexDefinition {
     private static NodeState getPropDefnNode(NodeState defn, String propName){
         NodeState propNode = defn.getChildNode(LuceneIndexConstants.PROP_NODE);
         NodeState propDefNode;
-        if (RelativeProperty.isRelativeProperty(propName)) {
-            propDefNode = new RelativeProperty(propName).getPropDefnNode(propNode);
+        if (isRelativeProperty(propName)) {
+            NodeState result = propNode;
+            for (String name : PathUtils.elements(propName)) {
+                result = result.getChildNode(name);
+            }
+            propDefNode = result;
         } else {
             propDefNode = propNode.getChildNode(propName);
         }
         return propDefNode.exists() ? propDefNode : null;
     }
 
-
     //~---------------------------------------------< utility >
+
+    private Codec createCodec() {
+        String codecName = getOptionalValue(definition, LuceneIndexConstants.CODEC_NAME, null);
+        Codec codec = null;
+        if (codecName != null) {
+            codec = Codec.forName(codecName);
+        } else if (fullTextEnabled) {
+            codec = new OakCodec();
+        }
+        return codec;
+    }
 
     private static String determineIndexName(NodeState defn, String indexPath) {
         String indexName = defn.getString(PROP_NAME);
@@ -956,64 +995,85 @@ class IndexDefinition {
         return false;
     }
 
-    private static boolean hasPropertyIndexEnabledIndexRule(List<IndexingRule> rules) {
-        for (IndexingRule rule : rules){
-            if (rule.propertyIndexEnabled){
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static Set<String> collectRelPropertyNames(Collection<RelativeProperty> props) {
-        Set<String> propNames = newHashSet();
-        for (RelativeProperty prop : props) {
-            propNames.add(prop.name);
-        }
-        return ImmutableSet.copyOf(propNames);
-    }
-
-    private static List<RelativeProperty> collectRelativeProperties(List<IndexingRule> indexRules) {
-        List<RelativeProperty> relProps = newArrayList();
-        for (IndexingRule rule : indexRules){
-            relProps.addAll(rule.getRelativeProps());
-        }
-        return ImmutableList.copyOf(relProps);
-    }
-
     private static void markAsNtUnstructured(NodeBuilder nb){
         nb.setProperty(JcrConstants.JCR_PRIMARYTYPE, JcrConstants.NT_UNSTRUCTURED, Type.NAME);
     }
 
-    private static IndexFormatVersion determineIndexFormatVersion(NodeState defn) {
-        return determineIndexFormatVersion(defn, null);
-    }
-
     private static IndexFormatVersion determineIndexFormatVersion(NodeState defn, NodeBuilder defnb) {
         if (defnb != null && !defnb.getChildNode(INDEX_DATA_CHILD_NAME).exists()){
-            return IndexFormatVersion.getCurrent();
+            return determineVersionForFreshIndex(defnb);
         }
 
-        if (defn.hasProperty(LuceneIndexConstants.COMPAT_MODE)){
-            return IndexFormatVersion.getVersion((int)defn.getLong(LuceneIndexConstants.COMPAT_MODE));
+        //Compat mode version if specified has highest priority
+        if (defn.hasProperty(COMPAT_MODE)){
+            return versionFrom(defn.getProperty(COMPAT_MODE));
         }
 
         if (defn.hasProperty(INDEX_VERSION)){
-            return IndexFormatVersion.getVersion((int)defn.getLong(INDEX_VERSION));
+            return versionFrom(defn.getProperty(INDEX_VERSION));
         }
 
         //No existing index data i.e. reindex or fresh index
         if (!defn.getChildNode(INDEX_DATA_CHILD_NAME).exists()){
-            return IndexFormatVersion.getCurrent();
+            return determineVersionForFreshIndex(defn);
         }
 
         boolean fullTextEnabled = getOptionalValue(defn, FULL_TEXT_ENABLED, true);
+
         //A fulltext index with old indexing format confirms to V1. However
         //a propertyIndex with old indexing format confirms to V2
         return fullTextEnabled ? IndexFormatVersion.V1 : IndexFormatVersion.V2;
     }
 
+    static IndexFormatVersion determineVersionForFreshIndex(NodeState defn){
+        return determineVersionForFreshIndex(defn.getProperty(FULL_TEXT_ENABLED),
+                defn.getProperty(COMPAT_MODE), defn.getProperty(INDEX_VERSION));
+    }
+
+    static IndexFormatVersion determineVersionForFreshIndex(NodeBuilder defnb){
+        return determineVersionForFreshIndex(defnb.getProperty(FULL_TEXT_ENABLED),
+                defnb.getProperty(COMPAT_MODE), defnb.getProperty(INDEX_VERSION));
+    }
+
+    private static IndexFormatVersion determineVersionForFreshIndex(PropertyState fulltext,
+                                                                    PropertyState compat,
+                                                                    PropertyState version){
+        if (compat != null){
+            return versionFrom(compat);
+        }
+
+        IndexFormatVersion defaultToUse = IndexFormatVersion.getDefault();
+        IndexFormatVersion existing = version != null ? versionFrom(version) : null;
+
+        //As per OAK-2290 current might be less than current used version. So
+        //set to current only if it is greater than existing
+
+        //Per setting use default configured
+        IndexFormatVersion result = defaultToUse;
+
+        //If default configured is lesser than existing then prefer existing
+        if (existing != null){
+            result = IndexFormatVersion.max(result,existing);
+        }
+
+        //Check if fulltext is false which indicates its a property index and
+        //hence confirm to V2 or above
+        if (fulltext != null && !fulltext.getValue(Type.BOOLEAN)){
+            return IndexFormatVersion.max(result,IndexFormatVersion.V2);
+        }
+
+        return result;
+    }
+
+    private static IndexFormatVersion versionFrom(PropertyState ps){
+        return IndexFormatVersion.getVersion(Ints.checkedCast(ps.getValue(Type.LONG)));
+    }
+
     private static boolean hasIndexingRules(NodeState defn) {
         return defn.getChildNode(LuceneIndexConstants.INDEX_RULES).exists();
+    }
+
+    private static boolean isRelativeProperty(String propertyName){
+        return !isAbsolute(propertyName) && PathUtils.getNextSlash(propertyName, 0) > 0;
     }
 }

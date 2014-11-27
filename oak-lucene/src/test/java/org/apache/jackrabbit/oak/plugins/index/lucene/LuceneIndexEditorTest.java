@@ -53,6 +53,7 @@ import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFIN
 import static org.apache.jackrabbit.oak.plugins.index.lucene.FieldNames.PATH;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.INCLUDE_PROPERTY_NAMES;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.VERSION;
+import static org.apache.jackrabbit.oak.plugins.index.lucene.TestUtil.newLuceneIndexDefinitionV2;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneIndexHelper.newLuceneIndexDefinition;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
 import static org.apache.jackrabbit.oak.plugins.memory.PropertyStates.createProperty;
@@ -80,7 +81,7 @@ public class LuceneIndexEditorTest {
     @Test
     public void testLuceneWithFullText() throws Exception {
         NodeBuilder index = builder.child(INDEX_DEFINITIONS_NAME);
-        newLuceneIndexDefinition(index, "lucene",
+        NodeBuilder idxnb = newLuceneIndexDefinitionV2(index, "lucene",
                 of(TYPENAME_STRING));
 
         NodeState before = builder.getNodeState();
@@ -92,15 +93,19 @@ public class LuceneIndexEditorTest {
         tracker.update(indexed);
 
         //system fields starts with ':' so need to be escaped
-        assertEquals("/test", query("\\"+FieldNames.createAnalyzedFieldName("foo")+":fox"));
+        assertEquals("/test", query(escape(FieldNames.createAnalyzedFieldName("foo"))+":fox"));
         assertNull("Non string properties not indexed by default",
                 getPath(NumericRangeQuery.newLongRange("price", 100L, 100L, true, true)));
+    }
+
+    private String escape(String name) {
+        return name.replace(":", "\\:");
     }
 
     @Test
     public void testLuceneWithNonFullText() throws Exception {
         NodeBuilder index = builder.child(INDEX_DEFINITIONS_NAME);
-        NodeBuilder nb = newLuceneIndexDefinition(index, "lucene",
+        NodeBuilder nb = newLuceneIndexDefinitionV2(index, "lucene",
                 of(TYPENAME_STRING));
         nb.setProperty(LuceneIndexConstants.FULL_TEXT_ENABLED, false);
         nb.setProperty(createProperty(INCLUDE_PROPERTY_NAMES, of("foo", "price", "weight", "bool", "creationTime"), STRINGS));
@@ -140,7 +145,7 @@ public class LuceneIndexEditorTest {
     @Test
     public void noOfDocsIndexedNonFullText() throws Exception{
         NodeBuilder index = builder.child(INDEX_DEFINITIONS_NAME);
-        NodeBuilder nb = newLuceneIndexDefinition(index, "lucene",
+        NodeBuilder nb = newLuceneIndexDefinitionV2(index, "lucene",
                 of(TYPENAME_STRING));
         nb.setProperty(LuceneIndexConstants.FULL_TEXT_ENABLED, false);
         nb.setProperty(createProperty(INCLUDE_PROPERTY_NAMES, of("foo"), STRINGS));
@@ -166,7 +171,7 @@ public class LuceneIndexEditorTest {
     @Test
     public void nonIncludedPropertyChange() throws Exception {
         NodeBuilder index = builder.child(INDEX_DEFINITIONS_NAME);
-        NodeBuilder nb = newLuceneIndexDefinition(index, "lucene",
+        NodeBuilder nb = newLuceneIndexDefinitionV2(index, "lucene",
                 of(TYPENAME_STRING));
         nb.setProperty(LuceneIndexConstants.FULL_TEXT_ENABLED, false);
         nb.setProperty(createProperty(INCLUDE_PROPERTY_NAMES, of("foo"),
@@ -200,7 +205,7 @@ public class LuceneIndexEditorTest {
     @Test
     public void testLuceneWithRelativeProperty() throws Exception {
         NodeBuilder index = builder.child(INDEX_DEFINITIONS_NAME);
-        NodeBuilder nb = newLuceneIndexDefinition(index, "lucene",
+        NodeBuilder nb = newLuceneIndexDefinitionV2(index, "lucene",
                 of(TYPENAME_STRING));
         nb.setProperty(LuceneIndexConstants.FULL_TEXT_ENABLED, false);
         nb.setProperty(createProperty(INCLUDE_PROPERTY_NAMES, of("foo", "jcr:content/mime",
@@ -277,7 +282,7 @@ public class LuceneIndexEditorTest {
         builder.child(INDEX_DEFINITIONS_NAME).child("lucene").setProperty(IndexConstants.REINDEX_PROPERTY_NAME, true);
         after = builder.getNodeState();
         indexed = HOOK.processCommit(before, after, CommitInfo.EMPTY);
-        assertEquals(IndexFormatVersion.getCurrent(), new IndexDefinition(root,
+        assertEquals(IndexFormatVersion.getDefault(), new IndexDefinition(root,
                 indexed.getChildNode(INDEX_DEFINITIONS_NAME).getChildNode("lucene")).getVersion());
 
     }
@@ -285,7 +290,7 @@ public class LuceneIndexEditorTest {
     @Test
     public void autoFormatUpdate() throws Exception{
         NodeBuilder index = builder.child(INDEX_DEFINITIONS_NAME);
-        NodeBuilder nb = newLuceneIndexDefinition(index, "lucene",
+        NodeBuilder nb = newLuceneIndexDefinitionV2(index, "lucene",
                 of(TYPENAME_STRING));
 
         //1. Trigger a index so that next index step does not see it as a fresh index
@@ -387,4 +392,5 @@ public class LuceneIndexEditorTest {
     static long dateToTime(String dt) throws java.text.ParseException {
         return FieldFactory.dateToLong(ISO8601.format(createCal(dt)));
     }
+
 }
