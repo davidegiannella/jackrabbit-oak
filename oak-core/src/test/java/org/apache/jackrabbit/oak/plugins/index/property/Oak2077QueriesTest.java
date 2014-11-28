@@ -36,6 +36,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.StringReader;
+import java.text.ParseException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -358,6 +359,15 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         
         return previousValue;
     }
+    
+    private void assertLogAndQuery(@Nonnull final String statement,
+                                   @Nonnull final List<ValuePathTuple> expected) throws Exception {
+        LOGGING_TRACKER.reset();
+        Result result = executeQuery(statement, SQL2, null);
+        assertRightOrder(expected, result.getRows().iterator());
+        assertTrue("We expect at least 1 warning message to be tracked",
+            LOGGING_TRACKER.countLinesTracked() >= 1);
+    }
 
     /**
      * filter out the provided list for later assertions
@@ -428,12 +438,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         List<ValuePathTuple> expected = filter(nodes, inexistent, null, null);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
-        LOGGING_TRACKER.reset();
-        Result result = executeQuery(statement, SQL2, null);
-        assertRightOrder(expected, result.getRows().iterator());
-        assertEquals("We expect 1 warning message to be tracked", 1, LOGGING_TRACKER.countLinesTracked());
-        // as the full iterable used in `property IS NOT NULL` cases walk the index on lane 0, any
-        // other lanes doesn't matter.
+        assertLogAndQuery(statement, expected);
         
         setTraversalEnabled(true);
     }
@@ -457,10 +462,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         List<ValuePathTuple> expected = filter(nodes, inexistent, null, null);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
-        LOGGING_TRACKER.reset();
-        Result result = executeQuery(statement, SQL2, null);
-        assertRightOrder(expected, result.getRows().iterator());
-        assertEquals("We expect 1 warning message to be tracked", 1, LOGGING_TRACKER.countLinesTracked());
+        assertLogAndQuery(statement, expected);
 
         // as the full iterable used in `property IS NOT NULL` cases walk the index on lane 0, any
         // other lanes doesn't matter.
@@ -497,11 +499,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
-        LOGGING_TRACKER.reset();
-        Result result = executeQuery(String.format(statement, whereCondition), SQL2, null);
-        assertRightOrder(expected, result.getRows().iterator());
-        assertTrue("We expect at least 1 warning message to be tracked",
-            LOGGING_TRACKER.countLinesTracked() >= 1);
+        assertLogAndQuery(String.format(statement, whereCondition), expected);
         
         setTraversalEnabled(true);
     }
@@ -532,7 +530,6 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         // no logging should be applied as the missing item does not match the seek condition
         // we don't care about the logging then.
         String st = String.format(statement, whereCondition);
-        LOG.debug(st);
         Result result = executeQuery(st, SQL2, null);
         assertRightOrder(expected, result.getRows().iterator());
 
@@ -561,11 +558,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
-        LOGGING_TRACKER.reset();
-        Result result = executeQuery(String.format(statement, whereCondition), SQL2, null);
-        assertRightOrder(expected, result.getRows().iterator());
-        assertTrue("We expect at least 1 warning message to be tracked",
-            LOGGING_TRACKER.countLinesTracked() >= 1);
+        assertLogAndQuery(String.format(statement, whereCondition), expected);
         
         setTraversalEnabled(true);
     }
@@ -591,11 +584,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             FilterCondition.GREATER_THEN_EQUAL, whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
-        LOGGING_TRACKER.reset();
-        Result result = executeQuery(String.format(statement, whereCondition), SQL2, null);
-        assertRightOrder(expected, result.getRows().iterator());
-        assertTrue("We expect at least 1 warning message to be tracked",
-            LOGGING_TRACKER.countLinesTracked() >= 1);
+        assertLogAndQuery(String.format(statement, whereCondition), expected);
         
         setTraversalEnabled(true);
     }
@@ -622,11 +611,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             FilterCondition.GREATER_THEN_EQUAL, whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
-        LOGGING_TRACKER.reset();
-        Result result = executeQuery(String.format(statement, whereCondition), SQL2, null);
-        assertRightOrder(expected, result.getRows().iterator());
-        assertTrue("We expect at least 1 warning message to be tracked",
-            LOGGING_TRACKER.countLinesTracked() >= 1);
+        assertLogAndQuery(String.format(statement, whereCondition), expected);
         
         setTraversalEnabled(true);
     }
@@ -651,11 +636,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
-        LOGGING_TRACKER.reset();
-        Result result = executeQuery(String.format(statement, whereCondition), SQL2, null);
-        assertRightOrder(expected, result.getRows().iterator());
-        assertTrue("We expect at least 1 warning message to be tracked",
-            LOGGING_TRACKER.countLinesTracked() >= 1);
+        assertLogAndQuery(String.format(statement, whereCondition), expected);
         
         setTraversalEnabled(true);
     }
@@ -681,11 +662,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
-        LOGGING_TRACKER.reset();
-        Result result = executeQuery(String.format(statement, whereCondition), SQL2, null);
-        assertRightOrder(expected, result.getRows().iterator());
-        assertTrue("We expect at least 1 warning message to be tracked",
-            LOGGING_TRACKER.countLinesTracked() >= 1);
+        assertLogAndQuery(String.format(statement, whereCondition), expected);
         
         setTraversalEnabled(true);
     }
