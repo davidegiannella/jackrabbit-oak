@@ -16,6 +16,7 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
@@ -41,6 +42,7 @@ import java.util.Map;
 import java.util.Random;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.jcr.NoSuchWorkspaceException;
 import javax.jcr.RepositoryException;
 import javax.security.auth.login.LoginException;
@@ -289,11 +291,21 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         qe = root.getQueryEngine();
     }
     
-    
+    /**
+     * create the test content by the provided attributes
+     * 
+     * @param numberOfNodes the number of nodes to be created
+     * @param offset if starting by 0 or by {@code offset}
+     * @param direction the direction of the value
+     * @return the list of ValiePathTuple for later assertions
+     * @throws CommitFailedException
+     */
     private List<ValuePathTuple> createContent(final int numberOfNodes,
                                                 final int offset,
                                                @Nonnull final OrderDirection direction) 
                                                    throws CommitFailedException {
+        checkNotNull(direction);
+        
         Tree content = root.getTree("/").addChild("content").addChild("nodes");
         List<String> values = generateOrderedValues(numberOfNodes, offset, direction);
         List<ValuePathTuple> nodes = addChildNodes(values, content, direction, STRING);
@@ -302,19 +314,12 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         return nodes;
     }
     
-    @Test
-    public void queryNotNullAscending() throws Exception {
-        setTraversalEnabled(false);
-        final int numberOfNodes = 20;
-        final OrderDirection direction = ASC;
-        final String unexistent  = formatNumber(numberOfNodes + 1);
-        final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
-                                 + " IS NOT NULL";
-        defineIndex(direction);
+    @Nullable 
+    private String truncate(final int lane, @Nonnull final String inexistent) throws Exception {
+        checkNotNull(inexistent);
+        checkArgument(lane >= 0 && lane < OrderedIndex.LANES);
         
-        List<ValuePathTuple> nodes = createContent(numberOfNodes, 0, direction);
-                
-        // truncating the list on lane 0
+        String previousValue;
         NodeBuilder rootBuilder = nodestore.getRoot().builder();
         NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
         builder = builder.getChildNode(TEST_INDEX_NAME);
@@ -325,13 +330,32 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         
         for (int i = 0; i < 4; i++) {
             // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated);
+            truncatedName = getPropertyNext(truncated, lane);
             truncated = builder.getChildNode(truncatedName);
         }
-        setPropertyNext(truncated, unexistent, 0);
+        previousValue = getPropertyNext(truncated, lane);
+        setPropertyNext(truncated, inexistent, lane);
         
         nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
         resetEnvVariables();
+        
+        return previousValue;
+    }
+    
+    @Test
+    public void queryNotNullAscending() throws Exception {
+        setTraversalEnabled(false);
+        final int numberOfNodes = 20;
+        final OrderDirection direction = ASC;
+        final String inexistent  = formatNumber(numberOfNodes + 1);
+        final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
+                                 + " IS NOT NULL";
+        defineIndex(direction);
+        
+        List<ValuePathTuple> nodes = createContent(numberOfNodes, 0, direction);
+                
+        // truncating the list on lane 0
+        truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
         List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
@@ -341,7 +365,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
                 @Override
                 public boolean apply(ValuePathTuple input) {
                     if (!stopHere) {
-                        stopHere = unexistent.equals(input.getValue());
+                        stopHere = inexistent.equals(input.getValue());
                     }
                     return !stopHere;
                 }
@@ -363,7 +387,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         setTraversalEnabled(false);
         final int numberOfNodes = 20;
         final OrderDirection direction = DESC; //changed
-        final String unexistent  = formatNumber(0); //changed
+        final String inexistent  = formatNumber(0); //changed
         final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
                                  + " IS NOT NULL";
         defineIndex(direction);
@@ -371,24 +395,8 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         List<ValuePathTuple> nodes = createContent(numberOfNodes, 1, direction);
         
         // truncating the list on lane 0
-        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-        builder = builder.getChildNode(TEST_INDEX_NAME);
-        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-        
-        NodeBuilder truncated = builder.getChildNode(START);
-        String truncatedName;
-        
-        for (int i = 0; i < 4; i++) {
-            // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated);
-            truncated = builder.getChildNode(truncatedName);
-        }
-        setPropertyNext(truncated, unexistent, 0);
-        
-        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        resetEnvVariables();
-        
+        truncate(0, inexistent);
+                
         //filtering out the part that should not be returned by the resultset.
         List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
             new Predicate<ValuePathTuple>() {
@@ -397,7 +405,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
                 @Override
                 public boolean apply(ValuePathTuple input) {
                     if (!stopHere) {
-                        stopHere = unexistent.equals(input.getValue());
+                        stopHere = inexistent.equals(input.getValue());
                     }
                     return !stopHere;
                 }
@@ -427,7 +435,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         setTraversalEnabled(false);
         final int numberOfNodes = 20;
         final OrderDirection direction = ASC;
-        final String unexistent  = formatNumber(numberOfNodes + 1);
+        final String inexistent  = formatNumber(numberOfNodes + 1);
         // as 'values' will start from 0, we're excluding first entry(ies)
         final String whereCondition = formatNumber(1);
         final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
@@ -437,23 +445,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         List<ValuePathTuple> nodes = createContent(numberOfNodes, 0, direction);
         
         // truncating the list on lane 0
-        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-        builder = builder.getChildNode(TEST_INDEX_NAME);
-        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-        
-        NodeBuilder truncated = builder.getChildNode(START);
-        String truncatedName;
-                
-        for (int i = 0; i < 4; i++) {
-            // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated);
-            truncated = builder.getChildNode(truncatedName);
-        }
-        setPropertyNext(truncated, unexistent, 0);
-        
-        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        resetEnvVariables();
+        truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
         List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
@@ -463,7 +455,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
                 @Override
                 public boolean apply(ValuePathTuple input) {
                     if (!stopHere) {
-                        stopHere = unexistent.equals(input.getValue());
+                        stopHere = inexistent.equals(input.getValue());
                     }
                     return !stopHere && input.getValue().compareTo(whereCondition) > 0;
                 }
@@ -495,29 +487,8 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         defineIndex(direction);
         
         List<ValuePathTuple> nodes = createContent(numberOfNodes, 0, direction);
-        
-        // truncating the list
-        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-        builder = builder.getChildNode(TEST_INDEX_NAME);
-        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-        
-        OrderedContentMirrorStorageStrategyTest.printSkipList(builder.getNodeState());
-        
-        NodeBuilder truncated = builder.getChildNode(START);
-        String truncatedName = "";
-        
-        // truncating on the 4th element and taking the 5th as where condition
-        for (int i = 0; i < 4; i++) {
-            // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated, 1);
-            truncated = builder.getChildNode(truncatedName);
-        }
-        whereCondition = getPropertyNext(truncated, 1);
-        setPropertyNext(truncated, unexistent, 1);
-        
-        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        resetEnvVariables();
+                
+        whereCondition = truncate(1, unexistent);
         
         //filtering out the part that should not be returned by the resultset.
         final String wc = whereCondition;
@@ -560,23 +531,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         List<ValuePathTuple> nodes = createContent(numberOfNodes, offset, direction);
         
         // truncating the list on lane 0
-        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-        builder = builder.getChildNode(TEST_INDEX_NAME);
-        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-        
-        NodeBuilder truncated = builder.getChildNode(START);
-        String truncatedName;
-                
-        for (int i = 0; i < 4; i++) {
-            // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated);
-            truncated = builder.getChildNode(truncatedName);
-        }
-        setPropertyNext(truncated, inexistent, 0);
-        
-        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        resetEnvVariables();
+        truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
         List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
@@ -607,7 +562,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         setTraversalEnabled(false);
         final int numberOfNodes = 20;
         final OrderDirection direction = ASC;
-        final String unexistent  = formatNumber(numberOfNodes + 1);
+        final String inexistent  = formatNumber(numberOfNodes + 1);
         // as 'values' will start from 0, we're excluding first entry(ies)
         final String whereCondition = formatNumber(1);
         final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
@@ -616,24 +571,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         
         List<ValuePathTuple> nodes = createContent(numberOfNodes, 0, direction);
         
-        // truncating the list on lane 0
-        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-        builder = builder.getChildNode(TEST_INDEX_NAME);
-        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-        
-        NodeBuilder truncated = builder.getChildNode(START);
-        String truncatedName;
-                
-        for (int i = 0; i < 4; i++) {
-            // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated);
-            truncated = builder.getChildNode(truncatedName);
-        }
-        setPropertyNext(truncated, unexistent, 0);
-        
-        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        resetEnvVariables();
+        truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
         List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
@@ -643,7 +581,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
                 @Override
                 public boolean apply(ValuePathTuple input) {
                     if (!stopHere) {
-                        stopHere = unexistent.equals(input.getValue());
+                        stopHere = inexistent.equals(input.getValue());
                     }
                     return !stopHere && input.getValue().compareTo(whereCondition) >= 0;
                 }
@@ -674,23 +612,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         List<ValuePathTuple> nodes = createContent(numberOfNodes, offset, direction);
         
         // truncating the list on lane 0
-        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-        builder = builder.getChildNode(TEST_INDEX_NAME);
-        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-        
-        NodeBuilder truncated = builder.getChildNode(START);
-        String truncatedName;
-                
-        for (int i = 0; i < 4; i++) {
-            // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated);
-            truncated = builder.getChildNode(truncatedName);
-        }
-        setPropertyNext(truncated, inexistent, 0);
-        
-        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        resetEnvVariables();
+        truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
         List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
@@ -721,7 +643,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         setTraversalEnabled(false);
         final int numberOfNodes = 20;
         final OrderDirection direction = ASC;
-        final String unexistent  = formatNumber(numberOfNodes + 1);
+        final String inexistent  = formatNumber(numberOfNodes + 1);
         final String whereCondition = formatNumber(numberOfNodes + 2);
         final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
                                  + " < '%s'";
@@ -729,24 +651,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         
         List<ValuePathTuple> nodes = createContent(numberOfNodes, 0, direction);
         
-        // truncating the list on lane 0
-        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-        builder = builder.getChildNode(TEST_INDEX_NAME);
-        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-        
-        NodeBuilder truncated = builder.getChildNode(START);
-        String truncatedName;
-                
-        for (int i = 0; i < 4; i++) {
-            // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated);
-            truncated = builder.getChildNode(truncatedName);
-        }
-        setPropertyNext(truncated, unexistent, 0);
-        
-        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        resetEnvVariables();
+        truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
         List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
@@ -756,7 +661,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
                 @Override
                 public boolean apply(ValuePathTuple input) {
                     if (!stopHere) {
-                        stopHere = unexistent.equals(input.getValue());
+                        stopHere = inexistent.equals(input.getValue());
                     }
                     return !stopHere && input.getValue().compareTo(whereCondition) < 0;
                 }
@@ -786,24 +691,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         
         List<ValuePathTuple> nodes = createContent(numberOfNodes, offset, direction);
         
-        // truncating the list on lane 0
-        NodeBuilder rootBuilder = nodestore.getRoot().builder();
-        NodeBuilder builder = rootBuilder.getChildNode(INDEX_DEFINITIONS_NAME);
-        builder = builder.getChildNode(TEST_INDEX_NAME);
-        builder = builder.getChildNode(INDEX_CONTENT_NODE_NAME);
-        
-        NodeBuilder truncated = builder.getChildNode(START);
-        String truncatedName;
-                
-        for (int i = 0; i < 4; i++) {
-            // changing the 4th element. No particular reasons on why the 4th.
-            truncatedName = getPropertyNext(truncated);
-            truncated = builder.getChildNode(truncatedName);
-        }
-        setPropertyNext(truncated, inexistent, 0);
-        
-        nodestore.merge(rootBuilder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-        resetEnvVariables();
+        truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
         List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
