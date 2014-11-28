@@ -61,6 +61,7 @@ import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentM
 import org.apache.jackrabbit.oak.plugins.index.property.strategy.OrderedContentMirrorStoreStrategy;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
+import org.apache.jackrabbit.oak.query.AbstractQueryTest;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
@@ -223,6 +224,13 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
             this.rnd = rnd;
         }
     }
+    
+    /**
+     * enum used for injecting the filter condition in the {@code filter()}
+     */
+    private enum FilterCondition {
+        GREATER_THAN, GREATER_THEN_EQUAL, LESS_THAN
+    };
 
     // ---------------------------------------------------------------------------------- < tests >
     @Override
@@ -314,6 +322,15 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         return nodes;
     }
     
+    /**
+     * truncate the {@link AbstractQueryTest#TEST_INDEX_NAME} index at the 4th element of the
+     * provided lane returning the previous value
+     * 
+     * @param lane the desired lane. Must be 0 <= {@code lane} < {@link OrderedIndex#LANES}
+     * @param inexistent the derired value to be injected
+     * @return the value before the change
+     * @throws Exception
+     */
     @Nullable 
     private String truncate(final int lane, @Nonnull final String inexistent) throws Exception {
         checkNotNull(inexistent);
@@ -341,6 +358,56 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         
         return previousValue;
     }
+
+    /**
+     * filter out the provided list for later assertions
+     * 
+     * @param nodes the original list to be filtered
+     * @param inexistent the previously injected inexistent node
+     * @param condition the condition applied in the query to assert. if {@code null} it will behave
+     *            as a {@code NOT NULL} query.
+     * @param whereCondition if {@condition} is provided CANNOT BE null. it's the where clause
+     *            provided in the query to assert.
+     * @return the filtered list to be expected
+     */
+    @Nonnull
+    private List<ValuePathTuple> filter(@Nonnull final List<ValuePathTuple> nodes,
+                                        @Nonnull final String inexistent,
+                                        @Nullable final FilterCondition condition,
+                                        @Nullable final String whereCondition) {
+        checkNotNull(nodes);
+        checkNotNull(inexistent);
+        checkArgument(condition != null ? whereCondition != null : true,
+            "if 'condition' is not null'whereCondition' MUST be provided");
+        
+        return Lists.newArrayList(Iterables.filter(nodes, new Predicate<ValuePathTuple>() {
+            boolean stopHere;
+
+            @Override
+            public boolean apply(ValuePathTuple input) {
+                if (!stopHere) {
+                    stopHere = inexistent.equals(input.getValue());
+                }
+                boolean filter = true;
+                if (condition != null) {
+                    switch (condition) {
+                    case GREATER_THAN:
+                        filter = input.getValue().compareTo(whereCondition) > 0;
+                        break;
+                    case GREATER_THEN_EQUAL:
+                        filter = input.getValue().compareTo(whereCondition) >= 0;
+                        break;
+                    case LESS_THAN:
+                        filter = input.getValue().compareTo(whereCondition) < 0;
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                return !stopHere && filter;
+            }
+        }));
+    }
     
     @Test
     public void queryNotNullAscending() throws Exception {
@@ -358,18 +425,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
-        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
-            new Predicate<ValuePathTuple>() {
-                boolean stopHere;
-
-                @Override
-                public boolean apply(ValuePathTuple input) {
-                    if (!stopHere) {
-                        stopHere = inexistent.equals(input.getValue());
-                    }
-                    return !stopHere;
-                }
-            }));
+        List<ValuePathTuple> expected = filter(nodes, inexistent, null, null);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         LOGGING_TRACKER.reset();
@@ -398,18 +454,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         truncate(0, inexistent);
                 
         //filtering out the part that should not be returned by the resultset.
-        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
-            new Predicate<ValuePathTuple>() {
-                boolean stopHere;
-
-                @Override
-                public boolean apply(ValuePathTuple input) {
-                    if (!stopHere) {
-                        stopHere = inexistent.equals(input.getValue());
-                    }
-                    return !stopHere;
-                }
-            }));
+        List<ValuePathTuple> expected = filter(nodes, inexistent, null, null);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         LOGGING_TRACKER.reset();
@@ -448,18 +493,8 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
-        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
-            new Predicate<ValuePathTuple>() {
-                boolean stopHere;
-
-                @Override
-                public boolean apply(ValuePathTuple input) {
-                    if (!stopHere) {
-                        stopHere = inexistent.equals(input.getValue());
-                    }
-                    return !stopHere && input.getValue().compareTo(whereCondition) > 0;
-                }
-            }));
+        List<ValuePathTuple> expected = filter(nodes, inexistent, FilterCondition.GREATER_THAN,
+            whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         LOGGING_TRACKER.reset();
@@ -480,7 +515,7 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         setTraversalEnabled(false);
         final int numberOfNodes = 20;
         final OrderDirection direction = ASC;
-        String unexistent  = formatNumber(numberOfNodes + 1);
+        String inexistent  = formatNumber(numberOfNodes + 1);
         String whereCondition;
         final String statement = "SELECT * FROM [nt:base] WHERE " + ORDERED_PROPERTY
                                  + " > '%s'";
@@ -488,23 +523,11 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         
         List<ValuePathTuple> nodes = createContent(numberOfNodes, 0, direction);
                 
-        whereCondition = truncate(1, unexistent);
+        whereCondition = truncate(1, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
-        final String wc = whereCondition;
-        final String un = unexistent;
-        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
-            new Predicate<ValuePathTuple>() {
-                boolean stopHere;
-
-                @Override
-                public boolean apply(ValuePathTuple input) {
-                    if (!stopHere) {
-                        stopHere = un.equals(input.getValue());
-                    }
-                    return !stopHere && input.getValue().compareTo(wc) > 0;
-                }
-            }));
+        List<ValuePathTuple> expected = filter(nodes, inexistent, FilterCondition.GREATER_THAN,
+            whereCondition);
 
         // no logging should be applied as the missing item does not match the seek condition
         // we don't care about the logging then.
@@ -534,18 +557,8 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
-        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
-            new Predicate<ValuePathTuple>() {
-                boolean stopHere;
-
-                @Override
-                public boolean apply(ValuePathTuple input) {
-                    if (!stopHere) {
-                        stopHere = inexistent.equals(input.getValue());
-                    }
-                    return !stopHere && input.getValue().compareTo(whereCondition) > 0;
-                }
-            }));
+        List<ValuePathTuple> expected = filter(nodes, inexistent, FilterCondition.GREATER_THAN,
+            whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         LOGGING_TRACKER.reset();
@@ -574,18 +587,8 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
-        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
-            new Predicate<ValuePathTuple>() {
-                boolean stopHere;
-
-                @Override
-                public boolean apply(ValuePathTuple input) {
-                    if (!stopHere) {
-                        stopHere = inexistent.equals(input.getValue());
-                    }
-                    return !stopHere && input.getValue().compareTo(whereCondition) >= 0;
-                }
-            }));
+        List<ValuePathTuple> expected = filter(nodes, inexistent,
+            FilterCondition.GREATER_THEN_EQUAL, whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         LOGGING_TRACKER.reset();
@@ -615,18 +618,8 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
-        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
-            new Predicate<ValuePathTuple>() {
-                boolean stopHere;
-
-                @Override
-                public boolean apply(ValuePathTuple input) {
-                    if (!stopHere) {
-                        stopHere = inexistent.equals(input.getValue());
-                    }
-                    return !stopHere && input.getValue().compareTo(whereCondition) >= 0;
-                }
-            }));
+        List<ValuePathTuple> expected = filter(nodes, inexistent,
+            FilterCondition.GREATER_THEN_EQUAL, whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         LOGGING_TRACKER.reset();
@@ -654,18 +647,8 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
-        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
-            new Predicate<ValuePathTuple>() {
-                boolean stopHere;
-
-                @Override
-                public boolean apply(ValuePathTuple input) {
-                    if (!stopHere) {
-                        stopHere = inexistent.equals(input.getValue());
-                    }
-                    return !stopHere && input.getValue().compareTo(whereCondition) < 0;
-                }
-            }));
+        List<ValuePathTuple> expected = filter(nodes, inexistent, FilterCondition.LESS_THAN,
+            whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         LOGGING_TRACKER.reset();
@@ -694,18 +677,8 @@ public class Oak2077QueriesTest extends BasicOrderedPropertyIndexQueryTest {
         truncate(0, inexistent);
         
         //filtering out the part that should not be returned by the resultset.
-        List<ValuePathTuple> expected = Lists.newArrayList(Iterables.filter(nodes,
-            new Predicate<ValuePathTuple>() {
-                boolean stopHere;
-
-                @Override
-                public boolean apply(ValuePathTuple input) {
-                    if (!stopHere) {
-                        stopHere = inexistent.equals(input.getValue());
-                    }
-                    return !stopHere && input.getValue().compareTo(whereCondition) < 0;
-                }
-            }));
+        List<ValuePathTuple> expected = filter(nodes, inexistent, FilterCondition.LESS_THAN,
+            whereCondition);
         
         // pointing to a non-existent node in lane 0 we expect the result to be truncated
         LOGGING_TRACKER.reset();
