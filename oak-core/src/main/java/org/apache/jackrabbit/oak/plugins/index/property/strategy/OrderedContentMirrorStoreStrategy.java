@@ -126,12 +126,14 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     }
     
     private static void printWalkedLanes(final String msg, final String[] walked) {
-        String m = (msg == null) ? "" : msg;
-        if (walked == null) {
-            LOG.debug(m + " walked: null");
-        } else {
-            for (int i = 0; i < walked.length; i++) {
-                LOG.debug("{}walked[{}]: {}", new Object[] { m, i, walked[i] });
+        if (LOG.isTraceEnabled()) {
+            String m = (msg == null) ? "" : msg;
+            if (walked == null) {
+                LOG.trace(m + " walked: null");
+            } else {
+                for (int i = 0; i < walked.length; i++) {
+                    LOG.trace("{}walked[{}]: {}", new Object[] { m, i, walked[i] });
+                }
             }
         }
     }
