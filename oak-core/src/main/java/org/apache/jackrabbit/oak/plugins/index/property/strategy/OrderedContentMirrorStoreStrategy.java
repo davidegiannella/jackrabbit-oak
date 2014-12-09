@@ -916,7 +916,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             
             lane = OrderedIndex.LANES - 1;
             NodeBuilder currentNode = null;
+            int iteration = 0;
             do {
+                iteration++;
                 stillLaning = lane > 0;
                 if (currentNode == null) {
                     currentNode = index.getChildNode(currentKey);
@@ -949,6 +951,26 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                             }
                         }
                     }
+                }
+                
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace("seek()::plain case - --- iteration: {}", iteration);
+                    LOG.trace("seek()::plain case - retries: {},  MAX_RETRIES: {}", retries,
+                        MAX_RETRIES);
+                    LOG.trace("seek()::plain case - lane: {}", lane);
+                    LOG.trace("seek()::plain case - currentKey: {}", currentKey);
+                    LOG.trace("seek()::plain case - nextkey: {}", nextkey);
+                    LOG.trace("seek()::plain case - condition.apply(nextkey): {}",
+                        condition.apply(nextkey));
+                    LOG.trace("seek()::plain case - found: {}", found);
+                    LOG.trace("seek()::plain case - !Strings.isNullOrEmpty(nextkey): {}",
+                        !Strings.isNullOrEmpty(nextkey));
+                    LOG.trace("seek()::plain case - walkingPredicate.apply(nextkey): {}",
+                        walkingPredicate.apply(nextkey));
+                    LOG.trace("seek()::plain case - stillLaning: {}", stillLaning);
+                    LOG.trace(
+                        "seek()::plain case - While Condition: {}",
+                        ((!Strings.isNullOrEmpty(nextkey) && walkingPredicate.apply(nextkey)) || stillLaning) && (found == null));
                 }
             } while (((!Strings.isNullOrEmpty(nextkey) && walkingPredicate.apply(nextkey)) || stillLaning) && (found == null));
         }
