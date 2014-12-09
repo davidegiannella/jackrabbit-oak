@@ -917,6 +917,8 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
             lane = OrderedIndex.LANES - 1;
             NodeBuilder currentNode = null;
             int iteration = 0;
+            boolean exitCondition = true;
+            
             do {
                 iteration++;
                 stillLaning = lane > 0;
@@ -953,6 +955,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     }
                 }
                 
+                exitCondition = ((!Strings.isNullOrEmpty(nextkey) && walkingPredicate
+                    .apply(nextkey)) || stillLaning) && (found == null);
+                
                 if (LOG.isTraceEnabled()) {
                     LOG.trace("seek()::plain case - --- iteration: {}", iteration);
                     LOG.trace("seek()::plain case - retries: {},  MAX_RETRIES: {}", retries,
@@ -970,9 +975,9 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     LOG.trace("seek()::plain case - stillLaning: {}", stillLaning);
                     LOG.trace(
                         "seek()::plain case - While Condition: {}",
-                        ((!Strings.isNullOrEmpty(nextkey) && walkingPredicate.apply(nextkey)) || stillLaning) && (found == null));
+                        exitCondition);
                 }
-            } while (((!Strings.isNullOrEmpty(nextkey) && walkingPredicate.apply(nextkey)) || stillLaning) && (found == null));
+            } while (exitCondition);
         }
         
         return found;
