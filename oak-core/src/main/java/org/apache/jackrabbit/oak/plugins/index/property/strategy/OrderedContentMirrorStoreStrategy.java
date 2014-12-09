@@ -905,7 +905,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                         found = nextkey;
                     } else {
                         currentKey = nextkey;
-                        if (keepWalked && !Strings.isNullOrEmpty(currentKey)) {
+                        if (keepWalked && !Strings.isNullOrEmpty(currentKey) && walkedLanes != null) {
                             walkedLanes[lane] = currentKey;
                         }
                     }
@@ -945,7 +945,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
                     } else {
                         currentKey = nextkey;
                         currentNode = null;
-                        if (keepWalked && !Strings.isNullOrEmpty(currentKey)) {
+                        if (keepWalked && !Strings.isNullOrEmpty(currentKey) && walkedLanes != null) {
                             for (int l = lane; l >= 0; l--) {
                                 walkedLanes[l] = currentKey;
                             }
