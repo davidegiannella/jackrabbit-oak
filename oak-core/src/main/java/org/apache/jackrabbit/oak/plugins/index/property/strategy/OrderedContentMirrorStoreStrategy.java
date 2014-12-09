@@ -140,7 +140,7 @@ public class OrderedContentMirrorStoreStrategy extends ContentMirrorStoreStrateg
     
     @Override
     NodeBuilder fetchKeyNode(@Nonnull NodeBuilder index, @Nonnull String key) {
-        LOG.debug("fetchKeyNode() - new item '{}' -----------------------------------------", key);
+        LOG.debug("fetchKeyNode() - === new item '{}'", key);
         // this is where the actual adding and maintenance of index's keys happen
         NodeBuilder node = null;
         NodeBuilder start = index.child(START);
