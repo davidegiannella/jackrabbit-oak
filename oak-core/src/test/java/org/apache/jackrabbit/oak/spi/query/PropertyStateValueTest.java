@@ -28,7 +28,6 @@ import java.util.TimeZone;
 import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.oak.api.PropertyValue;
-import org.apache.jackrabbit.oak.api.Type;
 import org.junit.Test;
 
 public class PropertyStateValueTest {
@@ -69,6 +68,28 @@ public class PropertyStateValueTest {
 
         d1 = newCal(null);
         d2 = newCal(d1, GMT, -1);
+        v1 = newDate(format(d1)); 
+        v2 = newDate(format(d2));
+        assertTrue("v1 > v2", v1.compareTo(v2) > 0);
+        assertTrue("v2 < v1", v2.compareTo(v1) < 0);
+        
+        // same time zone. Non Zulu.
+        d1 = newCal(null, PST, 0);
+        d2 = newCal(d1, PST, 0);
+        v1 = newDate(format(d1)); 
+        v2 = newDate(format(d2));
+        assertEquals("v1 and v2 should be equals", 0, v1.compareTo(v2));
+        assertEquals("v1 and v2 should be equals", 0, v2.compareTo(v1));
+
+        d1 = newCal(null, PST, 0);
+        d2 = newCal(d1, PST, 1);
+        v1 = newDate(format(d1)); 
+        v2 = newDate(format(d2));
+        assertTrue("v1 < v2", v1.compareTo(v2) < 0);
+        assertTrue("v2 > v1", v2.compareTo(v1) > 0);
+
+        d1 = newCal(null, PST, 0);
+        d2 = newCal(d1, PST, -1);
         v1 = newDate(format(d1)); 
         v2 = newDate(format(d2));
         assertTrue("v1 > v2", v1.compareTo(v2) > 0);
