@@ -49,6 +49,7 @@ import org.apache.jackrabbit.oak.plugins.index.lucene.util.TokenizerChain;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.plugins.nodetype.ReadOnlyNodeTypeManager;
 import org.apache.jackrabbit.oak.plugins.tree.ImmutableTree;
+import org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -64,8 +65,10 @@ import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Lists.newArrayListWithCapacity;
 import static com.google.common.collect.Maps.newHashMap;
 import static com.google.common.collect.Sets.newHashSet;
+import static org.apache.jackrabbit.JcrConstants.JCR_SCORE;
 import static org.apache.jackrabbit.JcrConstants.NT_BASE;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
+import static org.apache.jackrabbit.oak.commons.PathUtils.getParentPath;
 import static org.apache.jackrabbit.oak.commons.PathUtils.isAbsolute;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.DECLARING_NODE_TYPES;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ENTRY_COUNT_PROPERTY_NAME;
@@ -113,6 +116,12 @@ class IndexDefinition implements Aggregate.AggregateMapper{
     static final int TYPES_ALLOW_NONE = PropertyType.UNDEFINED;
 
     static final int TYPES_ALLOW_ALL = -1;
+
+    /**
+     * native sort order
+     */
+    static final OrderEntry NATIVE_SORT_ORDER = new OrderEntry(JCR_SCORE, Type.UNDEFINED,
+        OrderEntry.Order.DESCENDING);
 
     private final boolean fullTextEnabled;
 
@@ -498,8 +507,6 @@ class IndexDefinition implements Aggregate.AggregateMapper{
         private final List<NamePattern> namePatterns;
         final float boost;
         final boolean inherited;
-        final boolean defaultFulltextEnabled;
-        final boolean defaultStorageEnabled;
         final int propertyTypes;
         final boolean fulltextEnabled;
         final boolean propertyIndexEnabled;
@@ -513,9 +520,6 @@ class IndexDefinition implements Aggregate.AggregateMapper{
             this.baseNodeType = nodeTypeName;
             this.boost = getOptionalValue(config, FIELD_BOOST, DEFAULT_BOOST);
             this.inherited = getOptionalValue(config, LuceneIndexConstants.RULE_INHERITED, true);
-            this.defaultFulltextEnabled = getOptionalValue(config, LuceneIndexConstants.FULL_TEXT_ENABLED, false);
-            //TODO Provide a new proper propertyName for enabling storage
-            this.defaultStorageEnabled = getOptionalValue(config, LuceneIndexConstants.EXPERIMENTAL_STORAGE, false);
             this.propertyTypes = getSupportedTypes(config, INCLUDE_PROPERTY_TYPES, TYPES_ALLOW_ALL);
 
             List<NamePattern> namePatterns = newArrayList();
@@ -542,8 +546,6 @@ class IndexDefinition implements Aggregate.AggregateMapper{
             this.propConfigs = original.propConfigs;
             this.namePatterns = original.namePatterns;
             this.boost = original.boost;
-            this.defaultFulltextEnabled = original.defaultFulltextEnabled;
-            this.defaultStorageEnabled = original.defaultStorageEnabled;
             this.inherited = original.inherited;
             this.propertyTypes = original.propertyTypes;
             this.propertyIndexEnabled = original.propertyIndexEnabled;
@@ -728,6 +730,7 @@ class IndexDefinition implements Aggregate.AggregateMapper{
      * A property name pattern.
      */
     private static final class NamePattern {
+        private final String parentPath;
         /**
          * The pattern to match.
          */
@@ -747,7 +750,16 @@ class IndexDefinition implements Aggregate.AggregateMapper{
         private NamePattern(String pattern,
                             PropertyDefinition config){
 
-            this.pattern = Pattern.compile(pattern);
+            //Special handling for all props regex as its already being used
+            //and use of '/' in regex would confuse the parent path calculation
+            //logic
+            if (LuceneIndexConstants.REGEX_ALL_PROPS.equals(pattern)){
+                this.parentPath = "";
+                this.pattern = Pattern.compile(pattern);
+            } else {
+                this.parentPath = getParentPath(pattern);
+                this.pattern = Pattern.compile(PathUtils.getName(pattern));
+            }
             this.config = config;
         }
 
@@ -757,7 +769,12 @@ class IndexDefinition implements Aggregate.AggregateMapper{
          *         pattern; <code>false</code> otherwise.
          */
         boolean matches(String propertyPath) {
-            return pattern.matcher(propertyPath).matches();
+            String parentPath = getParentPath(propertyPath);
+            String propertyName = PathUtils.getName(propertyPath);
+            if (!this.parentPath.equals(parentPath)) {
+                return false;
+            }
+            return pattern.matcher(propertyName).matches();
         }
 
         PropertyDefinition getConfig() {

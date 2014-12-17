@@ -18,6 +18,8 @@ package org.apache.jackrabbit.oak.plugins.document;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Iterables.toArray;
+import static com.google.common.collect.Iterables.transform;
 import static org.apache.jackrabbit.oak.api.CommitFailedException.MERGE;
 import static org.apache.jackrabbit.oak.plugins.document.Collection.NODES;
 import static org.apache.jackrabbit.oak.plugins.document.DocumentMK.FAST_DIFF;
@@ -29,6 +31,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -36,6 +39,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TimeZone;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -50,6 +55,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.management.NotCompliantMBeanException;
 
 import com.google.common.base.Function;
 import com.google.common.cache.Cache;
@@ -60,10 +66,12 @@ import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 
 import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.commons.jmx.AnnotatedStandardMBean;
 import org.apache.jackrabbit.oak.commons.json.JsopReader;
 import org.apache.jackrabbit.oak.commons.json.JsopTokenizer;
 import org.apache.jackrabbit.oak.plugins.blob.BlobStoreBlob;
 import org.apache.jackrabbit.oak.plugins.blob.MarkSweepGarbageCollector;
+import org.apache.jackrabbit.oak.plugins.document.Checkpoints.Info;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoBlobReferenceIterator;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
 import org.apache.jackrabbit.oak.plugins.document.persistentCache.PersistentCache;
@@ -326,6 +334,8 @@ public final class DocumentNodeStore
 
     private PersistentCache persistentCache;
 
+    private final DocumentNodeStoreMBean mbean;
+
     public DocumentNodeStore(DocumentMK.Builder builder) {
         this.blobStore = builder.getBlobStore();
         if (builder.isUseSimpleRevision()) {
@@ -429,6 +439,7 @@ public final class DocumentNodeStore
             leaseUpdateThread.start();
         }
 
+        this.mbean = createMBean();
         LOG.info("Initialized DocumentNodeStore with clusterNodeId: {}", clusterId);
     }
 
@@ -756,6 +767,7 @@ public final class DocumentNodeStore
                                             String name, int limit) {
         String path = parent.getPath();
         Revision rev = parent.getLastRevision();
+        LOG.trace("Reading children for [{}] ast rev [{}]", path, rev);
         Iterable<NodeDocument> docs;
         DocumentNodeState.Children c = new DocumentNodeState.Children();
         // add one to the requested limit for the raw limit
@@ -853,7 +865,7 @@ public final class DocumentNodeStore
             docChildrenCache.put(key, clone);
             c = clone;
         }
-        Iterable<NodeDocument> it = Iterables.transform(c.childNames, new Function<String, NodeDocument>() {
+        Iterable<NodeDocument> it = transform(c.childNames, new Function<String, NodeDocument>() {
             @Override
             public NodeDocument apply(String name) {
                 String p = PathUtils.concat(path, name);
@@ -893,7 +905,7 @@ public final class DocumentNodeStore
         }
 
         final Revision readRevision = parent.getLastRevision();
-        return Iterables.transform(getChildren(parent, name, limit).children,
+        return transform(getChildren(parent, name, limit).children,
                 new Function<String, DocumentNodeState>() {
             @Override
             public DocumentNodeState apply(String input) {
@@ -1394,7 +1406,8 @@ public final class DocumentNodeStore
     @Override
     public NodeState retrieve(@Nonnull String checkpoint) {
         Revision r = Revision.fromString(checkpoint);
-        if (checkpoints.getCheckpoints().containsKey(r)) {
+        SortedMap<Revision, Info> checkpoints = this.checkpoints.getCheckpoints();
+        if (checkpoints != null && checkpoints.containsKey(r)) {
             return getRoot(r);
         } else {
             return null;
@@ -1650,23 +1663,41 @@ public final class DocumentNodeStore
         // TODO this does not work well for large child node lists
         // use a document store index instead
         int max = MANY_CHILDREN_THRESHOLD;
+
+        final boolean debug = LOG.isDebugEnabled();
+        final long start = debug ? now() : 0;
+
         DocumentNodeState.Children fromChildren, toChildren;
         fromChildren = getChildren(from, null, max);
         toChildren = getChildren(to, null, max);
+
+        final long getChildrenDoneIn = debug ? now() : 0;
+
+        String diffAlgo;
         if (!fromChildren.hasMore && !toChildren.hasMore) {
+            diffAlgo = "diffFewChildren";
             diffFewChildren(w, from.getPath(), fromChildren,
                     from.getLastRevision(), toChildren, to.getLastRevision());
         } else {
             if (FAST_DIFF) {
+                diffAlgo = "diffManyChildren";
                 diffManyChildren(w, from.getPath(),
                         from.getLastRevision(), to.getLastRevision());
             } else {
+                diffAlgo = "diffAllChildren";
                 max = Integer.MAX_VALUE;
                 fromChildren = getChildren(from, null, max);
                 toChildren = getChildren(to, null, max);
                 diffFewChildren(w, from.getPath(), fromChildren,
                         from.getLastRevision(), toChildren, to.getLastRevision());
             }
+        }
+
+        if (debug) {
+            long end = now();
+            LOG.debug("Diff performed via '{}' at [{}] between revisions [{}] => [{}] took {} ms ({} ms)",
+                    diffAlgo, from.getPath(), from.getLastRevision(), to.getLastRevision(),
+                    end - start, getChildrenDoneIn - start);
         }
         return w.toString();
     }
@@ -1679,10 +1710,15 @@ public final class DocumentNodeStore
         String fromKey = Utils.getKeyLowerLimit(path);
         String toKey = Utils.getKeyUpperLimit(path);
         Set<String> paths = Sets.newHashSet();
+
+        LOG.debug("diffManyChildren: path: {}, fromRev: {}, toRev: {}", path, fromRev, toRev);
+
         for (NodeDocument doc : store.query(Collection.NODES, fromKey, toKey,
                 NodeDocument.MODIFIED_IN_SECS, minValue, Integer.MAX_VALUE)) {
             paths.add(doc.getPath());
         }
+
+        LOG.debug("diffManyChildren: Affected paths: {}", paths.size());
         // also consider nodes with not yet stored modifications (OAK-1107)
         Revision minRev = new Revision(minTimestamp, 0, getClusterId());
         addPathsForDiff(path, paths, getPendingModifications().getPaths(minRev));
@@ -1698,6 +1734,9 @@ public final class DocumentNodeStore
             DocumentNodeState fromNode = getNode(p, fromRev);
             DocumentNodeState toNode = getNode(p, toRev);
             String name = PathUtils.getName(p);
+
+            LOG.trace("diffManyChildren: Changed Path {}", path);
+
             if (fromNode != null) {
                 // exists in fromRev
                 if (toNode != null) {
@@ -1785,6 +1824,10 @@ public final class DocumentNodeStore
         return (DocumentRootBuilder) builder;
     }
 
+    private static long now(){
+        return System.currentTimeMillis();
+    }
+
     private void moveOrCopyNode(boolean move,
                                 DocumentNodeState source,
                                 String targetPath,
@@ -1843,6 +1886,81 @@ public final class DocumentNodeStore
             }
         }
         return blobGC;
+    }
+
+    //-----------------------------< DocumentNodeStoreMBean >---------------------------------
+
+    public DocumentNodeStoreMBean getMBean() {
+        return mbean;
+    }
+
+    private DocumentNodeStoreMBean createMBean(){
+        try {
+            return new MBeanImpl();
+        } catch (NotCompliantMBeanException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private class MBeanImpl extends AnnotatedStandardMBean implements DocumentNodeStoreMBean {
+        private final String ISO_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS zzz";
+        private final TimeZone TZ_UTC = TimeZone.getTimeZone("UTC");
+
+        protected MBeanImpl() throws NotCompliantMBeanException {
+            super(DocumentNodeStoreMBean.class);
+        }
+
+        @Override
+        public String getRevisionComparatorState() {
+            return revisionComparator.toString();
+        }
+
+        @Override
+        public String getHead(){
+            return headRevision.toString();
+        }
+
+        @Override
+        public int getClusterId() {
+            return clusterId;
+        }
+
+        @Override
+        public int getUnmergedBranchCount() {
+            return branches.size();
+        }
+
+        @Override
+        public String[] getInactiveClusterNodes() {
+            return toArray(transform(inactiveClusterNodes.entrySet(),
+                    new Function<Map.Entry<Integer, Long>, String>() {
+                        @Override
+                        public String apply(Map.Entry<Integer, Long> input) {
+                            return input.toString();
+                        }
+                    }), String.class);
+        }
+
+        @Override
+        public String[] getLastKnownRevisions() {
+            return toArray(transform(lastKnownRevision.entrySet(),
+                    new Function<Map.Entry<Integer, Revision>, String>() {
+                        @Override
+                        public String apply(Map.Entry<Integer, Revision> input) {
+                            return input.toString();
+                        }
+                    }), String.class);
+        }
+
+        @Override
+        public String formatRevision(String rev, boolean utc){
+            Revision r = Revision.fromString(rev);
+            final SimpleDateFormat sdf = new SimpleDateFormat(ISO_FORMAT);
+            if (utc) {
+                sdf.setTimeZone(TZ_UTC);
+            }
+            return sdf.format(r.getTimestamp());
+        }
     }
 
     static abstract class NodeStoreTask implements Runnable {

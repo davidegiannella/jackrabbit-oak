@@ -657,7 +657,7 @@ public class SegmentWriter {
         return thisLevel.iterator().next();
     }
 
-    public MapRecord writeMap(MapRecord base, Map<String, RecordId> changes) {
+    MapRecord writeMap(MapRecord base, Map<String, RecordId> changes) {
         if (base != null && base.isDiff()) {
             Segment segment = base.getSegment();
             RecordId key = segment.readRecordId(base.getOffset(8));
@@ -1093,8 +1093,8 @@ public class SegmentWriter {
             if (property instanceof SegmentPropertyState
                     && store.containsSegment(((SegmentPropertyState) property).getRecordId().getSegmentId())) {
                 ids.add(((SegmentPropertyState) property).getRecordId());
-            } else if (!(before instanceof SegmentNodeState)
-                    || store.containsSegment(((SegmentNodeState) before).getRecordId().getSegmentId())) {
+            } else if (before == null
+                    || !store.containsSegment(before.getRecordId().getSegmentId())) {
                 ids.add(writeProperty(property));
             } else {
                 // reuse previously stored property, if possible
@@ -1123,6 +1123,10 @@ public class SegmentWriter {
             }
             return new SegmentNodeState(recordId);
         }
+    }
+
+    public SegmentTracker getTracker() {
+        return tracker;
     }
 
 }
