@@ -40,7 +40,7 @@ public interface IndexStoreStrategy {
      */
     void update(
         NodeBuilder index, String path,
-        String indexName, NodeState indexMeta,
+        String indexName, NodeBuilder indexMeta,
         Set<String> beforeKeys, Set<String> afterKeys);
     
     /**
