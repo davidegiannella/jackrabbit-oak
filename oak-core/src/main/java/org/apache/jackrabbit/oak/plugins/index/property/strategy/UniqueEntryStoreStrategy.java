@@ -51,7 +51,7 @@ public class UniqueEntryStoreStrategy implements IndexStoreStrategy {
     public void update(
             NodeBuilder index, String path,
             @Nullable final String indexName,
-            @Nullable final NodeState indexMeta,
+            @Nullable final NodeBuilder indexMeta,
             Set<String> beforeKeys, Set<String> afterKeys) {
         for (String key : beforeKeys) {
             remove(index, key, path);
