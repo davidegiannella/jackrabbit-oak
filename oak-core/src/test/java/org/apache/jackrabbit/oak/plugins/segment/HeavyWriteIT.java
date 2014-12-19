@@ -56,7 +56,7 @@ public class HeavyWriteIT {
     private File directory;
 
     @BeforeClass
-    public void checkFixtures() {
+    public static void checkFixtures() {
         Assume.assumeTrue(FIXTURES.contains(SEGMENT_MK));
     }
     
