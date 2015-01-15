@@ -34,6 +34,7 @@ import javax.jcr.Repository;
 import javax.jcr.RepositoryException;
 
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.ops4j.pax.exam.Configuration;
@@ -82,6 +83,8 @@ public class OSGiIT {
     @Inject
     private BundleContext context;
 
+    // FIXME remove the ignore
+    @Ignore("OAK-2402")
     @Test
     public void bundleStates() {
         assumeTrue(!buildBotTrunkLinux());
