@@ -245,6 +245,10 @@
   mixin
   - jcr:etag (STRING) protected autocreated
   
+/**
+ * mix:atomicCounter will define a node as a conter which will keep tracks of increasing/decreasing
+ * consistently across a cluster of oak instances. https://issues.apache.org/jira/browse/OAK-2220
+ */
 [mix:atomicCounter]
   mixin
   - oak:counter (LONG)=0 protected autocreated
