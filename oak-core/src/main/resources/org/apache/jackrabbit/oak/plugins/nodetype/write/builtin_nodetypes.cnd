@@ -251,7 +251,7 @@
  */
 [mix:atomicCounter]
   mixin
-  - oak:counter (LONG)=0 protected autocreated
+  - oak:counter (LONG) = '0' protected autocreated
 
 //------------------------------------------------------------------------------
 // U N S T R U C T U R E D   C O N T E N T
