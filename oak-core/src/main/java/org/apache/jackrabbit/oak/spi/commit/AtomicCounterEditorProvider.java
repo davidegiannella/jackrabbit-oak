@@ -19,21 +19,26 @@ package org.apache.jackrabbit.oak.spi.commit;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Provides an instance of the correct {@link Editor} if the changes are carried over a node type
  * with {@link JcrConstants#JCR_MIXINTYPES} containing {@link #MIXIN_ATOMIC_COUNTER}
  */
 public class AtomicCounterEditorProvider implements EditorProvider {
-    /**
-     * mixin to be have for the AtomicCounterEditor to be returned.
-     */
-    public static final String MIXIN_ATOMIC_COUNTER = "mix:atomicCounter";
-
+    private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterEditorProvider.class); 
+    
     @Override
     public Editor getRootEditor(NodeState before, NodeState after, NodeBuilder builder,
                                 CommitInfo info) throws CommitFailedException {
-        // TODO Auto-generated method stub
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("getRootEditor() - before: {}", before);    
+            LOG.debug("getRootEditor() - after: {}", after);    
+            LOG.debug("getRootEditor() - builder: {}", builder);    
+            LOG.debug("getRootEditor() - info: {}", info);    
+        }
+        
         return null;
     }
 
