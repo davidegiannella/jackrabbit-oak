@@ -14,41 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.plugins.document;
+package org.apache.jackrabbit.oak.security.authorization.composite;
 
-import java.util.Comparator;
+import org.apache.jackrabbit.oak.AbstractSecurityTest;
 
-import javax.annotation.Nonnull;
+public abstract class AbstractCompositeTest extends AbstractSecurityTest {
 
-/**
- * Provides revision related context.
- */
-public interface RevisionContext {
+    // TODO
 
-    /**
-     * @return the branches of the local DocumentMK instance, which are not yet
-     *         merged.
-     */
-    UnmergedBranches getBranches();
-
-    /**
-     * @return the pending modifications.
-     */
-    UnsavedModifications getPendingModifications();
-
-    /**
-     * @return the revision comparator.
-     */
-    Comparator<Revision> getRevisionComparator();
-
-    /**
-     * @return the cluster id of the local DocumentMK instance.
-     */
-    int getClusterId();
-
-    /**
-     * @return the current head revision.
-     */
-    @Nonnull
-    Revision getHeadRevision();
 }
