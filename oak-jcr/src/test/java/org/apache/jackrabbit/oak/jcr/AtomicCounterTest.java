@@ -32,12 +32,12 @@ import org.junit.Test;
 public class AtomicCounterTest extends AbstractRepositoryTest {
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
     
-    protected AtomicCounterTest(NodeStoreFixture fixture) {
+    public AtomicCounterTest(NodeStoreFixture fixture) {
         super(fixture);
     }
 
     @BeforeClass
-    public void assumptions() {
+    public static void assumptions() {
         // run only on the below fixtures
         Assume.assumeTrue(FIXTURES.contains(Fixture.SEGMENT_MK));
     }
