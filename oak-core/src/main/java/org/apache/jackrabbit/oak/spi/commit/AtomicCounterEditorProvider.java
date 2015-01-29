@@ -31,9 +31,9 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 public class AtomicCounterEditorProvider implements EditorProvider {
     
     @Override
-    public Editor getRootEditor(NodeState before, NodeState after, NodeBuilder builder,
-                                CommitInfo info) throws CommitFailedException {        
+    public Editor getRootEditor(final NodeState before, final NodeState after, 
+                                final NodeBuilder builder, final CommitInfo info) 
+                                    throws CommitFailedException {        
         return new AtomicCounterEditor(builder);
     }
-
 }
