@@ -16,17 +16,31 @@
  */
 package org.apache.jackrabbit.oak.spi.commit;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableList.of;
 import static org.apache.jackrabbit.JcrConstants.JCR_MIXINTYPES;
+import static org.apache.jackrabbit.oak.api.Type.LONG;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
+import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PREFIX_PROP_COUNTER;
+import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_INCREMENT;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import javax.annotation.Nonnull;
+
 import org.apache.jackrabbit.oak.api.CommitFailedException;
+import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
+import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.junit.Test;
+
+import com.google.common.collect.Iterators;
 
 public class AtomicCounterEditorTest {
     @Test
@@ -39,8 +53,65 @@ public class AtomicCounterEditorTest {
             editor.childNodeAdded("foo", builder.getNodeState()));
         
         builder = EMPTY_NODE.builder();
-        builder.setProperty(JCR_MIXINTYPES, of(MIX_ATOMIC_COUNTER), NAMES);
+        builder = setMixin(builder);
         assertTrue("with the mixin set we should get a proper Editor",
             editor.childNodeAdded("foo", builder.getNodeState()) instanceof AtomicCounterEditor);
+    }
+    
+    @Test
+    public void increment() throws CommitFailedException {
+        NodeBuilder builder;
+        Editor editor;
+        PropertyState property;
+        
+        builder = EMPTY_NODE.builder();
+        editor = new AtomicCounterEditor(builder);
+        property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
+        editor.propertyAdded(property);
+        assertNoCounters(builder.getProperties());
+        
+        builder = EMPTY_NODE.builder();
+        builder = setMixin(builder);
+        editor = new AtomicCounterEditor(builder);
+        property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
+        editor.propertyAdded(property);
+        assertNull("the oak:increment should never be set", builder.getProperty(PROP_INCREMENT));
+        assertTotalCounters(builder.getProperties(), 1);
+    }
+
+    /**
+     * that a list of properties does not contains any propery with name starting with
+     * {@link AtomicCounterEditor#PREFIX_PROP_COUNTER}
+     * 
+     * @param properties
+     */
+    private static void assertNoCounters(@Nonnull final Iterable<? extends PropertyState> properties) {
+        checkNotNull(properties);
+        
+        for (PropertyState p : properties) {
+            assertFalse("there should be no counter property",
+                p.getName().startsWith(PREFIX_PROP_COUNTER));
+        }
+    }
+    
+    /**
+     * assert the total amount of {@link AtomicCounterEditor#PREFIX_PROP_COUNTER}
+     * 
+     * @param properties
+     */
+    private static void assertTotalCounters(@Nonnull final Iterable<? extends PropertyState> properties,
+                                            int expected) {
+        int total = 0;
+        for (PropertyState p : checkNotNull(properties)) {
+            if (p.getName().startsWith(PREFIX_PROP_COUNTER)) {
+                total += p.getValue(LONG);
+            }
+        }
+        
+        assertEquals("the total amount of :oak-counter properties does not match", expected, total);
+    }
+    
+    private static NodeBuilder setMixin(@Nonnull final NodeBuilder builder) {
+        return checkNotNull(builder).setProperty(JCR_MIXINTYPES, of(MIX_ATOMIC_COUNTER), NAMES);
     }
 }
