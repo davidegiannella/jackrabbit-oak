@@ -16,23 +16,34 @@
  */
 package org.apache.jackrabbit.oak.jcr;
 
+import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
+import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_COUNTER;
+import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_INCREMENT;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+
 import java.util.Set;
 
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
+import org.apache.jackrabbit.JcrConstants;
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
 import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
+import org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor;
 import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.collect.ImmutableList;
+
 public class AtomicCounterTest extends AbstractRepositoryTest {
-    private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterTest.class);
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
     
     public AtomicCounterTest(NodeStoreFixture fixture) {
@@ -46,45 +57,31 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
     }
     
     @Test
-    public void added() throws RepositoryException {
+    public void increment() throws RepositoryException {
         Session session = getAdminSession();
         
-        LOG.debug("------------------------------------------------------------------------------");
-        LOG.debug("NO added");
         Node root = session.getRootNode();
-        root.addNode("no");
+        Node node = root.addNode("normal node");
         session.save();
         
-//        LOG.debug("------------------------------------------------------------------------------");
-//        LOG.debug("NO changed");
-//        Node node = root.getNode("no");
-//        node.setProperty("counter", 1);
-//        session.save();
-//
-//        LOG.debug("------------------------------------------------------------------------------");
-//        LOG.debug("NO deleted");
-//        node = root.getNode("no");
-//        node.remove();
-//        session.save();
-
-        LOG.debug("------------------------------------------------------------------------------");
-        LOG.debug("YES added");
-        root.addNode("yes").addMixin(NodeTypeConstants.MIX_ATOMIC_COUNTER);
+        node.setProperty(PROP_INCREMENT, 1L);
         session.save();
+        
+        assertNotNull("for normal nodes we expect the increment property to be treated as normal",
+            node.getProperty(PROP_INCREMENT));
+        
+        node = root.addNode("counterNode");
+        node.addMixin(MIX_ATOMIC_COUNTER);
+        session.save();
+        
+        assertNotNull(node.getProperty(PROP_COUNTER));
+        assertEquals(0, node.getProperty(PROP_COUNTER).getLong());
+        
+        node.setProperty(PROP_INCREMENT, 1L);
+        session.save();
+        assertNull("As oak:atomicCounter the oak:increment should not be saved",
+            node.getProperty(PROP_INCREMENT));
 
-//        LOG.debug("------------------------------------------------------------------------------");
-//        LOG.debug("YES changed");
-//        node = root.getNode("yes");
-//        node.setProperty("counter", 1);
-//        session.save();
-//
-//        LOG.debug("------------------------------------------------------------------------------");
-//        LOG.debug("YES deleted");
-//        node = root.getNode("yes");
-//        node.remove();
-//        session.save();
-
-        // TODO complete this stub
+        session.logout();
     }
-    
 }
