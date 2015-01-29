@@ -28,8 +28,11 @@ import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AtomicCounterTest extends AbstractRepositoryTest {
+    private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterTest.class);
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
     
     public AtomicCounterTest(NodeStoreFixture fixture) {
@@ -46,10 +49,41 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
     public void dumb() throws RepositoryException {
         Session session = getAdminSession();
         
+        LOG.debug("------------------------------------------------------------------------------");
+        LOG.debug("NO added");
         Node root = session.getRootNode();
         root.addNode("no");
-        root.addNode("yes").addMixin(NodeTypeConstants.MIX_ATOMIC_COUNTER);
+        session.save();
         
+        LOG.debug("------------------------------------------------------------------------------");
+        LOG.debug("NO changed");
+        Node node = root.getNode("no");
+        node.setProperty("counter", 1);
+        session.save();
+
+        LOG.debug("------------------------------------------------------------------------------");
+        LOG.debug("NO deleted");
+        node = root.getNode("no");
+        node.remove();
+        session.save();
+
+        LOG.debug("------------------------------------------------------------------------------");
+        LOG.debug("YES added");
+        root.addNode("yes").addMixin(NodeTypeConstants.MIX_ATOMIC_COUNTER);
+        session.save();
+
+        LOG.debug("------------------------------------------------------------------------------");
+        LOG.debug("YES changed");
+        node = root.getNode("yes");
+        node.setProperty("counter", 1);
+        session.save();
+
+        LOG.debug("------------------------------------------------------------------------------");
+        LOG.debug("YES deleted");
+        node = root.getNode("yes");
+        node.remove();
+        session.save();
+
         // TODO complete this stub
     }
 }
