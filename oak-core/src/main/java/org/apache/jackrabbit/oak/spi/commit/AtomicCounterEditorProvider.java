@@ -19,11 +19,8 @@ package org.apache.jackrabbit.oak.spi.commit;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
-import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Provides an instance of the correct {@link Editor} if the changes are carried over a node type
@@ -32,18 +29,10 @@ import org.slf4j.LoggerFactory;
 @Component
 @Service
 public class AtomicCounterEditorProvider implements EditorProvider {
-    private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterEditorProvider.class); 
     
     @Override
     public Editor getRootEditor(NodeState before, NodeState after, NodeBuilder builder,
-                                CommitInfo info) throws CommitFailedException {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("getRootEditor() - before: {}", before);    
-            LOG.debug("getRootEditor() - after: {}", after);    
-            LOG.debug("getRootEditor() - builder: {}", builder);    
-            LOG.debug("getRootEditor() - info: {}", info);
-        }
-        
+                                CommitInfo info) throws CommitFailedException {        
         return new AtomicCounterEditor(builder);
     }
 
