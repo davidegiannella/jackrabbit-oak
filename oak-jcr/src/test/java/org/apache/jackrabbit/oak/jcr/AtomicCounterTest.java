@@ -46,7 +46,7 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
     }
     
     @Test
-    public void dumb() throws RepositoryException {
+    public void added() throws RepositoryException {
         Session session = getAdminSession();
         
         LOG.debug("------------------------------------------------------------------------------");
@@ -55,35 +55,36 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
         root.addNode("no");
         session.save();
         
-        LOG.debug("------------------------------------------------------------------------------");
-        LOG.debug("NO changed");
-        Node node = root.getNode("no");
-        node.setProperty("counter", 1);
-        session.save();
-
-        LOG.debug("------------------------------------------------------------------------------");
-        LOG.debug("NO deleted");
-        node = root.getNode("no");
-        node.remove();
-        session.save();
+//        LOG.debug("------------------------------------------------------------------------------");
+//        LOG.debug("NO changed");
+//        Node node = root.getNode("no");
+//        node.setProperty("counter", 1);
+//        session.save();
+//
+//        LOG.debug("------------------------------------------------------------------------------");
+//        LOG.debug("NO deleted");
+//        node = root.getNode("no");
+//        node.remove();
+//        session.save();
 
         LOG.debug("------------------------------------------------------------------------------");
         LOG.debug("YES added");
         root.addNode("yes").addMixin(NodeTypeConstants.MIX_ATOMIC_COUNTER);
         session.save();
 
-        LOG.debug("------------------------------------------------------------------------------");
-        LOG.debug("YES changed");
-        node = root.getNode("yes");
-        node.setProperty("counter", 1);
-        session.save();
-
-        LOG.debug("------------------------------------------------------------------------------");
-        LOG.debug("YES deleted");
-        node = root.getNode("yes");
-        node.remove();
-        session.save();
+//        LOG.debug("------------------------------------------------------------------------------");
+//        LOG.debug("YES changed");
+//        node = root.getNode("yes");
+//        node.setProperty("counter", 1);
+//        session.save();
+//
+//        LOG.debug("------------------------------------------------------------------------------");
+//        LOG.debug("YES deleted");
+//        node = root.getNode("yes");
+//        node.remove();
+//        session.save();
 
         // TODO complete this stub
     }
+    
 }
