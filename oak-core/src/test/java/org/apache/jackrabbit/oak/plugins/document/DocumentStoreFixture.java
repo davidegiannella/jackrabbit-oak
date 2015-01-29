@@ -95,6 +95,11 @@ public abstract class DocumentStoreFixture {
         String name;
         RDBOptions options = new RDBOptions().tablePrefix(TABLEPREFIX).dropTablesOnClose(true);
 
+        public RDBFixture() {
+            // default RDB fixture
+            this("RDB-H2(file)", "jdbc:h2:file:./target/ds-test2", "sa", "");
+        }
+
         public RDBFixture(String name, String url, String username, String passwd) {
             this.name = name;
             try {

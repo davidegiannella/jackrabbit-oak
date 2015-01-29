@@ -95,6 +95,11 @@ class FilterQueryParser {
                                         kv[1] = "_query_:\"{!dismax qf=" + fields + " q.op=OR}" + kv[1] + "\"";
                                     }
                                 }
+                                if ("mlt.fl".equals(kv[0]) && ":path".equals(kv[1])) {
+                                    // rep:similar passes the path of the node to find similar documents for in the :path
+                                    // but needs its indexed content to find similar documents
+                                    kv[1] = configuration.getCatchAllField();
+                                }
                                 solrQuery.setParam(kv[0], kv[1]);
                             }
                         }
@@ -103,11 +108,7 @@ class FilterQueryParser {
                         queryBuilder.append(nativeQueryString);
                     }
                 } else {
-                    if (!configuration.useForPropertyRestrictions() // Solr index not used for properties
-                            || pr.propertyName.contains("/") // no child-level property restrictions
-                            || "rep:excerpt".equals(pr.propertyName) // rep:excerpt is handled by the query engine
-                            || configuration.getIgnoredProperties().contains(pr.propertyName) // property is explicitly ignored
-                            ) {
+                    if (SolrQueryIndex.isIgnoredProperty(pr.propertyName, configuration)) {
                         continue;
                     }
 

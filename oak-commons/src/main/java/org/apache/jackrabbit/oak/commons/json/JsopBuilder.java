@@ -238,8 +238,9 @@ public class JsopBuilder implements JsopWriter {
     /**
      * Convert a string to a quoted Json literal using the correct escape
      * sequences. The literal is enclosed in double quotes. Characters outside
-     * the range 32..127 are encoded (backslash u xxxx). The forward slash
-     * (solidus) is not escaped. Null is encoded as "null" (without quotes).
+     * the range 32..127 are encoded using
+     * {@link #escape(String, StringBuilder)}). Null is encoded as "null"
+     * (without quotes).
      *
      * @param s the text to convert
      * @return the Json representation (including double quotes)
@@ -254,7 +255,7 @@ public class JsopBuilder implements JsopWriter {
         }
         for (int i = 0; i < length; i++) {
             char c = s.charAt(i);
-            if (c == '\"' || c == '\\' || c < ' ') {
+            if (c == '\"' || c == '\\' || c < ' ' || (c >= 0xd800 && c <= 0xdbff)) {
                 StringBuilder buff = new StringBuilder(length + 2 + length / 8);
                 buff.append('\"');
                 escape(s, length, buff);
@@ -276,7 +277,11 @@ public class JsopBuilder implements JsopWriter {
     }
 
     /**
-     * Escape a string into the target buffer.
+     * Escape a string for JSON into the target buffer.
+     * <p>
+     * Characters are only escaped if required by RFC 7159 (thus, controls,
+     * backslash, and double quotes), or if they are part of a malformed
+     * surrogate pair (which wouldn't round-trip through UTF-8 otherwise).
      *
      * @param s      the string to escape
      * @param length the number of characters.
@@ -285,7 +290,6 @@ public class JsopBuilder implements JsopWriter {
     private static void escape(String s, int length, StringBuilder buff) {
         for (int i = 0; i < length; i++) {
             char c = s.charAt(i);
-            int ic = (int)c;
             switch (c) {
             case '"':
                 // quotation mark
@@ -317,8 +321,8 @@ public class JsopBuilder implements JsopWriter {
                 break;
             default:
                 if (c < ' ') {
-                    buff.append(String.format("\\u%04x", ic));
-                } else if (ic >= 0xD800 && ic <= 0xDBFF) {
+                    buff.append(String.format("\\u%04x", (int) c));
+                } else if (c >= 0xd800 && c <= 0xdbff) {
                     // isSurrogate(), only available in Java 7
                     if (i < length - 1 && Character.isSurrogatePair(c, s.charAt(i + 1))) {
                         // ok surrogate
@@ -327,7 +331,7 @@ public class JsopBuilder implements JsopWriter {
                         i += 1;
                     } else {
                         // broken surrogate -> escape
-                        buff.append(String.format("\\u%04x", ic));
+                        buff.append(String.format("\\u%04x", (int) c));
                     }
                 } else {
                     buff.append(c);

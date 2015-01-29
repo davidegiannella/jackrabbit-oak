@@ -197,13 +197,10 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
 
     @Test
     public void testInterestingStrings() {
-        // TODO see OAK-1913
-        Assume.assumeTrue(!(super.dsname.equals("RDB-MySQL")));
+        // test case  "gclef:\uD834\uDD1E" will fail on MySQL unless properly configured to use utf8mb4 charset        // Assume.assumeTrue(!(super.dsname.equals("RDB-MySQL")));
 
-        String[] tests = new String[] {
-            "simple:foo", "cr:a\n\b", "dquote:a\"b", "bs:a\\b", "euro:a\u201c", "gclef:\uD834\uDD1E", "tab:a\tb", "nul:a\u0000b",
-            "brokensurrogate:\ud800"
-        };
+        String[] tests = new String[] { "simple:foo", "cr:a\n\b", "dquote:a\"b", "bs:a\\b", "euro:a\u201c", "gclef:\uD834\uDD1E",
+                "tab:a\tb", "nul:a\u0000b", "brokensurrogate:\ud800" };
 
         for (String t : tests) {
             int pos = t.indexOf(":");
@@ -215,7 +212,7 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
             up.set("_id", id);
             up.set("foo", test);
             boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
-            assertTrue("failed to insert a document with property value of " + test + " in " + super.dsname, success);
+            assertTrue("failed to insert a document with property value of " + test + " (" + testname + ") in " + super.dsname, success);
             // re-read from persistence
             super.ds.invalidateCache();
             NodeDocument nd = super.ds.find(Collection.NODES, id);
@@ -319,6 +316,27 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
         assertEquals(5, result.size());
         assertTrue(result.contains(base + "1"));
         assertFalse(result.contains(base + "0"));
+    }
+
+    @Test
+    public void testQueryDeletedOnce() {
+        // create ten documents
+        String base = this.getClass().getName() + ".testQueryDeletedOnce-";
+        for (int i = 0; i < 10; i++) {
+            String id = base + i;
+            UpdateOp up = new UpdateOp(id, true);
+            up.set("_id", id);
+            up.set(NodeDocument.DELETED_ONCE, Boolean.valueOf(i % 2 == 0));
+            boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
+            assertTrue("document with " + id + " not created", success);
+            removeMe.add(id);
+        }
+
+        List<String> result = getKeys(ds.query(Collection.NODES, base, base + "Z", NodeDocument.DELETED_ONCE,
+                1L, 1000));
+        assertEquals(5, result.size());
+        assertTrue(result.contains(base + "0"));
+        assertFalse(result.contains(base + "1"));
     }
 
     @Test

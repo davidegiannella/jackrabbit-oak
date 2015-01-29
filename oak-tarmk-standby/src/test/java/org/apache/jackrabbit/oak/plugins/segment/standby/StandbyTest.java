@@ -47,7 +47,7 @@ import org.junit.Test;
 
 import com.google.common.io.ByteStreams;
 
-public class FailoverTest extends TestBase {
+public class StandbyTest extends TestBase {
 
     @Before
     public void setUp() throws Exception {
@@ -60,7 +60,7 @@ public class FailoverTest extends TestBase {
     }
 
     @Test
-    public void testFailover() throws Exception {
+    public void testSync() throws Exception {
         final int mb = 1 * 1024 * 1024;
         final int blobSize = 5 * mb;
         FileStore primary = getPrimary();
@@ -69,7 +69,8 @@ public class FailoverTest extends TestBase {
         NodeStore store = new SegmentNodeStore(primary);
         final StandbyServer server = new StandbyServer(getPort(), primary);
         server.start();
-        byte[] data = addTestContent(store, "server", blobSize);
+        byte[] data = addTestContent(store, "server", blobSize, 150);
+        primary.flush();
 
         StandbyClient cl = new StandbyClient("127.0.0.1", getPort(), secondary);
         cl.run();
@@ -97,22 +98,30 @@ public class FailoverTest extends TestBase {
 
     }
 
-    private static byte[] addTestContent(NodeStore store, String child, int size)
+    private static byte[] addTestContent(NodeStore store, String child, int size, int dataNodes)
             throws CommitFailedException, IOException {
         NodeBuilder builder = store.getRoot().builder();
-        builder.child(child).setProperty("ts", System.currentTimeMillis());
+        NodeBuilder content = builder.child(child);
+        content.setProperty("ts", System.currentTimeMillis());
 
         byte[] data = new byte[size];
         new Random().nextBytes(data);
         Blob blob = store.createBlob(new ByteArrayInputStream(data));
-        builder.child(child).setProperty("testBlob", blob);
+        content.setProperty("testBlob", blob);
+
+        for (int i = 0; i < dataNodes; i++) {
+            NodeBuilder c = content.child("c" + i);
+            for (int j = 0; j < 1000; j++) {
+                c.setProperty("p" + i, "v" + i);
+            }
+        }
 
         store.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
         return data;
     }
 
     public static void main(String[] args) throws Exception {
-        File d = createTmpTargetDir("FailoverLiveTest");
+        File d = createTmpTargetDir("StandbyLiveTest");
         d.delete();
         d.mkdir();
         FileStore s = new FileStore(d, 256, false);
