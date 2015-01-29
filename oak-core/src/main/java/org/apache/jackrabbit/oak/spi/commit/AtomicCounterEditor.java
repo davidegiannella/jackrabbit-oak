@@ -17,15 +17,23 @@
 package org.apache.jackrabbit.oak.spi.commit;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.jackrabbit.JcrConstants.JCR_MIXINTYPES;
+import static org.apache.jackrabbit.oak.api.Type.NAMES;
+import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Iterators;
 
 public class AtomicCounterEditor extends DefaultEditor {
     private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterEditor.class);
@@ -36,6 +44,13 @@ public class AtomicCounterEditor extends DefaultEditor {
         this.builder = builder;
     }
 
+    private static boolean shallWeProcess(@Nonnull final NodeState state) {
+        checkNotNull(state);
+        PropertyState mixin = state.getProperty(JCR_MIXINTYPES);
+        return mixin != null
+               && Iterators.contains(mixin.getValue(NAMES).iterator(), MIX_ATOMIC_COUNTER);
+    }
+    
     @Override
     public void enter(NodeState before, NodeState after) throws CommitFailedException {
         LOG.debug("enter - before: {}, after: {}", before, after);
@@ -69,7 +84,10 @@ public class AtomicCounterEditor extends DefaultEditor {
     @Override
     public Editor childNodeAdded(String name, NodeState after) throws CommitFailedException {
         LOG.debug("childNodeAdded  - name: {}, after: {}", name, after);
-        return super.childNodeAdded(name, after);
+        if (shallWeProcess(after)) {
+            return new AtomicCounterEditor(builder.getChildNode(name));
+        }
+        return null;
     }
 
     @Override
