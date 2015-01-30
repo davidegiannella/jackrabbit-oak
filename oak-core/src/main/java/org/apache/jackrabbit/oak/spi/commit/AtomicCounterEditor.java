@@ -90,18 +90,6 @@ public class AtomicCounterEditor extends DefaultEditor {
     }
     
     @Override
-    public void enter(NodeState before, NodeState after) throws CommitFailedException {
-        LOG.debug("enter - before: {}, after: {}", before, after);
-        super.enter(before, after);
-    }
-
-    @Override
-    public void leave(NodeState before, NodeState after) throws CommitFailedException {
-        LOG.debug("leave - before: {}, after: {}", before, after);
-        super.leave(before, after);
-    }
-
-    @Override
     public void propertyAdded(PropertyState after) throws CommitFailedException {
         LOG.debug("propertyAdded - after: {}", after);
         if (shallWeProcessProperty(after, nodeName, builder)) {
@@ -110,20 +98,7 @@ public class AtomicCounterEditor extends DefaultEditor {
     }
 
     @Override
-    public void propertyChanged(PropertyState before, PropertyState after) throws CommitFailedException {
-        LOG.debug("propertyChanged - before: {}, after: {}", before, after);
-        super.propertyChanged(before, after);
-    }
-
-    @Override
-    public void propertyDeleted(PropertyState before) throws CommitFailedException {
-        LOG.debug("propertyDeleted - before: {}", before);
-        super.propertyDeleted(before);
-    }
-
-    @Override
     public Editor childNodeAdded(String name, NodeState after) throws CommitFailedException {
-        LOG.debug("childNodeAdded  - name: {}, after: {}", name, after);
         if (shallWeProcessNode(new ReadOnlyBuilder(after))) {
             return new AtomicCounterEditor(name, builder.getChildNode(name));
         }
@@ -132,13 +107,16 @@ public class AtomicCounterEditor extends DefaultEditor {
 
     @Override
     public Editor childNodeChanged(String name, NodeState before, NodeState after) throws CommitFailedException {
-        LOG.debug("childNodeChanged - name: {}, before: {}, after: {}", name, before, after);
-        return super.childNodeChanged(name, before, after);
+        if (shallWeProcessNode(new ReadOnlyBuilder(after))) {
+            return new AtomicCounterEditor(name, builder.getChildNode(name));
+        }
+        return null;
     }
 
     @Override
-    public Editor childNodeDeleted(String name, NodeState before) throws CommitFailedException {
-        LOG.debug("childNodeDeleted - name: {}, before: {}", name, before);
-        return super.childNodeDeleted(name, before);
+    public void leave(NodeState before, NodeState after) throws CommitFailedException {
+        if (shallWeProcessNode(builder)) {
+            builder.removeProperty(PROP_INCREMENT);
+        }
     }
 }

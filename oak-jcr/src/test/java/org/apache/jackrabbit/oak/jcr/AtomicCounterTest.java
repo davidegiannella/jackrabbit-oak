@@ -20,8 +20,10 @@ import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_A
 import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_COUNTER;
 import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_INCREMENT;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Set;
 
@@ -67,20 +69,20 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
         node.setProperty(PROP_INCREMENT, 1L);
         session.save();
         
-        assertNotNull("for normal nodes we expect the increment property to be treated as normal",
-            node.getProperty(PROP_INCREMENT));
+        assertTrue("for normal nodes we expect the increment property to be treated as normal",
+            node.hasProperty(PROP_INCREMENT));
         
         node = root.addNode("counterNode");
         node.addMixin(MIX_ATOMIC_COUNTER);
         session.save();
         
-        assertNotNull(node.getProperty(PROP_COUNTER));
+        assertTrue(node.hasProperty(PROP_COUNTER));
         assertEquals(0, node.getProperty(PROP_COUNTER).getLong());
         
         node.setProperty(PROP_INCREMENT, 1L);
         session.save();
-        assertNull("As oak:atomicCounter the oak:increment should not be saved",
-            node.getProperty(PROP_INCREMENT));
+        assertFalse("As oak:atomicCounter the oak:increment should not be saved",
+            node.hasProperty(PROP_COUNTER));
 
         session.logout();
     }
