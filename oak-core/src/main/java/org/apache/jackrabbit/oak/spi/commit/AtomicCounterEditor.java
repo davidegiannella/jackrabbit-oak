@@ -170,24 +170,4 @@ public class AtomicCounterEditor extends DefaultEditor {
             consolidateCount(builder);
         }
     }
-
-    @Override
-    public void enter(NodeState before, NodeState after) throws CommitFailedException {
-        LOG.debug("enter");
-        super.enter(before, after);
-    }
-
-    @Override
-    public void propertyDeleted(PropertyState before) throws CommitFailedException {
-        LOG.debug("propertyDeleted");
-        super.propertyDeleted(before);
-    }
-
-    @Override
-    public Editor childNodeDeleted(String name, NodeState before) throws CommitFailedException {
-        LOG.debug("child deleted");
-        return super.childNodeDeleted(name, before);
-    }
-    
-    
 }
