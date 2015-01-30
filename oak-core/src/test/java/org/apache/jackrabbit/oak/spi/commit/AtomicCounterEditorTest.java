@@ -24,9 +24,11 @@ import static org.apache.jackrabbit.oak.api.Type.NAMES;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PREFIX_PROP_COUNTER;
+import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_COUNTER;
 import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_INCREMENT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -36,11 +38,8 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
-import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.junit.Test;
-
-import com.google.common.collect.Iterators;
 
 public class AtomicCounterEditorTest {
     @Test
@@ -77,6 +76,27 @@ public class AtomicCounterEditorTest {
         editor.propertyAdded(property);
         assertNull("the oak:increment should never be set", builder.getProperty(PROP_INCREMENT));
         assertTotalCounters(builder.getProperties(), 1);
+    }
+    
+    @Test
+    public void consolidate() throws CommitFailedException {
+        NodeBuilder builder;
+        Editor editor;
+        PropertyState property;
+        
+        builder = EMPTY_NODE.builder();
+        builder = setMixin(builder);
+        editor = new AtomicCounterEditor(builder);
+        property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
+        
+        editor.propertyAdded(property);
+        assertTotalCounters(builder.getProperties(), 1);
+        editor.propertyAdded(property);
+        assertTotalCounters(builder.getProperties(), 2);
+        AtomicCounterEditor.consolidateCount(builder);
+        assertNotNull(builder.getProperty(PROP_COUNTER));
+        assertEquals(2, builder.getProperty(PROP_COUNTER).getValue(LONG).longValue());
+        assertNoCounters(builder.getProperties());
     }
 
     /**

@@ -20,9 +20,6 @@ import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_A
 import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_COUNTER;
 import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_INCREMENT;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Set;
@@ -31,19 +28,11 @@ import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
-import org.apache.jackrabbit.JcrConstants;
-import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
-import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
-import org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor;
 import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.ImmutableList;
 
 public class AtomicCounterTest extends AbstractRepositoryTest {
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
@@ -81,9 +70,17 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
         
         node.setProperty(PROP_INCREMENT, 1L);
         session.save();
-        assertFalse("As oak:atomicCounter the oak:increment should not be saved",
-            node.hasProperty(PROP_COUNTER));
+        assertTrue(node.hasProperty(PROP_COUNTER));
+        assertEquals(1, node.getProperty(PROP_COUNTER).getLong());
 
+        // increment again the same node
+        node.getProperty(PROP_INCREMENT).remove();
+        session.save();
+        node.setProperty(PROP_INCREMENT, 1L);
+        session.save();
+        assertTrue(node.hasProperty(PROP_COUNTER));
+        assertEquals(2, node.getProperty(PROP_COUNTER).getLong());
+        
         session.logout();
     }
 }
