@@ -18,8 +18,8 @@ package org.apache.jackrabbit.oak.jcr;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
-import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_COUNTER;
-import static org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor.PROP_INCREMENT;
+import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_COUNTER;
+import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_INCREMENT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assume.assumeTrue;
 
@@ -39,7 +39,7 @@ import javax.jcr.Session;
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
 import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
-import org.apache.jackrabbit.oak.spi.commit.AtomicCounterEditor;
+import org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
