@@ -115,4 +115,6 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
             session.logout();
         }
     }
+    
+    // FIXME add test case on non root node
 }
