@@ -41,13 +41,7 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
      * set of fixtures provided by the environment
      */
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
-    
-    /**
-     * used to ignore individual tests in case of running with multiple fixtures and only one (or
-     * some) of those is desired
-     */
-    private static final Set<NodeStoreFixture> ALLOWED_FIXTURES = of(SEGMENT_MK);
-    
+        
     public AtomicCounterTest(NodeStoreFixture fixture) {
         super(fixture);
     }
@@ -61,7 +55,7 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
     @Test
     public void increment() throws RepositoryException {
         
-        assumeTrue(ALLOWED_FIXTURES.contains(fixture));
+        assumeTrue(NodeStoreFixture.SEGMENT_MK.equals(fixture));
         
         Session session = getAdminSession();
 
