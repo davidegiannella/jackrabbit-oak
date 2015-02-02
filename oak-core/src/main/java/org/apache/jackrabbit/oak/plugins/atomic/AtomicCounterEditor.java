@@ -127,6 +127,7 @@ public class AtomicCounterEditor extends DefaultEditor {
     public void propertyAdded(final PropertyState after) throws CommitFailedException {
         if (shallWeProcessProperty(after, path, builder)) {
             setUniqueCounter(after.getValue(LONG));
+            builder.removeProperty(PROP_INCREMENT);
         }
     }
 

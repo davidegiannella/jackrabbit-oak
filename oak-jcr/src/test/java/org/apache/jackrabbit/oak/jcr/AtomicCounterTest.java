@@ -16,12 +16,11 @@
  */
 package org.apache.jackrabbit.oak.jcr;
 
-import static com.google.common.collect.ImmutableSet.of;
-import static org.apache.jackrabbit.oak.jcr.NodeStoreFixture.SEGMENT_MK;
-import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_COUNTER;
 import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_INCREMENT;
+import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
@@ -81,30 +80,28 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
             session.save();
             assertTrue(node.hasProperty(PROP_COUNTER));
             assertEquals(1, node.getProperty(PROP_COUNTER).getLong());
+            assertFalse(node.hasProperty(PROP_INCREMENT));
 
             // increment again the same node
-            node.getProperty(PROP_INCREMENT).remove();
-            session.save();
             node.setProperty(PROP_INCREMENT, 1L);
             session.save();
             assertTrue(node.hasProperty(PROP_COUNTER));
             assertEquals(2, node.getProperty(PROP_COUNTER).getLong());
+            assertFalse(node.hasProperty(PROP_INCREMENT));
 
             // decrease the counter by 2
-            node.getProperty(PROP_INCREMENT).remove();
-            session.save();
             node.setProperty(PROP_INCREMENT, -2L);
             session.save();
             assertTrue(node.hasProperty(PROP_COUNTER));
             assertEquals(0, node.getProperty(PROP_COUNTER).getLong());
+            assertFalse(node.hasProperty(PROP_INCREMENT));
 
             // increase by 5
-            node.getProperty(PROP_INCREMENT).remove();
-            session.save();
             node.setProperty(PROP_INCREMENT, 5L);
             session.save();
             assertTrue(node.hasProperty(PROP_COUNTER));
             assertEquals(5, node.getProperty(PROP_COUNTER).getLong());
+            assertFalse(node.hasProperty(PROP_INCREMENT));
         } finally {
             session.logout();
         }
