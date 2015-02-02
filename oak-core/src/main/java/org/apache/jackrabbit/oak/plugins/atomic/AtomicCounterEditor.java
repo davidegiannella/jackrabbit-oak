@@ -26,7 +26,6 @@ import java.util.UUID;
 
 import javax.annotation.Nonnull;
 
-import com.google.common.collect.Iterators;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.spi.commit.DefaultEditor;
@@ -36,7 +35,55 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-// FIXME add class javadoc
+import com.google.common.collect.Iterators;
+
+/**
+ * <p>
+ * Manages a node as <em>Atomic Counter</em>: a node which will handle at low level a protected
+ * property ({@link #PROP_COUNTER}) in an atomic way. This will represent an increment or decrement
+ * of a counter in the case, for example, of <em>Likes</em> or <em>Voting</em>.
+ * </p>
+ * 
+ * <p>
+ * Whenever you add a {@link NodeTypeConstants#MIX_ATOMIC_COUNTER} mixin to a node it will turn it
+ * into an atomic counter. Then in order to increment or decrement the {@code oak:counter} property
+ * you'll need to set the {@code oak:increment} one ({@link #PROP_INCREMENT). Please note that the
+ * <strong>{@code oak:incremement} will never be saved</strong>, only the {@code oak:counter} will
+ * be amended accordingly.
+ * </p>
+ * 
+ * <p>
+ *  So in order to deal with the counter from a JCR point of view you'll do something as follows 
+ * </p>
+ * 
+ * <pre>
+ *  Session session = ...
+ *  
+ *  // creating a counter node
+ *  Node counter = session.getRootNode().addNode("mycounter");
+ *  counter.addMixin("mix:atomicCounter"); // or use the NodeTypeConstants
+ *  session.save();
+ *  
+ *  // Will output 0. the default value
+ *  System.out.println("counter now: " + counter.getProperty("oak:counter").getLong());
+ *  
+ *  // incrementing by 5 the counter
+ *  counter.setProperty("oak:increment", 5);
+ *  session.save();
+ *  
+ *  // Will output 5
+ *  System.out.println("counter now: " + counter.getProperty("oak:counter").getLong());
+ *  
+ *  // decreasing by 1
+ *  counter.setProperty("oak:increment", -1);
+ *  session.save();
+ *  
+ *  // Will output 4
+ *  System.out.println("counter now: " + counter.getProperty("oak:counter").getLong());
+ *  
+ *  session.logout();
+ * </pre>
+ */
 public class AtomicCounterEditor extends DefaultEditor {
     /**
      * property to be set for incrementing/decrementing the counter

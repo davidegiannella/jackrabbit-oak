@@ -26,9 +26,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
 /**
- * Provides an instance of the correct {@link Editor} if the changes are carried over a node type
- * with {@link org.apache.jackrabbit.JcrConstants#JCR_MIXINTYPES JCR_MIXINTYPES} containing
- * {@link org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants#MIX_ATOMIC_COUNTER MIX_ATOMIC_COUNTER}
+ * Provide an instance of {@link AtomicCounterEditor}
  */
 @Component
 @Service
