@@ -95,6 +95,22 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
         assertTrue(node.hasProperty(PROP_COUNTER));
         assertEquals(2, node.getProperty(PROP_COUNTER).getLong());
 
+        // decrease the counter by 2
+        node.getProperty(PROP_INCREMENT).remove();
+        session.save();
+        node.setProperty(PROP_INCREMENT, -2L);
+        session.save();
+        assertTrue(node.hasProperty(PROP_COUNTER));
+        assertEquals(0, node.getProperty(PROP_COUNTER).getLong());
+
+        // increase by 5
+        node.getProperty(PROP_INCREMENT).remove();
+        session.save();
+        node.setProperty(PROP_INCREMENT, 5L);
+        session.save();
+        assertTrue(node.hasProperty(PROP_COUNTER));
+        assertEquals(5, node.getProperty(PROP_COUNTER).getLong());
+
         session.logout();
     }
 }
