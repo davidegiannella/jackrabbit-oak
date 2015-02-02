@@ -200,4 +200,14 @@ public interface LuceneIndexConstants {
     String ANL_CLASS = "class";
     String ANL_NAME = "name";
     String ANL_LUCENE_MATCH_VERSION = AbstractAnalysisFactory.LUCENE_MATCH_VERSION_PARAM;
+
+    /**
+     * Config node which include Tika related configuration
+     */
+    String TIKA = "tika";
+
+    /**
+     * nt:file node under 'tika' node which refers to the config xml file
+     */
+    String TIKA_CONFIG = "config.xml";
 }
