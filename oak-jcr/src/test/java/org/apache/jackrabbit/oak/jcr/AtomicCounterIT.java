@@ -108,9 +108,6 @@ public class AtomicCounterIT extends AbstractRepositoryTest {
                 Session session = createAdminSession();
                 try {
                     Node c = session.getNode(counterPath);
-                    if (c.hasProperty(PROP_INCREMENT)) {
-                        c.getProperty(PROP_INCREMENT).remove();
-                    }
                     c.setProperty(PROP_INCREMENT, delta);
                     expected.addAndGet(delta);
                     session.save();
