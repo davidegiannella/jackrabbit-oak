@@ -65,52 +65,54 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
         
         Session session = getAdminSession();
 
-        Node root = session.getRootNode();
-        Node node = root.addNode("normal node");
-        session.save();
+        try {
+            Node root = session.getRootNode();
+            Node node = root.addNode("normal node");
+            session.save();
 
-        node.setProperty(PROP_INCREMENT, 1L);
-        session.save();
+            node.setProperty(PROP_INCREMENT, 1L);
+            session.save();
 
-        assertTrue("for normal nodes we expect the increment property to be treated as normal",
-            node.hasProperty(PROP_INCREMENT));
+            assertTrue("for normal nodes we expect the increment property to be treated as normal",
+                node.hasProperty(PROP_INCREMENT));
 
-        node = root.addNode("counterNode");
-        node.addMixin(MIX_ATOMIC_COUNTER);
-        session.save();
+            node = root.addNode("counterNode");
+            node.addMixin(MIX_ATOMIC_COUNTER);
+            session.save();
 
-        assertTrue(node.hasProperty(PROP_COUNTER));
-        assertEquals(0, node.getProperty(PROP_COUNTER).getLong());
+            assertTrue(node.hasProperty(PROP_COUNTER));
+            assertEquals(0, node.getProperty(PROP_COUNTER).getLong());
 
-        node.setProperty(PROP_INCREMENT, 1L);
-        session.save();
-        assertTrue(node.hasProperty(PROP_COUNTER));
-        assertEquals(1, node.getProperty(PROP_COUNTER).getLong());
+            node.setProperty(PROP_INCREMENT, 1L);
+            session.save();
+            assertTrue(node.hasProperty(PROP_COUNTER));
+            assertEquals(1, node.getProperty(PROP_COUNTER).getLong());
 
-        // increment again the same node
-        node.getProperty(PROP_INCREMENT).remove();
-        session.save();
-        node.setProperty(PROP_INCREMENT, 1L);
-        session.save();
-        assertTrue(node.hasProperty(PROP_COUNTER));
-        assertEquals(2, node.getProperty(PROP_COUNTER).getLong());
+            // increment again the same node
+            node.getProperty(PROP_INCREMENT).remove();
+            session.save();
+            node.setProperty(PROP_INCREMENT, 1L);
+            session.save();
+            assertTrue(node.hasProperty(PROP_COUNTER));
+            assertEquals(2, node.getProperty(PROP_COUNTER).getLong());
 
-        // decrease the counter by 2
-        node.getProperty(PROP_INCREMENT).remove();
-        session.save();
-        node.setProperty(PROP_INCREMENT, -2L);
-        session.save();
-        assertTrue(node.hasProperty(PROP_COUNTER));
-        assertEquals(0, node.getProperty(PROP_COUNTER).getLong());
+            // decrease the counter by 2
+            node.getProperty(PROP_INCREMENT).remove();
+            session.save();
+            node.setProperty(PROP_INCREMENT, -2L);
+            session.save();
+            assertTrue(node.hasProperty(PROP_COUNTER));
+            assertEquals(0, node.getProperty(PROP_COUNTER).getLong());
 
-        // increase by 5
-        node.getProperty(PROP_INCREMENT).remove();
-        session.save();
-        node.setProperty(PROP_INCREMENT, 5L);
-        session.save();
-        assertTrue(node.hasProperty(PROP_COUNTER));
-        assertEquals(5, node.getProperty(PROP_COUNTER).getLong());
-
-        session.logout();
+            // increase by 5
+            node.getProperty(PROP_INCREMENT).remove();
+            session.save();
+            node.setProperty(PROP_INCREMENT, 5L);
+            session.save();
+            assertTrue(node.hasProperty(PROP_COUNTER));
+            assertEquals(5, node.getProperty(PROP_COUNTER).getLong());
+        } finally {
+            session.logout();
+        }
     }
 }
