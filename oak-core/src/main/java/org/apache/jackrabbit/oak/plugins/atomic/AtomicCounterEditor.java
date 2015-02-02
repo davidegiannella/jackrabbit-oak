@@ -131,13 +131,6 @@ public class AtomicCounterEditor extends DefaultEditor {
     }
 
     @Override
-    public void propertyChanged(PropertyState before, PropertyState after) throws CommitFailedException {
-        if (shallWeProcessProperty(after, path, builder)) {
-            setUniqueCounter(after.getValue(LONG));
-        }
-    }
-
-    @Override
     public Editor childNodeAdded(final String name, final NodeState after) throws CommitFailedException {
         return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name));
     }
