@@ -53,14 +53,15 @@ public class AtomicCounterIT extends AbstractRepositoryTest {
 
     @BeforeClass
     public static void assumptions() {
-        assumeTrue(FIXTURES.contains(Fixture.SEGMENT_MK));
+        assumeTrue(
+            FIXTURES.contains(Fixture.SEGMENT_MK)
+            || FIXTURES.contains(Fixture.DOCUMENT_MK)
+            );
     }
 
     @Test
-    public void concurrentSegmentIncrements() throws RepositoryException, InterruptedException, 
+    public void concurrentIncrements() throws RepositoryException, InterruptedException, 
                                                      ExecutionException {
-        // ensuring the run only on allowed fix
-        assumeTrue(NodeStoreFixture.SEGMENT_MK.equals(fixture));
         
         // setting-up
         Session session = getAdminSession();
