@@ -21,11 +21,9 @@ import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_
 import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_INCREMENT;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assume.assumeTrue;
 
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -35,9 +33,6 @@ import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
-import org.apache.jackrabbit.oak.commons.FixturesHelper;
-import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.google.common.collect.Lists;
@@ -45,18 +40,8 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFutureTask;
 
 public class AtomicCounterIT extends AbstractRepositoryTest {
-    private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
-        
     public AtomicCounterIT(NodeStoreFixture fixture) {
         super(fixture);
-    }
-
-    @BeforeClass
-    public static void assumptions() {
-        assumeTrue(
-            FIXTURES.contains(Fixture.SEGMENT_MK)
-            || FIXTURES.contains(Fixture.DOCUMENT_MK)
-            );
     }
 
     @Test
