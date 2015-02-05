@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.annotation.Nonnull;
@@ -50,6 +51,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ListenableFutureTask;
 
 public class AtomicCounterClusterIT {
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
@@ -96,6 +99,33 @@ public class AtomicCounterClusterIT {
                 counter.getProperty(PROP_COUNTER).getLong());
         } finally {
             session.logout();
+        }
+        
+        // for each cluster node, 100 sessions pushing random increments
+        List<ListenableFutureTask<Void>> tasks = Lists.newArrayList();
+        for (Repository rep : repos) {
+            final Repository r = rep;
+            for (int i = 0; i < 100; i++) {
+                ListenableFutureTask<Void> task = ListenableFutureTask.create(new Callable<Void>() {
+
+                        @Override
+                        public Void call() throws Exception {
+                            Session s = r.login(ADMIN);
+                            try {
+                                Node n = s.getNode(counterPath);
+                                int increment = rnd.nextInt(10) + 1;
+                                n.setProperty(PROP_COUNTER, increment);
+                                expected.addAndGet(increment);
+                                s.save();
+                            } finally {
+                                s.logout();
+                            }
+                            return null;
+                        }
+                });
+                new Thread(task).start();
+                tasks.add(task);
+            }
         }
     }
     
@@ -190,19 +220,5 @@ public class AtomicCounterClusterIT {
         session.logout();
         dispose(repository);
         mk.dispose(); // closes connection as well
-    }
-
-    /**
-     * extends this class to implement your task. Will provide you with a class instance of
-     * {@link Repository} and {@code Map<String, Exception>}
-     */
-    abstract class Worker implements Runnable {
-        final Repository repo;
-        final Map<String, Exception> exceptions;
-
-        Worker(@Nonnull final Repository repo, @Nonnull final Map<String, Exception> exceptions) {
-            this.repo = checkNotNull(repo);
-            this.exceptions = checkNotNull(exceptions);
-        }
     }
 }
