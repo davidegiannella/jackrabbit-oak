@@ -16,12 +16,25 @@
  */
 package org.apache.jackrabbit.oak.jcr;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.jackrabbit.oak.jcr.AbstractRepositoryTest.dispose;
 import static org.junit.Assume.assumeTrue;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+
+import javax.annotation.Nonnull;
+import javax.jcr.Repository;
+import javax.jcr.Session;
+import javax.jcr.SimpleCredentials;
 
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
+import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
+import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -38,4 +51,54 @@ public class AtomicCounterClusterIT {
     public void increments() {
         
     }
+    
+    // ------------------------------------------------ < common with ConcurrentAddNodesClusterIT >
+    
+    List<Repository> repos = new ArrayList<Repository>();
+    List<DocumentMK> mks = new ArrayList<DocumentMK>();
+
+    @Before
+    public void before() throws Exception {
+        dropDB(this.getClass());
+        initRepository(this.getClass());
+    }
+
+    @After
+    public void after() throws Exception {
+        for (Repository repo : repos) {
+            dispose(repo);
+        }
+        for (DocumentMK mk : mks) {
+            mk.dispose();
+        }
+        dropDB(this.getClass());
+    }
+
+    private static MongoConnection createConnection(@Nonnull final Class<?> clazz) throws Exception {
+        return OakMongoNSRepositoryStub.createConnection(
+                checkNotNull(clazz).getSimpleName());
+    }
+
+    private static void dropDB(@Nonnull final Class<?> clazz) throws Exception {
+        MongoConnection con = createConnection(checkNotNull(clazz));
+        try {
+            con.getDB().dropDatabase();
+        } finally {
+            con.close();
+        }
+    }
+
+    private static void initRepository(@Nonnull final Class<?> clazz) throws Exception {
+        MongoConnection con = createConnection(checkNotNull(clazz));
+        DocumentMK mk = new DocumentMK.Builder()
+                .setMongoDB(con.getDB())
+                .setClusterId(1).open();
+        Repository repository = new Jcr(mk.getNodeStore()).createRepository();
+        Session session = repository.login(
+                new SimpleCredentials("admin", "admin".toCharArray()));
+        session.logout();
+        dispose(repository);
+        mk.dispose(); // closes connection as well
+    }
+
 }
