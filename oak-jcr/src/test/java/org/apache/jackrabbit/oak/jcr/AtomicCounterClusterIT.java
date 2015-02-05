@@ -18,26 +18,38 @@ package org.apache.jackrabbit.oak.jcr;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.jcr.AbstractRepositoryTest.dispose;
+import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_COUNTER;
+import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assume.assumeTrue;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.annotation.Nonnull;
+import javax.jcr.Credentials;
+import javax.jcr.Node;
 import javax.jcr.Repository;
 import javax.jcr.Session;
 import javax.jcr.SimpleCredentials;
 
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
+import org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor;
 import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
 import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
+import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import com.google.common.base.Strings;
 
 public class AtomicCounterClusterIT {
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
@@ -52,7 +64,39 @@ public class AtomicCounterClusterIT {
     public void increments() throws Exception {
         setUpCluster(this.getClass(), mks, repos);
         
+        // setting-up the counter node
+        final String counterPath;
+        final Random rnd = new Random(14);
+        final AtomicLong expected = new AtomicLong(0);
+        Repository repo = repos.get(0);
+        Session session = repo.login(ADMIN);
+        Node counter;
         
+        try {
+            counter = session.getRootNode().addNode("counter");
+            counter.addMixin(MIX_ATOMIC_COUNTER);
+            session.save();
+            
+            counterPath = counter.getPath();
+        } finally {
+            session.logout();
+        }
+        
+        alignCluster(mks);
+        
+        // asserting the initial state
+        assertFalse("Path to the counter node should be set", Strings.isNullOrEmpty(counterPath));
+        try {
+            session = repos.get(0).login(ADMIN);
+            counter = session.getNode(counterPath);
+            assertEquals("Nothing should have touched the `expected`", 0, expected.get());
+            assertEquals(
+                "Wrong initial counter", 
+                expected.get(), 
+                counter.getProperty(PROP_COUNTER).getLong());
+        } finally {
+            session.logout();
+        }
     }
     
     // ------------------------------------------------ < common with ConcurrentAddNodesClusterIT >
@@ -64,7 +108,12 @@ public class AtomicCounterClusterIT {
      * the number of nodes we'd like to run against
      */
     static final int NUM_CLUSTER_NODES = Integer.getInteger("it.documentmk.cluster.nodes", 5);
-
+    
+    /**
+     * credentials for logging in as {@code admin}
+     */
+    static final Credentials ADMIN = new SimpleCredentials("admin", "admin".toCharArray());
+    
     @Before
     public void before() throws Exception {
         dropDB(this.getClass());
@@ -82,6 +131,17 @@ public class AtomicCounterClusterIT {
         dropDB(this.getClass());
     }
 
+    /**
+     * ensures that the cluster is aligned by running all the background operations
+     * 
+     * @param mks the list of {@link DocumentMK} composing the cluster. Cannot be null.
+     */
+    static void alignCluster(@Nonnull final List<DocumentMK> mks) {
+        for (DocumentMK mk : checkNotNull(mks)) {
+            mk.getNodeStore().runBackgroundOperations();
+        }
+    }
+    
     /**
      * set up the cluster connections
      * 
