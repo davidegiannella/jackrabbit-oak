@@ -25,6 +25,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assume.assumeTrue;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -49,13 +51,17 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFutureTask;
 
 public class AtomicCounterClusterIT {
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
+    private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterClusterIT.class);
     
     @BeforeClass
     public static void assumtions() {
@@ -66,11 +72,14 @@ public class AtomicCounterClusterIT {
     @Test
     public void increments() throws Exception {
         setUpCluster(this.getClass(), mks, repos);
-        
-        // setting-up the counter node
+
         final String counterPath;
         final Random rnd = new Random(14);
         final AtomicLong expected = new AtomicLong(0);
+        final Map<String, Exception> exceptions = Collections.synchronizedMap(
+            new HashMap<String, Exception>());
+
+        // setting-up the repo state
         Repository repo = repos.get(0);
         Session session = repo.login(ADMIN);
         Node counter;
@@ -112,13 +121,17 @@ public class AtomicCounterClusterIT {
                         public Void call() throws Exception {
                             Session s = r.login(ADMIN);
                             try {
-                                Node n = s.getNode(counterPath);
-                                int increment = rnd.nextInt(10) + 1;
-                                n.setProperty(PROP_COUNTER, increment);
-                                expected.addAndGet(increment);
-                                s.save();
-                            } finally {
-                                s.logout();
+                                try {
+                                    Node n = s.getNode(counterPath);
+                                    int increment = rnd.nextInt(10) + 1;
+                                    n.setProperty(PROP_COUNTER, increment);
+                                    expected.addAndGet(increment);
+                                    s.save();
+                                } finally {
+                                    s.logout();
+                                }                                
+                            } catch (Exception e) {
+                                exceptions.put(Thread.currentThread().getName(), e);
                             }
                             return null;
                         }
@@ -126,6 +139,23 @@ public class AtomicCounterClusterIT {
                 new Thread(task).start();
                 tasks.add(task);
             }
+        }
+        Futures.allAsList(tasks).get();
+        
+        alignCluster(mks);
+
+        raiseExceptions(exceptions);
+        
+        // assert the final situation
+        try {
+            session = repos.get(0).login(ADMIN);
+            counter = session.getNode(counterPath);
+            assertEquals(
+                "Wrong counter", 
+                expected.get(), 
+                counter.getProperty(PROP_COUNTER).getLong());
+        } finally {
+            session.logout();
         }
     }
     
@@ -159,6 +189,15 @@ public class AtomicCounterClusterIT {
             mk.dispose();
         }
         dropDB(this.getClass());
+    }
+
+    static void raiseExceptions(final Map<String, Exception> exceptions) throws Exception {
+        if (exceptions != null) {
+            for (Map.Entry<String, Exception> entry : exceptions.entrySet()) {
+                LOG.error("Exception in thread {}", entry.getKey(), entry.getValue());
+                throw entry.getValue();
+            }
+        }
     }
 
     /**
