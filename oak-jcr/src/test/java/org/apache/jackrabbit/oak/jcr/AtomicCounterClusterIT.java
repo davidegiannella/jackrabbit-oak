@@ -22,6 +22,7 @@ import static org.junit.Assume.assumeTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
@@ -48,7 +49,9 @@ public class AtomicCounterClusterIT {
     }
     
     @Test
-    public void increments() {
+    public void increments() throws Exception {
+        setUpCluster(this.getClass(), mks, repos);
+        
         
     }
     
@@ -56,6 +59,11 @@ public class AtomicCounterClusterIT {
     
     List<Repository> repos = new ArrayList<Repository>();
     List<DocumentMK> mks = new ArrayList<DocumentMK>();
+
+    /**
+     * the number of nodes we'd like to run against
+     */
+    static final int NUM_CLUSTER_NODES = Integer.getInteger("it.documentmk.cluster.nodes", 5);
 
     @Before
     public void before() throws Exception {
@@ -74,12 +82,35 @@ public class AtomicCounterClusterIT {
         dropDB(this.getClass());
     }
 
-    private static MongoConnection createConnection(@Nonnull final Class<?> clazz) throws Exception {
+    /**
+     * set up the cluster connections
+     * 
+     * @param clazz class used for logging into Mongo itself
+     * @param mks the list of mks to work on.
+     * @param repos list of {@link Repository} created on each {@code mks}
+     * @throws Exception
+     */
+    static void setUpCluster(@Nonnull final Class<?> clazz, 
+                             @Nonnull final List<DocumentMK> mks,
+                             @Nonnull final List<Repository> repos) throws Exception {
+        for (int i = 0; i < NUM_CLUSTER_NODES; i++) {
+            DocumentMK mk = new DocumentMK.Builder()
+                    .setMongoDB(createConnection(checkNotNull(clazz)).getDB())
+                    .setClusterId(i + 1).open();
+            
+            Repository repo = new Jcr(mk.getNodeStore()).createRepository();
+            
+            mks.add(mk);
+            repos.add(repo);
+        }        
+    }
+    
+    static MongoConnection createConnection(@Nonnull final Class<?> clazz) throws Exception {
         return OakMongoNSRepositoryStub.createConnection(
                 checkNotNull(clazz).getSimpleName());
     }
 
-    private static void dropDB(@Nonnull final Class<?> clazz) throws Exception {
+    static void dropDB(@Nonnull final Class<?> clazz) throws Exception {
         MongoConnection con = createConnection(checkNotNull(clazz));
         try {
             con.getDB().dropDatabase();
@@ -88,7 +119,7 @@ public class AtomicCounterClusterIT {
         }
     }
 
-    private static void initRepository(@Nonnull final Class<?> clazz) throws Exception {
+    static void initRepository(@Nonnull final Class<?> clazz) throws Exception {
         MongoConnection con = createConnection(checkNotNull(clazz));
         DocumentMK mk = new DocumentMK.Builder()
                 .setMongoDB(con.getDB())
@@ -101,4 +132,17 @@ public class AtomicCounterClusterIT {
         mk.dispose(); // closes connection as well
     }
 
+    /**
+     * extends this class to implement your task. Will provide you with a class instance of
+     * {@link Repository} and {@code Map<String, Exception>}
+     */
+    abstract class Worker implements Runnable {
+        final Repository repo;
+        final Map<String, Exception> exceptions;
+
+        Worker(@Nonnull final Repository repo, @Nonnull final Map<String, Exception> exceptions) {
+            this.repo = checkNotNull(repo);
+            this.exceptions = checkNotNull(exceptions);
+        }
+    }
 }
