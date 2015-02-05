@@ -98,16 +98,19 @@ public class AtomicCounterClusterIT {
         
         // asserting the initial state
         assertFalse("Path to the counter node should be set", Strings.isNullOrEmpty(counterPath));
-        try {
-            session = repos.get(0).login(ADMIN);
-            counter = session.getNode(counterPath);
-            assertEquals("Nothing should have touched the `expected`", 0, expected.get());
-            assertEquals(
-                "Wrong initial counter", 
-                expected.get(), 
-                counter.getProperty(PROP_COUNTER).getLong());
-        } finally {
-            session.logout();
+        for (Repository r : repos) {
+            try {
+                session = r.login(ADMIN);
+                counter = session.getNode(counterPath);
+                assertEquals("Nothing should have touched the `expected`", 0, expected.get());
+                assertEquals(
+                    "Wrong initial counter", 
+                    expected.get(), 
+                    counter.getProperty(PROP_COUNTER).getLong());
+            } finally {
+                session.logout();
+            }
+            
         }
         
         // for each cluster node, 100 sessions pushing random increments
