@@ -33,6 +33,7 @@ import java.util.Calendar;
 import java.util.HashSet;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.TimeZone;
 
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -56,8 +57,11 @@ import org.apache.jackrabbit.commons.JcrUtils;
 import org.apache.jackrabbit.commons.cnd.CndImporter;
 import org.apache.jackrabbit.oak.jcr.AbstractRepositoryTest;
 import org.apache.jackrabbit.oak.jcr.NodeStoreFixture;
+import org.apache.jackrabbit.util.ISO8601;
 import org.junit.Ignore;
 import org.junit.Test;
+
+import com.google.common.collect.Iterators;
 
 /**
  * Tests the query feature.
@@ -700,4 +704,38 @@ public class QueryTest extends AbstractRepositoryTest {
         assertFalse(ni.hasNext());
     }
 
+    @Test
+    public void oak2497() throws RepositoryException {
+        final String property = "lastModified"; 
+        Session session = createAdminSession();
+        Calendar calendar;
+        String statement;
+        
+        try {
+            Node content  = session.getRootNode().addNode("content");
+
+            // building up a calendar on the Zulu timezone
+            calendar = Calendar.getInstance();
+            calendar.setTimeZone(TimeZone.getTimeZone("Z"));
+            
+            // building up the stament for running the queries
+            statement = "//*[@" + property + " >= '"
+                + ISO8601.format(calendar).replaceAll("Z", "z") + "']";
+            
+            // adding a couple of node that should be returned.
+            content.addNode("node1").setProperty(property, calendar);
+            calendar.add(Calendar.HOUR_OF_DAY, 1);
+            content.addNode("node2").setProperty(property, calendar);
+            
+            session.save();
+            
+            @SuppressWarnings("deprecation")
+            NodeIterator result = session.getWorkspace().getQueryManager()
+                .createQuery(statement, Query.XPATH).execute().getNodes();
+            
+            assertEquals(2, Iterators.size(result));
+        } finally {
+            session.logout();
+        }
+    }
 }

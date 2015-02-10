@@ -95,7 +95,14 @@ public final class Conversions {
          * @throws IllegalArgumentException  if the string cannot be parsed into a date
          */
         public Calendar toCalendar() {
-            Calendar date = ISO8601.parse(toString());
+            String s = toString();
+            if (s.indexOf('z') >= 0) {
+                s = s.replaceAll("z", "Z");
+            }
+            if (s.indexOf('t') >= 0) {
+                s = s.replaceAll("t", "T");
+            }
+            Calendar date = ISO8601.parse(s);
             if (date == null) {
                 throw new IllegalArgumentException("Not a date string: " + toString());
             }
