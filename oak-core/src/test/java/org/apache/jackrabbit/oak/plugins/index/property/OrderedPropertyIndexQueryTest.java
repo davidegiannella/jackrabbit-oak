@@ -23,12 +23,15 @@ import static junit.framework.Assert.assertTrue;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
+import static org.apache.jackrabbit.oak.api.Type.BOOLEAN;
 import static org.apache.jackrabbit.oak.api.Type.NAME;
 import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.REINDEX_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
 import static org.apache.jackrabbit.oak.spi.query.PropertyValues.newString;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -48,6 +51,7 @@ import org.apache.jackrabbit.oak.api.ResultRow;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
+import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
@@ -88,9 +92,18 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
     }
 
     protected void createTestIndexNode(String path) throws Exception {
+        createTestIndexNode(path, true);
+    }
+
+    private void createTestIndexNode(final String path, final boolean reindex) throws Exception {
         Tree index = root.getTree(path);
         IndexUtils.createIndexDefinition(new NodeUtil(index.getChild(INDEX_DEFINITIONS_NAME)),
                 TEST_INDEX_NAME, false, new String[] { ORDERED_PROPERTY }, null, OrderedIndex.TYPE);
+        
+        // setting reindex flag accordingly
+        index.getChild(INDEX_DEFINITIONS_NAME).getChild(TEST_INDEX_NAME)
+            .setProperty(REINDEX_PROPERTY_NAME, reindex, BOOLEAN);
+        
         root.commit();
     }
 
@@ -1036,6 +1049,29 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
                 }
             })));
 
+        setTraversalEnabled(true);
+    }
+    
+    @Test
+    public void oak2360() throws Exception {
+        setTraversalEnabled(false);
+        
+        // deleting the index
+        assertTrue(root.getTree("/" + INDEX_DEFINITIONS_NAME + "/" + TEST_INDEX_NAME).remove());
+        root.commit();
+        
+        // adding nodes
+        Tree content = root.getTree("/").addChild("content");
+        content.addChild("a").setProperty(ORDERED_PROPERTY, "hello", STRING);
+        content.addChild("b").setProperty(ORDERED_PROPERTY, "world", STRING);
+        root.commit();
+        
+        // adding the index without a reindex. should have then no content
+        createTestIndexNode("/", false);
+        
+        List<String> expected = Lists.newArrayList();
+        assertQuery("//*[@" + ORDERED_PROPERTY + "]", "xpath", expected);
+        
         setTraversalEnabled(true);
     }
 }
