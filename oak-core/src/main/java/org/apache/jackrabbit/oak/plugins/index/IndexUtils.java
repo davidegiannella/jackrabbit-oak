@@ -174,21 +174,9 @@ public class IndexUtils {
                                              @Nullable String[] declaringNodeTypeNames, 
                                              @Nonnull String propertyIndexType,
                                              Map<String, String> properties) throws RepositoryException {
-        createIndexDefinition(indexNode, indexDefName, unique, propertyNames,
-            declaringNodeTypeNames, propertyIndexType, properties, true);
-    }
-
-    public static void createIndexDefinition(@Nonnull NodeUtil indexNode, 
-                                             @Nonnull String indexDefName, 
-                                             boolean unique, 
-                                             @Nonnull String[] propertyNames, 
-                                             @Nullable String[] declaringNodeTypeNames, 
-                                             @Nonnull String propertyIndexType,
-                                             Map<String, String> properties,
-                                             final boolean reindex) throws RepositoryException {
         NodeUtil entry = indexNode.getOrAddChild(indexDefName, INDEX_DEFINITIONS_NODE_TYPE);
         entry.setString(TYPE_PROPERTY_NAME, propertyIndexType);
-        entry.setBoolean(REINDEX_PROPERTY_NAME, reindex);
+        entry.setBoolean(REINDEX_PROPERTY_NAME, true);
         if (unique) {
             entry.setBoolean(UNIQUE_PROPERTY_NAME, true);
         }

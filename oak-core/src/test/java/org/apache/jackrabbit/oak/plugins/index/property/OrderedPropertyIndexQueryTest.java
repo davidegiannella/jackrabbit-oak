@@ -89,7 +89,7 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
     
     private static final EditorHook HOOK = new EditorHook(new IndexUpdateProvider(
         new OrderedPropertyIndexEditorProvider()));
-
+ 
     private NodeStore nodestore;
     private ContentRepository repository;
     
@@ -110,18 +110,10 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
     }
 
     protected void createTestIndexNode(String path) throws Exception {
-        createTestIndexNode(path, true);
-    }
-
-    private void createTestIndexNode(final String path, final boolean reindex) throws Exception {
         Tree index = root.getTree(path);
         IndexUtils.createIndexDefinition(new NodeUtil(index.getChild(INDEX_DEFINITIONS_NAME)),
                 TEST_INDEX_NAME, false, new String[] { ORDERED_PROPERTY }, null, OrderedIndex.TYPE);
-        
-        // setting reindex flag accordingly
-        index.getChild(INDEX_DEFINITIONS_NAME).getChild(TEST_INDEX_NAME)
-            .setProperty(REINDEX_PROPERTY_NAME, reindex, BOOLEAN);
-        
+                
         root.commit();
     }
 
@@ -1073,22 +1065,13 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
     @Test
     public void oak2360() throws Exception {
         setTraversalEnabled(false);
-        
-        // deleting the index
-        assertTrue(root.getTree("/" + INDEX_DEFINITIONS_NAME + "/" + TEST_INDEX_NAME).remove());
-        root.commit();
-        
-        assertFalse(root.getTree("/" + INDEX_DEFINITIONS_NAME + "/" + TEST_INDEX_NAME).exists());
-        
+                
         // adding nodes
         Tree content = root.getTree("/").addChild("content");
         content.addChild("a").setProperty(ORDERED_PROPERTY, "hello", STRING);
         content.addChild("b").setProperty(ORDERED_PROPERTY, "world", STRING);
         root.commit();
-        
-        // adding the index without a reindex. should have then no content
-        createTestIndexNode("/", false);
-        
+                
         List<String> expected = Lists.newArrayList();
         assertQuery("//*[@" + ORDERED_PROPERTY + "]", "xpath", expected);
         
