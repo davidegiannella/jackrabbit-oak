@@ -31,7 +31,6 @@ import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.REINDEX_PRO
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
 import static org.apache.jackrabbit.oak.spi.query.PropertyValues.newString;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -45,17 +44,20 @@ import java.util.Map;
 import javax.jcr.RepositoryException;
 
 import org.apache.jackrabbit.JcrConstants;
+import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
+import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.ResultRow;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
-import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexUtils;
 import org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
+import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
+import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.QueryEngineSettings;
 import org.apache.jackrabbit.oak.query.ast.Operator;
 import org.apache.jackrabbit.oak.query.ast.SelectorImpl;
@@ -66,8 +68,10 @@ import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
+import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.util.NodeUtil;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -85,6 +89,20 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
     
     private static final EditorHook HOOK = new EditorHook(new IndexUpdateProvider(
         new OrderedPropertyIndexEditorProvider()));
+
+    private NodeStore nodestore;
+    private ContentRepository repository;
+    
+    @Override
+    protected ContentRepository createRepository() {
+        nodestore = new MemoryNodeStore();
+        repository = new Oak(nodestore).with(new InitialContent())
+            .with(new OpenSecurityProvider())
+            .with(new LowCostOrderedPropertyIndexProvider())
+            .with(new OrderedPropertyIndexEditorProvider())
+            .createContentRepository();
+        return repository;
+    }
 
     @Override
     protected void createTestIndexNode() throws Exception {
@@ -1059,6 +1077,8 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         // deleting the index
         assertTrue(root.getTree("/" + INDEX_DEFINITIONS_NAME + "/" + TEST_INDEX_NAME).remove());
         root.commit();
+        
+        assertFalse(root.getTree("/" + INDEX_DEFINITIONS_NAME + "/" + TEST_INDEX_NAME).exists());
         
         // adding nodes
         Tree content = root.getTree("/").addChild("content");
