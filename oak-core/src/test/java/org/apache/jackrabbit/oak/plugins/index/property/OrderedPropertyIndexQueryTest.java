@@ -23,15 +23,15 @@ import static junit.framework.Assert.assertTrue;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
-import static org.apache.jackrabbit.oak.api.Type.BOOLEAN;
 import static org.apache.jackrabbit.oak.api.Type.NAME;
 import static org.apache.jackrabbit.oak.api.Type.STRING;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_CONTENT_NODE_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
-import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.REINDEX_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
 import static org.apache.jackrabbit.oak.spi.query.PropertyValues.newString;
 import static org.junit.Assert.assertNotNull;
 
+import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -41,7 +41,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import javax.jcr.NoSuchWorkspaceException;
 import javax.jcr.RepositoryException;
+import javax.security.auth.login.LoginException;
 
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
@@ -64,6 +66,7 @@ import org.apache.jackrabbit.oak.query.ast.SelectorImpl;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
+import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex;
@@ -1062,16 +1065,40 @@ public class OrderedPropertyIndexQueryTest extends BasicOrderedPropertyIndexQuer
         setTraversalEnabled(true);
     }
     
+    /**
+     * <p>
+     * reset the environment variables to be sure to use the latest root. {@code session, root, qe}
+     * <p>
+     * 
+     * @throws IOException
+     * @throws LoginException
+     * @throws NoSuchWorkspaceException
+     */
+    private void resetEnvVariables() throws IOException, LoginException, NoSuchWorkspaceException {
+        session.close();
+        session = repository.login(null, null);
+        root = session.getLatestRoot();
+        qe = root.getQueryEngine();
+    }
+
     @Test
     public void oak2360() throws Exception {
-        setTraversalEnabled(false);
                 
         // adding nodes
         Tree content = root.getTree("/").addChild("content");
         content.addChild("a").setProperty(ORDERED_PROPERTY, "hello", STRING);
         content.addChild("b").setProperty(ORDERED_PROPERTY, "world", STRING);
         root.commit();
-                
+        
+        // manually deleting :data
+        NodeBuilder builder = nodestore.getRoot().builder();
+        builder.getChildNode(INDEX_DEFINITIONS_NAME).getChildNode(TEST_INDEX_NAME)
+            .getChildNode(INDEX_CONTENT_NODE_NAME).remove();
+        nodestore.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        resetEnvVariables();
+        
+        setTraversalEnabled(false);
+        
         List<String> expected = Lists.newArrayList();
         assertQuery("//*[@" + ORDERED_PROPERTY + "]", "xpath", expected);
         
