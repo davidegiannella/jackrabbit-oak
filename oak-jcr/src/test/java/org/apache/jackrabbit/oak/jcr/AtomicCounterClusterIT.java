@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.Nonnull;
 import javax.jcr.Credentials;
 import javax.jcr.Node;
+import javax.jcr.PathNotFoundException;
 import javax.jcr.Repository;
 import javax.jcr.Session;
 import javax.jcr.SimpleCredentials;
@@ -96,9 +97,13 @@ public class AtomicCounterClusterIT {
         
         alignCluster(mks);
         
+        // FIXME we should remove this. Leave it for unlocking myself and proceeding with actual code.
+        Thread.sleep(5000);
+        
         // asserting the initial state
         assertFalse("Path to the counter node should be set", Strings.isNullOrEmpty(counterPath));
         for (Repository r : repos) {
+            
             try {
                 session = r.login(ADMIN);
                 counter = session.getNode(counterPath);
