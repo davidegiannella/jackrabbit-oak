@@ -17,13 +17,13 @@
 package org.apache.jackrabbit.oak.jcr;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Properties;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import javax.jcr.RepositoryException;
 
 import org.apache.jackrabbit.oak.plugins.index.aggregate.AggregateIndexProvider;
-import org.apache.jackrabbit.oak.plugins.index.solr.configuration.CommitPolicy;
 import org.apache.jackrabbit.oak.plugins.index.solr.configuration.DefaultSolrConfiguration;
 import org.apache.jackrabbit.oak.plugins.index.solr.configuration.DefaultSolrConfigurationProvider;
 import org.apache.jackrabbit.oak.plugins.index.solr.configuration.EmbeddedSolrServerConfiguration;
@@ -49,11 +49,16 @@ public class SolrOakRepositoryStub extends OakTarMKRepositoryStub {
         File f = new File(path);
         final SolrServer solrServer;
         try {
-            solrServer = new EmbeddedSolrServerProvider(new EmbeddedSolrServerConfiguration(f.getPath(), "", "oak")).getSolrServer();
+            solrServer = new EmbeddedSolrServerProvider(new EmbeddedSolrServerConfiguration(f.getPath(), "oak")).getSolrServer();
         } catch (Exception e) {
             throw new RuntimeException();
         }
         SolrServerProvider solrServerProvider = new SolrServerProvider() {
+            @Override
+            public void close() throws IOException {
+
+            }
+
             @CheckForNull
             @Override
             public SolrServer getSolrServer() throws Exception {

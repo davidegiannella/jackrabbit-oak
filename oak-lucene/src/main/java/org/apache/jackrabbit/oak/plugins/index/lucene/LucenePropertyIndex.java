@@ -20,7 +20,6 @@ package org.apache.jackrabbit.oak.plugins.index.lucene;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
@@ -65,6 +64,7 @@ import org.apache.jackrabbit.oak.spi.query.QueryIndex;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.AdvanceFulltextQueryIndex;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.document.Document;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.MultiFields;
@@ -339,19 +339,48 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
                     } else if (luceneRequestFacade.getLuceneRequest() instanceof SpellcheckHelper.SpellcheckQuery) {
                         SpellcheckHelper.SpellcheckQuery spellcheckQuery = (SpellcheckHelper.SpellcheckQuery) luceneRequestFacade.getLuceneRequest();
                         SuggestWord[] suggestWords = SpellcheckHelper.getSpellcheck(spellcheckQuery);
+
+                        // ACL filter spellchecks
                         Collection<String> suggestedWords = new ArrayList<String>(suggestWords.length);
-                        for (SuggestWord suggestWord : suggestWords) {
-                            suggestedWords.add(suggestWord.string);
+                        QueryParser qp = new QueryParser(Version.LUCENE_47, FieldNames.FULLTEXT, indexNode.getDefinition().getAnalyzer());
+                        for (SuggestWord suggestion : suggestWords) {
+                            Query query = qp.createPhraseQuery(FieldNames.FULLTEXT, suggestion.string);
+                            TopDocs topDocs = searcher.search(query, 100);
+                            if (topDocs.totalHits > 0) {
+                                for (ScoreDoc doc : topDocs.scoreDocs) {
+                                    Document retrievedDoc = searcher.doc(doc.doc);
+                                    if (filter.isAccessible(retrievedDoc.get(FieldNames.PATH))) {
+                                        suggestedWords.add(suggestion.string);
+                                        break;
+                                    }
+                                }
+                            }
                         }
+
                         queue.add(new LuceneResultRow(suggestedWords));
                         noDocs = true;
                     } else if (luceneRequestFacade.getLuceneRequest() instanceof SuggestHelper.SuggestQuery) {
                         SuggestHelper.SuggestQuery suggestQuery = (SuggestHelper.SuggestQuery) luceneRequestFacade.getLuceneRequest();
+
                         List<Lookup.LookupResult> lookupResults = SuggestHelper.getSuggestions(suggestQuery);
+
+                        // ACL filter suggestions
                         Collection<String> suggestedWords = new ArrayList<String>(lookupResults.size());
-                        for (Lookup.LookupResult suggestWord : lookupResults) {
-                            suggestedWords.add("{term=" + suggestWord.key + ",weight=" + suggestWord.value + "}");
+                        QueryParser qp = new QueryParser(Version.LUCENE_47, FieldNames.FULLTEXT, indexNode.getDefinition().getAnalyzer());
+                        for (Lookup.LookupResult suggestion : lookupResults) {
+                            Query query = qp.createPhraseQuery(FieldNames.FULLTEXT, suggestion.key.toString());
+                            TopDocs topDocs = searcher.search(query, 100);
+                            if (topDocs.totalHits > 0) {
+                                for (ScoreDoc doc : topDocs.scoreDocs) {
+                                    Document retrievedDoc = searcher.doc(doc.doc);
+                                    if (filter.isAccessible(retrievedDoc.get(FieldNames.PATH))) {
+                                        suggestedWords.add("{term=" + suggestion.key + ",weight=" + suggestion.value + "}");
+                                        break;
+                                    }
+                                }
+                            }
                         }
+
                         queue.add(new LuceneResultRow(suggestedWords));
                         noDocs = true;
                     }
@@ -531,10 +560,19 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
         }
 
         if (qs.size() == 0) {
-            if (!defn.isFullTextEnabled()) {
-                throw new IllegalStateException("No query created for filter " + filter);
+            if (reader == null){
+                //When called in planning mode then some queries like rep:similar
+                //cannot create query as reader is not provided. In such case we
+                //just return match all queries
+                return new LuceneRequestFacade<Query>(new MatchAllDocsQuery());
             }
-            return new LuceneRequestFacade<Query>(new MatchAllDocsQuery());
+            //For purely nodeType based queries all the documents would have to
+            //be returned (if the index definition has a single rule)
+            if (planResult.evaluateNodeTypeRestriction()) {
+                return new LuceneRequestFacade<Query>(new MatchAllDocsQuery());
+            }
+
+            throw new IllegalStateException("No query created for filter " + filter);
         }
         if (qs.size() == 1) {
             return new LuceneRequestFacade<Query>(qs.get(0));
@@ -680,6 +718,11 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
     private static Query createQuery(PropertyRestriction pr,
                                      PropertyDefinition defn) {
         int propType = determinePropertyType(defn, pr);
+
+        if (pr.isNullRestriction()){
+            return new TermQuery(new Term(FieldNames.NULL_PROPS, defn.name));
+        }
+
         switch (propType) {
             case PropertyType.DATE: {
                 Long first = pr.first != null ? FieldFactory.dateToLong(pr.first.getValue(Type.DATE)) : null;
@@ -704,7 +747,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
                         in.add(NumericRangeQuery.newLongRange(pr.propertyName, dateVal, dateVal, true, true), BooleanClause.Occur.SHOULD);
                     }
                     return in;
-                } else if (pr.first == null && pr.last == null ) {
+                } else if (pr.isNotNullRestriction()) {
                     // not null. For date lower bound of zero can be used
                     return NumericRangeQuery.newLongRange(pr.propertyName, 0L, Long.MAX_VALUE, true, true);
                 }
@@ -734,7 +777,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
                         in.add(NumericRangeQuery.newDoubleRange(pr.propertyName, doubleVal, doubleVal, true, true), BooleanClause.Occur.SHOULD);
                     }
                     return in;
-                } else if (pr.first == null && pr.last == null ) {
+                } else if (pr.isNotNullRestriction()) {
                     // not null.
                     return NumericRangeQuery.newDoubleRange(pr.propertyName, Double.MIN_VALUE, Double.MAX_VALUE, true, true);
                 }
@@ -763,7 +806,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
                         in.add(NumericRangeQuery.newLongRange(pr.propertyName, longVal, longVal, true, true), BooleanClause.Occur.SHOULD);
                     }
                     return in;
-                } else if (pr.first == null && pr.last == null ) {
+                } else if (pr.isNotNullRestriction()) {
                     // not null.
                     return NumericRangeQuery.newLongRange(pr.propertyName, Long.MIN_VALUE, Long.MAX_VALUE, true, true);
                 }
@@ -797,7 +840,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
                         in.add(new TermQuery(new Term(pr.propertyName, strVal)), BooleanClause.Occur.SHOULD);
                     }
                     return in;
-                } else if (pr.first == null && pr.last == null ) {
+                } else if (pr.isNotNullRestriction()) {
                     return new TermRangeQuery(pr.propertyName, null, null, true, true);
                 }
             }

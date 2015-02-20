@@ -29,7 +29,6 @@ import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.index.IndexEditor;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdateCallback;
-import org.apache.jackrabbit.oak.plugins.index.solr.configuration.CommitPolicy;
 import org.apache.jackrabbit.oak.plugins.index.solr.configuration.OakSolrConfiguration;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -70,11 +69,6 @@ class SolrIndexEditor implements IndexEditor {
      */
     private String path;
 
-    /**
-     * Index definition node builder
-     */
-    private final NodeBuilder definition;
-
     private final SolrServer solrServer;
 
     private final OakSolrConfiguration configuration;
@@ -86,13 +80,12 @@ class SolrIndexEditor implements IndexEditor {
     private static final Parser parser = new AutoDetectParser();
 
     SolrIndexEditor(
-            NodeBuilder definition, SolrServer solrServer,
+            SolrServer solrServer,
             OakSolrConfiguration configuration,
             IndexUpdateCallback callback) {
         this.parent = null;
         this.name = null;
         this.path = "/";
-        this.definition = definition;
         this.solrServer = solrServer;
         this.configuration = configuration;
         this.updateCallback = callback;
@@ -102,7 +95,6 @@ class SolrIndexEditor implements IndexEditor {
         this.parent = parent;
         this.name = name;
         this.path = null;
-        this.definition = parent.definition;
         this.solrServer = parent.solrServer;
         this.configuration = parent.configuration;
         this.updateCallback = parent.updateCallback;
@@ -148,7 +140,7 @@ class SolrIndexEditor implements IndexEditor {
         }
     }
 
-    private void commitByPolicy(SolrServer solrServer, CommitPolicy commitPolicy) throws IOException, SolrServerException {
+    private void commitByPolicy(SolrServer solrServer, OakSolrConfiguration.CommitPolicy commitPolicy) throws IOException, SolrServerException {
         switch (commitPolicy) {
             case HARD: {
                 solrServer.commit();

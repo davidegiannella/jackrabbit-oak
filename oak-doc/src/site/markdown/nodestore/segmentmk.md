@@ -94,7 +94,7 @@ four bytes and to align the next record at a four-byte boundary.
 The segment header consists of the following fields:
 
     +--------+--------+--------+--------+--------+--------+--------+--------+
-    | magic bytes: "0aK\n" in ASCII     |version |idcount |rootcount        |
+    | magic bytes: "0aK" ASCII |version |reserved|idcount |rootcount        |
     +--------+--------+--------+--------+--------+--------+--------+--------+
     | blobrefcount    | reserved (set to 0)                                 |
     +--------+--------+--------+--------+--------+--------+--------+--------+
@@ -114,9 +114,9 @@ The segment header consists of the following fields:
     |                                            | padding (set to 0)       |
     +--------+--------+--------+--------+--------+--------+--------+--------+
 
-The first four bytes of a segment always contain the ASCII string "0aK\n",
+The first three bytes of a segment always contain the ASCII string "0aK",
 which is intended to make the binary segment data format easily detectable.
-The next byte indicates the version of segment format, and is set to zero
+The next byte indicates the version of segment format, and is set to 10
 for all segments that follow the format described here.
 
 The `idcount` byte indicates how many other segments are referenced by
@@ -131,8 +131,9 @@ that follow after the segment identifier lookup table. The root record
 references are a debugging and recovery aid, that are not needed during
 normal operation. They identify the types and locations of those records
 within this segment that are not accessible by following references in
-other records within this segment. These root references give enough context
-for parsing all records within a segment without any external information.
+other records within this segment. <s>These root references give enough
+context for parsing all records within a segment without any external
+information.</s> See [OAK-2498](https://issues.apache.org/jira/browse/OAK-2498).
 
 The 16-bit `blobrefcount` field indicates the number of external blob record
 references that follow after the root record references. External blobs are

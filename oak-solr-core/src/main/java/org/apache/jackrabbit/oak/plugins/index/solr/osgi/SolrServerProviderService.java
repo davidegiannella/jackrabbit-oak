@@ -16,6 +16,7 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.solr.osgi;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.CheckForNull;
@@ -41,7 +42,7 @@ import org.slf4j.LoggerFactory;
 /**
  * OSGi service for {@link org.apache.jackrabbit.oak.plugins.index.solr.server.SolrServerProvider}
  */
-@Component(metatype = true, label = "Oak Solr server provider", immediate = true)
+@Component(metatype = true, label = "Apache Jackrabbit Oak Solr server provider", immediate = true)
 @References({
         @Reference(name = "solrServerConfigurationProvider",
                 referenceInterface = SolrServerConfigurationProvider.class,
@@ -87,10 +88,11 @@ public class SolrServerProviderService implements SolrServerProvider {
     @Deactivate
     protected void deactivate() throws Exception {
         solrServerConfigurationProviders.clear();
-        shutdownSolrServers();
+        close();
     }
 
-    private void shutdownSolrServers() {
+    @Override
+    public void close() throws IOException {
         if (cachedSolrServer != null) {
             try {
                 cachedSolrServer.shutdown();
@@ -124,7 +126,11 @@ public class SolrServerProviderService implements SolrServerProvider {
         synchronized (solrServerConfigurationProviders) {
             String name = String.valueOf(properties.get("name"));
             solrServerConfigurationProviders.put(name, solrServerConfigurationProvider);
-            shutdownSolrServers();
+            try {
+                close();
+            } catch (IOException e) {
+                // do nothing
+            }
         }
     }
 
@@ -132,7 +138,11 @@ public class SolrServerProviderService implements SolrServerProvider {
         synchronized (solrServerConfigurationProviders) {
             String name = String.valueOf(properties.get("name"));
             solrServerConfigurationProviders.remove(name);
-            shutdownSolrServers();
+            try {
+                close();
+            } catch (IOException e) {
+                // do nothing
+            }
         }
     }
 
@@ -140,7 +150,11 @@ public class SolrServerProviderService implements SolrServerProvider {
         synchronized (solrServerConfigurationProviders) {
             String name = String.valueOf(properties.get("name"));
             solrServerConfigurationProviders.put(name, solrServerConfigurationProvider);
-            shutdownSolrServers();
+            try {
+                close();
+            } catch (IOException e) {
+                // do nothing
+            }
         }
     }
 

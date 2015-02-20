@@ -14,18 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.plugins.document.cache;
+package org.apache.jackrabbit.oak.plugins.document;
 
-import org.apache.jackrabbit.oak.cache.CacheStats;
-import org.apache.jackrabbit.oak.plugins.document.DocumentStore;
+import java.util.SortedMap;
+
+import javax.annotation.Nonnull;
 
 /**
- * A {@link DocumentStore} that provides caching information.
+ * Helper class to access package private methods on NodeDocument.
  */
-public interface CachingDocumentStore extends DocumentStore {
-
-    /**
-     * @return status information about the cache
-     */
-    CacheStats getCacheStats();
+public class NodeDocumentHelper {
+    
+    @Nonnull
+    public static SortedMap<Revision, String> getLocalMap(
+            NodeDocument doc, String key) {
+        return doc.getLocalMap(key);
+    }
+    
+    @Nonnull
+    public static SortedMap<Revision, String> getLocalCommitRoot(
+            NodeDocument doc) {
+        return doc.getLocalCommitRoot();
+    }
+    
+    @Nonnull
+    public static String commitRoot() {
+        return NodeDocument.COMMIT_ROOT;
+    }
 }

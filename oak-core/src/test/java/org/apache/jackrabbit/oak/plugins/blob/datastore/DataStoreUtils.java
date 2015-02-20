@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.plugins.document.blob.ds;
+package org.apache.jackrabbit.oak.plugins.blob.datastore;
 
 import java.io.File;
 import java.util.Map;
@@ -24,6 +24,7 @@ import org.apache.jackrabbit.core.data.DataStore;
 import org.apache.jackrabbit.core.data.FileDataStore;
 import org.apache.jackrabbit.oak.commons.PropertiesUtil;
 import org.apache.jackrabbit.oak.plugins.blob.datastore.DataStoreBlobStore;
+import org.apache.jackrabbit.oak.plugins.blob.datastore.OakFileDataStore;
 import org.apache.jackrabbit.oak.plugins.document.AbstractMongoConnectionTest;
 import org.junit.Test;
 
@@ -39,15 +40,19 @@ import static org.junit.Assert.assertEquals;
  * where the key has a prefix 'ds.' or 'bs.'. So to set 'minRecordLength' of FileDataStore specify
  * the system property as 'ds.minRecordLength'
  */
-public class DataStoreUtils extends AbstractMongoConnectionTest {
+public class DataStoreUtils {
     public static final String DS_CLASS_NAME = "dataStore";
-    public static final String PATH = "./target/repository/";
 
     private static final String DS_PROP_PREFIX = "ds.";
     private static final String BS_PROP_PREFIX = "bs.";
 
+    /**
+     * By default create a default directory. But if overridden will need to be unset
+     */
+    private static long time = -1;
+
     public static DataStoreBlobStore getBlobStore() throws Exception {
-        String className = System.getProperty(DS_CLASS_NAME, FileDataStore.class.getName());
+        String className = System.getProperty(DS_CLASS_NAME, OakFileDataStore.class.getName());
         DataStore ds = Class.forName(className).asSubclass(DataStore.class).newInstance();
         PropertiesUtil.populate(ds, getConfig(), false);
         ds.init(getHomeDir());
@@ -66,8 +71,9 @@ public class DataStoreUtils extends AbstractMongoConnectionTest {
         return result;
     }
 
-    private static String getHomeDir() {
-        return concat(new File(".").getAbsolutePath(), "target/blobstore/" + System.currentTimeMillis());
+    public static String getHomeDir() {
+        return concat(new File(".").getAbsolutePath(), "target/blobstore/" +
+            (time == -1 ? 0 : System.currentTimeMillis()));
     }
 
     @Test

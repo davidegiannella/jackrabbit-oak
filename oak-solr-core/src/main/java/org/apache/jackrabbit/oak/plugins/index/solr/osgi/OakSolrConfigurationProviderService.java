@@ -18,6 +18,7 @@ package org.apache.jackrabbit.oak.plugins.index.solr.osgi;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 
 import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
@@ -31,7 +32,6 @@ import org.apache.felix.scr.annotations.PropertyUnbounded;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PropertiesUtil;
-import org.apache.jackrabbit.oak.plugins.index.solr.configuration.CommitPolicy;
 import org.apache.jackrabbit.oak.plugins.index.solr.configuration.OakSolrConfiguration;
 import org.apache.jackrabbit.oak.plugins.index.solr.configuration.OakSolrConfigurationProvider;
 import org.apache.jackrabbit.oak.plugins.index.solr.configuration.SolrServerConfigurationDefaults;
@@ -41,7 +41,7 @@ import org.osgi.service.component.ComponentContext;
 /**
  * OSGi service for {@link org.apache.jackrabbit.oak.plugins.index.solr.configuration.OakSolrConfigurationProvider}
  */
-@Component(label = "Oak Solr indexing / search configuration", metatype = true, immediate = true)
+@Component(label = "Apache Jackrabbit Oak Solr indexing / search configuration", metatype = true, immediate = true)
 @Service(OakSolrConfigurationProvider.class)
 public class OakSolrConfigurationProviderService implements OakSolrConfigurationProvider {
 
@@ -91,8 +91,7 @@ public class OakSolrConfigurationProviderService implements OakSolrConfiguration
             unbounded = PropertyUnbounded.ARRAY)
     private static final String IGNORED_PROPERTIES = "ignored.properties";
 
-    @Property(label = "used properties",
-            unbounded = PropertyUnbounded.ARRAY)
+    @Property(value = {}, label = "used properties", unbounded = PropertyUnbounded.ARRAY)
     private static final String USED_PROPERTIES = "used.properties";
 
     @Property(value = SolrServerConfigurationDefaults.TYPE_MAPPINGS, cardinality = 13, description =
@@ -110,7 +109,7 @@ public class OakSolrConfigurationProviderService implements OakSolrConfiguration
     private String pathDescendantsFieldName;
     private String pathExactFieldName;
     private String catchAllField;
-    private CommitPolicy commitPolicy;
+    private OakSolrConfiguration.CommitPolicy commitPolicy;
     private int rows;
     private boolean useForPathRestrictions;
     private boolean useForPropertyRestrictions;
@@ -130,7 +129,7 @@ public class OakSolrConfigurationProviderService implements OakSolrConfiguration
         pathDescendantsFieldName = String.valueOf(componentContext.getProperties().get(PATH_DESCENDANTS_FIELD));
         catchAllField = String.valueOf(componentContext.getProperties().get(CATCH_ALL_FIELD));
         rows = Integer.parseInt(String.valueOf(componentContext.getProperties().get(ROWS)));
-        commitPolicy = CommitPolicy.valueOf(String.valueOf(componentContext.getProperties().get(COMMIT_POLICY)));
+        commitPolicy = OakSolrConfiguration.CommitPolicy.valueOf(String.valueOf(componentContext.getProperties().get(COMMIT_POLICY)));
         useForPathRestrictions = Boolean.valueOf(String.valueOf(componentContext.getProperties().get(PATH_RESTRICTIONS)));
         useForPropertyRestrictions = Boolean.valueOf(String.valueOf(componentContext.getProperties().get(PROPERTY_RESTRICTIONS)));
         useForPrimaryTypes = Boolean.valueOf(String.valueOf(componentContext.getProperties().get(PRIMARY_TYPES_RESTRICTIONS)));
@@ -248,7 +247,11 @@ public class OakSolrConfigurationProviderService implements OakSolrConfiguration
                 @Nonnull
                 @Override
                 public Collection<String> getIgnoredProperties() {
-                    return Arrays.asList(ignoredProperties);
+                    if (usedProperties != null && usedProperties.length > 0) {
+                        return Arrays.asList(usedProperties);
+                    } else {
+                        return Collections.emptyList();
+                    }
                 }
 
                 @Nonnull

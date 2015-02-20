@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import org.apache.jackrabbit.oak.plugins.document.cache.CachingDocumentStore;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
 import org.junit.Assume;
 import org.junit.Test;
@@ -71,7 +70,11 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
 
     @Test
     public void testMaxIdAscii() {
-        testMaxId(true);
+        // TODO see OAK-2395
+        Assume.assumeTrue(! super.dsname.contains("MSSql"));
+
+        int result = testMaxId(true);
+        assertTrue("needs to support keys of 512 bytes length, but only supports " + result, result >= 512);
     }
 
     @Test
@@ -79,12 +82,13 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
         testMaxId(false);
     }
 
-    private void testMaxId(boolean ascii) {
+    private int testMaxId(boolean ascii) {
         // TODO see OAK-1589
         Assume.assumeTrue(!(super.ds instanceof MongoDocumentStore));
         int min = 0;
         int max = 32768;
         int test = 0;
+        int last = 0;
 
         while (max - min >= 2) {
             test = (max + min) / 2;
@@ -99,19 +103,22 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
                 assertEquals(id, findme.getId());
                 super.ds.remove(Collection.NODES, id);
                 min = test;
+                last = test;
             } else {
                 max = test;
             }
         }
 
-        LOG.info("max " + (ascii ? "ASCII ('0')" : "non-ASCII (U+1F4A9)") + " id length for " + super.dsname + " was " + test);
+        LOG.info("max " + (ascii ? "ASCII ('0')" : "non-ASCII (U+1F4A9)") + " id length for " + super.dsname + " was " + last);
+        return last;
     }
 
     @Test
     public void testMaxProperty() {
         int min = 0;
-        int max = 1024 * 1024 * 4; // 32M
+        int max = 1024 * 1024 * 8;
         int test = 0;
+        int last = 0;
 
         while (max - min >= 256) {
             test = (max + min) / 2;
@@ -127,12 +134,13 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
                 assertNotNull("failed to retrieve previously stored document", findme);
                 super.ds.remove(Collection.NODES, id);
                 min = test;
+                last = test;
             } else {
                 max = test;
             }
         }
 
-        LOG.info("max prop length for " + super.dsname + " was " + test);
+        LOG.info("max prop length for " + super.dsname + " was " + last);
     }
 
     @Test
@@ -473,7 +481,7 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
         while (System.currentTimeMillis() < end) {
             long now = System.currentTimeMillis();
             List<NodeDocument> result = super.ds.query(Collection.NODES, sid, cid + "X", fetchcount);
-            if ((super.ds instanceof CachingDocumentStore) && result.size() > 0) {
+            if (super.ds.getCacheStats() != null && result.size() > 0) {
                 // check freshness of returned documents
                 long created = result.get(0).getLastCheckTime();
                 assertTrue(
@@ -729,7 +737,8 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
             byte bdata[] = new byte[65536];
             String sdata = appendString;
             boolean needsConcat = super.dsname.contains("MySQL");
-            int dataInChars = (super.dsname.contains("Oracle") ? 4000 : 16384);
+            boolean needsSQLStringConcat = super.dsname.contains("MSSql");
+            int dataInChars = ((super.dsname.contains("Oracle") || (super.dsname.contains("MSSql"))) ? 4000 : 16384);
             int dataInBytes = dataInChars / 3;
 
             while (System.currentTimeMillis() < end) {
@@ -776,11 +785,21 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
                             stmt.close();
                         }
                     } else if (mode == 3) {
-                        PreparedStatement stmt = connection.prepareStatement("update "
-                                + table
-                                + " set "
-                                + (needsConcat ? "DATA = CONCAT(DATA, ?)" : "DATA = DATA || CAST(? as varchar(" + dataInChars
-                                        + "))") + " where ID = ?");
+                        String t = "update " + table + " ";
+
+                        t += "set DATA = ";
+                        if (needsConcat) {
+                            t += "CONCAT(DATA, ?) ";
+                        } else if (needsSQLStringConcat) {
+                            t += "CASE WHEN LEN(DATA) <= " + (dataInChars - appendString.length()) + " THEN (DATA + CAST(? AS nvarchar(" + 4000
+                                    + "))) ELSE (DATA + CAST(DATA AS nvarchar(max))) END";
+                        } else {
+                            t += "DATA || CAST(? as varchar(" + dataInChars + "))";
+                        }
+
+                        t += " where ID = ?";
+
+                        PreparedStatement stmt = connection.prepareStatement(t);
                         try {
                             stmt.setString(1, appendString);
                             stmt.setString(2, key);

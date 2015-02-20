@@ -18,7 +18,9 @@ package org.apache.jackrabbit.oak.run;
 
 import static com.google.common.collect.Sets.newHashSet;
 import static java.util.Arrays.asList;
+import static org.apache.commons.io.FileUtils.byteCountToDisplaySize;
 import static org.apache.jackrabbit.oak.checkpoint.Checkpoints.CP;
+import static org.apache.jackrabbit.oak.plugins.segment.RecordType.NODE;
 import static org.apache.jackrabbit.oak.plugins.segment.file.tooling.ConsistencyChecker.checkConsistency;
 
 import java.io.Closeable;
@@ -56,12 +58,10 @@ import com.google.common.util.concurrent.AbstractScheduledService;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientURI;
 import com.mongodb.MongoURI;
-
 import joptsimple.ArgumentAcceptingOptionSpec;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
-
 import org.apache.jackrabbit.core.RepositoryContext;
 import org.apache.jackrabbit.core.config.RepositoryConfig;
 import org.apache.jackrabbit.oak.Oak;
@@ -84,12 +84,14 @@ import org.apache.jackrabbit.oak.plugins.document.DocumentNodeStore;
 import org.apache.jackrabbit.oak.plugins.document.LastRevRecoveryAgent;
 import org.apache.jackrabbit.oak.plugins.document.NodeDocument;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
+import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStoreHelper;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoMissingLastRevSeeker;
 import org.apache.jackrabbit.oak.plugins.document.util.CloseableIterable;
 import org.apache.jackrabbit.oak.plugins.document.util.MapDBMapFactory;
 import org.apache.jackrabbit.oak.plugins.document.util.MapFactory;
 import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
 import org.apache.jackrabbit.oak.plugins.segment.RecordId;
+import org.apache.jackrabbit.oak.plugins.segment.RecordUsageAnalyser;
 import org.apache.jackrabbit.oak.plugins.segment.Segment;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentId;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeState;
@@ -183,6 +185,9 @@ public class Main {
                 break;
             case RECOVERY:
                 recovery(args);
+                break;
+            case REPAIR:
+                repair(args);
                 break;
             case HELP:
             default:
@@ -638,6 +643,31 @@ public class Main {
             closer.close();
         }
     }
+    
+    private static void repair(String[] args) throws IOException {
+        Closer closer = Closer.create();
+        String h = "repair mongodb://host:port/database path";
+        try {
+            NodeStore store = bootstrapNodeStore(args, closer, h);
+            if (!(store instanceof DocumentNodeStore)) {
+                System.err.println("Repair only available for DocumentNodeStore");
+                System.exit(1);
+            }
+            DocumentNodeStore dns = (DocumentNodeStore) store;
+            if (!(dns.getDocumentStore() instanceof MongoDocumentStore)) {
+                System.err.println("Repair only available for MongoDocumentStore");
+                System.exit(1);
+            }
+            MongoDocumentStore docStore = (MongoDocumentStore) dns.getDocumentStore();
+
+            String path = args[args.length - 1];
+            MongoDocumentStoreHelper.repair(docStore, path);
+        } catch (Throwable e) {
+            throw closer.rethrow(e);
+        } finally {
+            closer.close();
+        }
+    }
 
     private static void debug(String[] args) throws IOException {
         if (args.length == 0) {
@@ -805,20 +835,21 @@ public class Main {
         }
     }
 
-    private static void debugFileStore(FileStore store){
-
+    private static void debugFileStore(FileStore store) {
         Map<SegmentId, List<SegmentId>> idmap = Maps.newHashMap();
-
         int dataCount = 0;
         long dataSize = 0;
         int bulkCount = 0;
         long bulkSize = 0;
+        RecordUsageAnalyser analyser = new RecordUsageAnalyser();
+
         for (SegmentId id : store.getSegmentIds()) {
             if (id.isDataSegmentId()) {
                 Segment segment = id.getSegment();
                 dataCount++;
                 dataSize += segment.size();
                 idmap.put(id, segment.getReferencedIds());
+                analyseSegment(segment, analyser);
             } else if (id.isBulkSegmentId()) {
                 bulkCount++;
                 bulkSize += id.getSegment().size();
@@ -827,11 +858,12 @@ public class Main {
         }
         System.out.println("Total size:");
         System.out.format(
-                "%6dMB in %6d data segments%n",
-                dataSize / (1024 * 1024), dataCount);
+                "%s in %6d data segments%n",
+                byteCountToDisplaySize(dataSize), dataCount);
         System.out.format(
-                "%6dMB in %6d bulk segments%n",
-                bulkSize / (1024 * 1024), bulkCount);
+                "%s in %6d bulk segments%n",
+                byteCountToDisplaySize(bulkSize), bulkCount);
+        System.out.println(analyser.toString());
 
         Set<SegmentId> garbage = newHashSet(idmap.keySet());
         Queue<SegmentId> queue = Queues.newArrayDeque();
@@ -855,13 +887,27 @@ public class Main {
                 bulkSize += id.getSegment().size();
             }
         }
-        System.out.println("Available for garbage collection:");
+        System.out.println("\nAvailable for garbage collection:");
         System.out.format(
-                "%6dMB in %6d data segments%n",
-                dataSize / (1024 * 1024), dataCount);
+                "%s in %6d data segments%n",
+                byteCountToDisplaySize(dataSize), dataCount);
         System.out.format(
-                "%6dMB in %6d bulk segments%n",
-                bulkSize / (1024 * 1024), bulkCount);
+                "%s in %6d bulk segments%n",
+                byteCountToDisplaySize(bulkSize), bulkCount);
+    }
+
+    private static void analyseSegment(Segment segment, RecordUsageAnalyser analyser) {
+        for (int k = 0; k < segment.getRootCount(); k++) {
+            if (segment.getRootType(k) == NODE) {
+                RecordId nodeId = new RecordId(segment.getSegmentId(), segment.getRootOffset(k));
+                try {
+                    analyser.analyseNode(nodeId);
+                } catch (Exception e) {
+                    System.err.format("Error while processing node at %s", nodeId);
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
     /**
@@ -1149,7 +1195,8 @@ public class Main {
         STANDBY("standy"),
         HELP("help"),
         CHECKPOINTS("checkpoints"),
-        RECOVERY("recovery");
+        RECOVERY("recovery"),
+        REPAIR("repair");
 
         private final String name;
 
