@@ -205,7 +205,7 @@ public class AtomicCounterClusterIT {
         }
     }
 
-    /**
+    /** 
      * ensures that the cluster is aligned by running all the background operations
      * 
      * @param mks the list of {@link DocumentMK} composing the cluster. Cannot be null.
