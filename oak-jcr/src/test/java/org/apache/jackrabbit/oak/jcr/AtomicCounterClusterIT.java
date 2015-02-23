@@ -96,10 +96,7 @@ public class AtomicCounterClusterIT {
         }
         
         alignCluster(mks);
-        
-        // FIXME we should remove this. Leave it for unlocking myself and proceeding with actual code.
-//        Thread.sleep(5000);
-        
+                
         // asserting the initial state
         assertFalse("Path to the counter node should be set", Strings.isNullOrEmpty(counterPath));
         for (Repository r : repos) {
@@ -214,10 +211,15 @@ public class AtomicCounterClusterIT {
      * @param mks the list of {@link DocumentMK} composing the cluster. Cannot be null.
      */
     static void alignCluster(@Nonnull final List<DocumentMK> mks) {
-        for (int i = 0; i < checkNotNull(mks).size() * 2; i++) {
-            for (DocumentMK mk : mks) {
-                mk.getNodeStore().runBackgroundOperations();
-            }
+        for (DocumentMK mk : mks) {
+            mk.getNodeStore().runBackgroundOperations();
+        }
+        
+        try {
+            // FIXME we should remove this. Leave it for unlocking myself and proceeding with actual code.
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            LOG.error("Sleeping badly.", e);
         }
     }
     
