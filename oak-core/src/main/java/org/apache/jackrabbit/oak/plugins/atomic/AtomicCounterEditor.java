@@ -146,7 +146,7 @@ public class AtomicCounterEditor extends DefaultEditor {
      * 
      * <p>
      * The passed in {@code NodeBuilder} must have
-     * {@link org.apache.jackrabbit.JcrConstants#JCR_MIXINTYPES JCR_MIXINTYPES} with
+     * {@link org.apache.jackrabbit.JcrConstants#JCR_MIXINTYPES} with
      * {@link org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants#MIX_ATOMIC_COUNTER MIX_ATOMIC_COUNTER}.
      * If not it will be silently ignored.
      * </p>
