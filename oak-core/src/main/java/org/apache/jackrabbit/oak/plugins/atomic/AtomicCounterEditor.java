@@ -22,6 +22,7 @@ import static org.apache.jackrabbit.oak.api.Type.LONG;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 
+import java.util.Set;
 import java.util.UUID;
 
 import javax.annotation.Nonnull;
@@ -36,6 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Sets;
 
 /**
  * <p>
@@ -155,14 +157,22 @@ public class AtomicCounterEditor extends DefaultEditor {
         long count = builder.hasProperty(PROP_COUNTER)
                         ? builder.getProperty(PROP_COUNTER).getValue(LONG)
                         : 0;
+        Set<String> processedProperties = Sets.newHashSet();
+        
         for (PropertyState p : builder.getProperties()) {
             if (p.getName().startsWith(PREFIX_PROP_COUNTER)) {
                 count += p.getValue(LONG);
-                builder.removeProperty(p.getName());
+                processedProperties.add(p.getName());
             }
         }
 
         builder.setProperty(PROP_COUNTER, count);
+        
+        // deleting the properties after having increased the counter for better management of
+        // conflicts
+        for (String p : processedProperties) {
+            builder.removeProperty(p);
+        }
     }
 
     private void setUniqueCounter(final long value) {
