@@ -16,6 +16,14 @@
  */
 package org.apache.jackrabbit.oak.spi.commit.async;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import java.util.Collections;
+import java.util.List;
+
+import javax.annotation.Nonnull;
+
+import org.apache.jackrabbit.oak.spi.commit.AsyncEditorProvider;
 import org.apache.jackrabbit.oak.stats.StopwatchLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,10 +32,24 @@ public class AsyncEditorProcessor implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(AsyncEditorProcessor.class);
     private static final StopwatchLogger SWL = new StopwatchLogger(LOG, AsyncEditorProcessor.class);
     
+    /**
+     * the list of asynchronous editor providers
+     */
+    private final List<AsyncEditorProvider> editorProviders;
+    
+    public AsyncEditorProcessor(@Nonnull final List<AsyncEditorProvider> editorProviders) {
+        this.editorProviders = Collections.unmodifiableList(checkNotNull(editorProviders));
+    }
+    
     @Override
     public void run() {
         SWL.start();
         LOG.debug("Processing asynchronous editors");
+        
+        for (AsyncEditorProvider e : editorProviders) {
+            LOG.debug(e.toString());
+        }
+        
         SWL.stop("Asynchronous editors completed in");
     }
 }

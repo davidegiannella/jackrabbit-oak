@@ -154,6 +154,7 @@ public class AtomicCounterEditor extends DefaultEditor {
      * @param builder the builder to work on. Cannot be null.
      */
     public static void consolidateCount(@Nonnull final NodeBuilder builder) {
+        LOG.debug("consolidating...");
         long count = builder.hasProperty(PROP_COUNTER)
                         ? builder.getProperty(PROP_COUNTER).getValue(LONG)
                         : 0;

@@ -70,6 +70,7 @@ import org.apache.jackrabbit.oak.plugins.index.property.jmx.PropertyIndexAsyncRe
 import org.apache.jackrabbit.oak.plugins.index.property.jmx.PropertyIndexAsyncReindexMBean;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.query.QueryEngineSettings;
+import org.apache.jackrabbit.oak.spi.commit.AsyncEditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
@@ -133,6 +134,11 @@ public class Oak {
 
     private List<EditorProvider> editorProviders = newArrayList();
 
+    /**
+     * list of asynchronous editor providers
+     */
+    private List<AsyncEditorProvider> asyncEditorProviders = newArrayList();
+    
     private SecurityProvider securityProvider;
 
     private ScheduledExecutorService scheduledExecutor;
@@ -407,6 +413,12 @@ public class Oak {
         editorProviders.add(checkNotNull(provider));
         return this;
     }
+    
+    @Nonnull
+    public Oak with(@Nonnull AsyncEditorProvider provider) {
+        asyncEditorProviders.add(checkNotNull(provider));
+        return this;
+    }
 
     /**
      * Associates the given editor with the repository to be created.
@@ -525,7 +537,7 @@ public class Oak {
                 .compose(editorProviders)));
 
         // Asynchronous commits
-        AsyncEditorProcessor aep = new AsyncEditorProcessor();
+        AsyncEditorProcessor aep = new AsyncEditorProcessor(asyncEditorProviders);
         regs.add(scheduleWithFixedDelay(whiteboard, aep, 5, true));
         
         if (asyncIndexing) {
