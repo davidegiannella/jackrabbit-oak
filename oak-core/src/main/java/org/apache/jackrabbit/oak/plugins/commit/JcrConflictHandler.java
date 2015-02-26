@@ -19,6 +19,8 @@
 package org.apache.jackrabbit.oak.plugins.commit;
 
 import com.google.common.collect.ImmutableList;
+
+import org.apache.jackrabbit.oak.plugins.atomic.OakCounterConflictHandler;
 import org.apache.jackrabbit.oak.spi.commit.CompositeConflictHandler;
 
 /**
@@ -32,7 +34,9 @@ public final class JcrConflictHandler {
      */
     public static CompositeConflictHandler createJcrConflictHandler() {
         return new CompositeConflictHandler(ImmutableList.of(
+                new OakCounterConflictHandler(),
                 new ChildOrderConflictHandler(),
+                // leave annotation conflict always as last resource
                 new AnnotatingConflictHandler()
         ));
     }
