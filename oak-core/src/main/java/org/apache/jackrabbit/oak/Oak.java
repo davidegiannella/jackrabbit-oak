@@ -80,6 +80,7 @@ import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.Observable;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
+import org.apache.jackrabbit.oak.spi.commit.async.AsyncEditorProcessor;
 import org.apache.jackrabbit.oak.spi.lifecycle.CompositeInitializer;
 import org.apache.jackrabbit.oak.spi.lifecycle.OakInitializer;
 import org.apache.jackrabbit.oak.spi.lifecycle.RepositoryInitializer;
@@ -523,6 +524,10 @@ public class Oak {
         initHooks.add(new EditorHook(CompositeEditorProvider
                 .compose(editorProviders)));
 
+        // Asynchronous commits
+        AsyncEditorProcessor aep = new AsyncEditorProcessor();
+        regs.add(scheduleWithFixedDelay(whiteboard, aep, 5, true));
+        
         if (asyncIndexing) {
             String name = "async";
             AsyncIndexUpdate task = new AsyncIndexUpdate(name, store,
