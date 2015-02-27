@@ -67,7 +67,7 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
     @Override
     public void run() {
         StopwatchLogger swl = new StopwatchLogger(LOG);
-        swl.start("Processing asynchronous editors started");
+        swl.start("Processing asynchronous editors started -");
         
         if (!editorProviders.isEmpty()) {
             NodeState root = store.getRoot();
@@ -76,15 +76,19 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             NodeState async = root.getChildNode(ASYNC);
             long leaseEndTime = async.getLong(name + "-lease");
             long currentTime = System.currentTimeMillis();
-            if (leaseEndTime > currentTime) {
-                LOG.debug(
-                    "Another copy is already running: {}. Skipping this update. Time left before expiring: {}s",
-                    name, (leaseEndTime - currentTime) / 1000);
+            if (leaseEndTime < currentTime) {
+                swl.stop(
+                    String.format(
+                        "Another copy of '%s' is running. " +
+                        "Time left before expiration: %ds. Skipping. Process completed in",
+                        name,
+                        (leaseEndTime - currentTime) / 1000
+                        )
+                    );
                 return;
-            }
+            } 
         }
         
-        
-        swl.stop("Processing asynchronous editors completed");
+        swl.stop("Processing asynchronous editors completed in");
     }
 }

@@ -29,6 +29,8 @@ import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Strings;
+
 /**
  * Utility class to be used for tracking of timing within methods. It makes use of the
  * {@link Clock.Fast} for speeding up the operation.
@@ -130,7 +132,7 @@ public class StopwatchLogger implements Closeable {
         track(this, message);
         clock = null;
     }
-
+    
     /**
      * convenience method for tracking the messages
      * 
@@ -138,6 +140,7 @@ public class StopwatchLogger implements Closeable {
      * @param clock the clock used for tracking.
      * @param clazz the class to be used during the tracking of times
      * @param message a custom message for the tracking.
+     * @param trackTime whether track the elapsed time or not.
      */
     private static void track(@Nonnull final StopwatchLogger swl,
                               @Nullable final String message) {
@@ -151,11 +154,18 @@ public class StopwatchLogger implements Closeable {
                 l.debug("{} - clock has not been started yet.", swl.clazz);
             } else {
                 Clock c = swl.clock;
-                
-                l.debug(
-                    "{} - {} {}ms",
-                    new Object[] { checkNotNull(swl.clazz), message == null ? "" : message,
-                                  c.getTimeMonotonic() - swl.start});
+
+                if ("".equals(checkNotNull(swl.clazz))) {
+                    l.debug(
+                        "{} {}ms",
+                        new Object[] { message == null ? "" : message,
+                                       c.getTimeMonotonic() - swl.start});
+                } else {
+                    l.debug(
+                        "{} - {} {}ms",
+                        new Object[] { message == null ? "" : message,
+                                       c.getTimeMonotonic() - swl.start});
+                }
             }
         }
     }
