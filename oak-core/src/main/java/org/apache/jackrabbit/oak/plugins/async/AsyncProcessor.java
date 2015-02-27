@@ -26,6 +26,6 @@ public abstract class AsyncProcessor {
      * Name of the hidden node under which information about the checkpoints
      * seen and indexed by each async indexer is kept.
      */
-    protected static final String ASYNC = ":async";
+    public static final String ASYNC = ":async";
 
 }
