@@ -41,6 +41,7 @@ import javax.annotation.Nullable;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.plugins.async.AsyncProcessor;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexLookup;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
@@ -426,7 +427,7 @@ public class AsyncIndexUpdateTest {
 
         builder = store.getRoot().builder();
         // change cp ref to point to a non-existing one
-        builder.child(AsyncIndexUpdate.ASYNC).setProperty("async", "faulty");
+        builder.child(AsyncProcessor.ASYNC).setProperty("async", "faulty");
         builder.child("testAnother").setProperty("foo", "def");
         store.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
 
@@ -450,7 +451,7 @@ public class AsyncIndexUpdateTest {
         Set<String> checkpoints = newHashSet(store.listCheckpoints());
         assertTrue("Expecting the initial checkpoint",
                 checkpoints.size() == 1);
-        assertEquals(store.getRoot().getChildNode(AsyncIndexUpdate.ASYNC)
+        assertEquals(store.getRoot().getChildNode(AsyncProcessor.ASYNC)
                 .getString("async"), checkpoints.iterator().next());
 
         async.run();
@@ -491,7 +492,7 @@ public class AsyncIndexUpdateTest {
                 secondCp.equals(firstCp));
         assertEquals(
                 secondCp,
-                store.getRoot().getChildNode(AsyncIndexUpdate.ASYNC)
+                store.getRoot().getChildNode(AsyncProcessor.ASYNC)
                         .getString("async"));
     }
 
@@ -529,7 +530,7 @@ public class AsyncIndexUpdateTest {
                 secondCp.equals(firstCp));
         assertEquals(
                 secondCp,
-                store.getRoot().getChildNode(AsyncIndexUpdate.ASYNC)
+                store.getRoot().getChildNode(AsyncProcessor.ASYNC)
                         .getString("async"));
     }
 
@@ -585,7 +586,7 @@ public class AsyncIndexUpdateTest {
         String firstCp = store.listCheckpoints().iterator().next();
         assertEquals(
                 firstCp,
-                store.getRoot().getChildNode(AsyncIndexUpdate.ASYNC)
+                store.getRoot().getChildNode(AsyncProcessor.ASYNC)
                         .getString("asyncMissing"));
 
         // second run, simulate an index going away
@@ -607,7 +608,7 @@ public class AsyncIndexUpdateTest {
                 secondCp.equals(firstCp));
         assertEquals(
                 firstCp,
-                store.getRoot().getChildNode(AsyncIndexUpdate.ASYNC)
+                store.getRoot().getChildNode(AsyncProcessor.ASYNC)
                         .getString("asyncMissing"));
     }
 

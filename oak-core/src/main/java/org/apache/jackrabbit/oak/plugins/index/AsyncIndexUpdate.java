@@ -44,10 +44,12 @@ import com.google.common.base.Objects;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
+
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.api.jmx.IndexStatsMBean;
+import org.apache.jackrabbit.oak.plugins.async.AsyncProcessor;
 import org.apache.jackrabbit.oak.plugins.commit.AnnotatingConflictHandler;
 import org.apache.jackrabbit.oak.plugins.commit.ConflictHook;
 import org.apache.jackrabbit.oak.plugins.commit.ConflictValidatorProvider;
@@ -69,16 +71,10 @@ import org.apache.jackrabbit.util.ISO8601;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class AsyncIndexUpdate implements Runnable {
+public class AsyncIndexUpdate extends AsyncProcessor implements Runnable {
 
     private static final Logger log = LoggerFactory
             .getLogger(AsyncIndexUpdate.class);
-
-    /**
-     * Name of the hidden node under which information about the checkpoints
-     * seen and indexed by each async indexer is kept.
-     */
-    static final String ASYNC = ":async";
 
     private static final long DEFAULT_LIFETIME = TimeUnit.DAYS.toMillis(1000);
 
