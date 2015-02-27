@@ -38,7 +38,6 @@ import com.google.common.base.Strings;
  */
 public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(AsyncEditorProcessor.class);
-    private static final StopwatchLogger SWL = new StopwatchLogger(LOG, AsyncEditorProcessor.class);
     
     /**
      * the list of asynchronous editor providers
@@ -67,8 +66,8 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
     
     @Override
     public void run() {
-        LOG.debug("Processing asynchronous editors");
-        SWL.start();
+        StopwatchLogger swl = new StopwatchLogger(LOG);
+        swl.start("Processing asynchronous editors started");
         
         if (!editorProviders.isEmpty()) {
             NodeState root = store.getRoot();
@@ -86,6 +85,6 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
         }
         
         
-        SWL.stop("Asynchronous editors completed in");
+        swl.stop("Processing asynchronous editors completed");
     }
 }

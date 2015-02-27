@@ -84,6 +84,15 @@ public class StopwatchLogger implements Closeable {
         this.clazz = checkNotNull(clazz);
         this.customLog = customLog;
     }
+    
+    /**
+     * Same as {@link #StopwatchLogger(Logger, String)} passing and empty string as {@code clazz}
+     * 
+     * @param customLog the custom logger to be used. Cannot be null.
+     */
+    public StopwatchLogger(@Nonnull final Logger customLog) {
+        this(checkNotNull(customLog), "");
+    }
 
     /**
      * starts the clock
@@ -91,6 +100,16 @@ public class StopwatchLogger implements Closeable {
     public void start() {
         clock = new Clock.Fast(executor);
         start = clock.getTimeMonotonic();
+    }
+    
+    /**
+     * start the clock and track the provided message
+     * 
+     * @param message
+     */
+    public void start(@Nullable final String message) {
+        start();
+        track(this, message);
     }
     
     /**
