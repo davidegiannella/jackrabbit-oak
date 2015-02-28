@@ -18,7 +18,9 @@ package org.apache.jackrabbit.oak.plugins.async;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.MISSING_NODE;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
@@ -76,7 +78,7 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             NodeState async = root.getChildNode(ASYNC);
             long leaseEndTime = async.getLong(name + "-lease");
             long currentTime = System.currentTimeMillis();
-            if (leaseEndTime < currentTime) {
+            if (leaseEndTime > currentTime) {
                 swl.stop(
                     String.format(
                         "Another copy of '%s' is running. " +
@@ -85,10 +87,45 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
                         (leaseEndTime - currentTime) / 1000
                         )
                     );
+                closeStopwatch(swl);
                 return;
-            } 
+            }
+            
+            // find the last checkpoint state, and check if there are recent changes
+            NodeState before;
+            String beforeCheckpoint = async.getString(name);
+            if (beforeCheckpoint != null) {
+                NodeState state = store.retrieve(beforeCheckpoint);
+                if (state == null) {
+                    LOG.warn("Failed to retrieve previously checkpoint '{}'"
+                            + " re-running the initial update for '{}'",
+                            beforeCheckpoint, name);
+                    beforeCheckpoint = null;
+                    before = MISSING_NODE;
+                } else if (noVisibleChanges(state, root)) {
+                    swl.stop("No changes since last checkpoint;"
+                            + " skipping the update");
+                    closeStopwatch(swl);
+                    return;
+                } else {
+                    before = state;
+                }
+            } else {
+                LOG.info("Initial '{}' update", name);
+                before = MISSING_NODE;
+            }
+
         }
         
         swl.stop("Processing asynchronous editors completed in");
+        closeStopwatch(swl);
+    }
+    
+    private static void closeStopwatch(@Nonnull final StopwatchLogger swl) {
+        try {
+            checkNotNull(swl).close();
+        } catch (IOException e) {
+            LOG.debug("ignoring", e);
+        }
     }
 }

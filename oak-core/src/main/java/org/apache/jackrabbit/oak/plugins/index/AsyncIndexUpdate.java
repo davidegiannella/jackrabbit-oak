@@ -63,7 +63,6 @@ import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.commit.VisibleEditor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.apache.jackrabbit.oak.spi.state.NodeStateDiff;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.stats.TimeSeriesStatsUtil;
 import org.apache.jackrabbit.stats.TimeSeriesRecorder;
@@ -663,45 +662,6 @@ public class AsyncIndexUpdate extends AsyncProcessor implements Runnable {
                 execTimer.recordOneSecond();
             }
         }
-    }
-
-    /**
-     * Checks whether there are no visible changes between the given states.
-     */
-    private static boolean noVisibleChanges(NodeState before, NodeState after) {
-        return after.compareAgainstBaseState(before, new NodeStateDiff() {
-            @Override
-            public boolean propertyAdded(PropertyState after) {
-                return isHidden(after.getName());
-            }
-            @Override
-            public boolean propertyChanged(
-                    PropertyState before, PropertyState after) {
-                return isHidden(after.getName());
-            }
-            @Override
-            public boolean propertyDeleted(PropertyState before) {
-                return isHidden(before.getName());
-            }
-            @Override
-            public boolean childNodeAdded(String name, NodeState after) {
-                return isHidden(name);
-            }
-            @Override
-            public boolean childNodeChanged(
-                    String name, NodeState before, NodeState after) {
-                return isHidden(name)
-                        || after.compareAgainstBaseState(before, this);
-            }
-            @Override
-            public boolean childNodeDeleted(String name, NodeState before) {
-                return isHidden(name);
-            }
-        });
-    }
-
-    private static boolean isHidden(String name) {
-        return name.charAt(0) == ':';
     }
 
     static class DefaultMissingIndexProviderStrategy extends

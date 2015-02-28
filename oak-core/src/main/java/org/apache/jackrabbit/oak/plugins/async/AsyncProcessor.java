@@ -16,6 +16,10 @@
  */
 package org.apache.jackrabbit.oak.plugins.async;
 
+import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.state.NodeStateDiff;
+
 /**
  * abstract class from which an asynchronous processor could extend in order to inherit some utility
  * methods
@@ -27,5 +31,44 @@ public abstract class AsyncProcessor {
      * seen and indexed by each async indexer is kept.
      */
     public static final String ASYNC = ":async";
+
+    /**
+     * Checks whether there are no visible changes between the given states.
+     */
+    protected static boolean noVisibleChanges(NodeState before, NodeState after) {
+        return after.compareAgainstBaseState(before, new NodeStateDiff() {
+            @Override
+            public boolean propertyAdded(PropertyState after) {
+                return isHidden(after.getName());
+            }
+            @Override
+            public boolean propertyChanged(
+                    PropertyState before, PropertyState after) {
+                return isHidden(after.getName());
+            }
+            @Override
+            public boolean propertyDeleted(PropertyState before) {
+                return isHidden(before.getName());
+            }
+            @Override
+            public boolean childNodeAdded(String name, NodeState after) {
+                return isHidden(name);
+            }
+            @Override
+            public boolean childNodeChanged(
+                    String name, NodeState before, NodeState after) {
+                return isHidden(name)
+                        || after.compareAgainstBaseState(before, this);
+            }
+            @Override
+            public boolean childNodeDeleted(String name, NodeState before) {
+                return isHidden(name);
+            }
+        });
+    }
+
+    private static boolean isHidden(String name) {
+        return name.charAt(0) == ':';
+    }
 
 }
