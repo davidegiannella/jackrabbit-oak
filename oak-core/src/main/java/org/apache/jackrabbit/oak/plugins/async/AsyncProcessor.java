@@ -16,6 +16,8 @@
  */
 package org.apache.jackrabbit.oak.plugins.async;
 
+import java.util.concurrent.TimeUnit;
+
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStateDiff;
@@ -31,6 +33,7 @@ public abstract class AsyncProcessor {
      * seen and indexed by each async indexer is kept.
      */
     public static final String ASYNC = ":async";
+    public static final long DEFAULT_LIFETIME = TimeUnit.DAYS.toMillis(1000);
 
     /**
      * Checks whether there are no visible changes between the given states.

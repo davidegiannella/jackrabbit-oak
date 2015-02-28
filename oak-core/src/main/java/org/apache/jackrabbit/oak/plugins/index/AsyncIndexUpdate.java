@@ -75,8 +75,6 @@ public class AsyncIndexUpdate extends AsyncProcessor implements Runnable {
     private static final Logger log = LoggerFactory
             .getLogger(AsyncIndexUpdate.class);
 
-    private static final long DEFAULT_LIFETIME = TimeUnit.DAYS.toMillis(1000);
-
     private static final CommitFailedException CONCURRENT_UPDATE = new CommitFailedException(
             "Async", 1, "Concurrent update detected");
 

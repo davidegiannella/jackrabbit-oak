@@ -26,6 +26,7 @@ import java.util.List;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.oak.plugins.index.AsyncIndexUpdate;
 import org.apache.jackrabbit.oak.spi.commit.AsyncEditorProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -34,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableMap;
 
 /**
  * the director which orchestrate the asynchronous editors
@@ -111,11 +113,27 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
                     before = state;
                 }
             } else {
-                LOG.info("Initial '{}' update", name);
+                LOG.info("Initial update");
                 before = MISSING_NODE;
             }
-
         }
+        
+        // creating the checkpoint
+        String afterCheckpoint = store.checkpoint(DEFAULT_LIFETIME, ImmutableMap.of(
+                "creator", AsyncEditorProcessor.class.getSimpleName(),
+                "thread", Thread.currentThread().getName()));
+        NodeState after = store.retrieve(afterCheckpoint);
+        if (after == null) {
+            swl.stop(
+                String.format(
+                    "Unable to create newly created checkpoint %s, skipping the update",
+                    afterCheckpoint
+                ));
+            closeStopwatch(swl);
+            return;
+        }
+
+        swl.split("checkpoint created");
         
         swl.stop("Processing asynchronous editors completed in");
         closeStopwatch(swl);
