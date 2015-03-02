@@ -18,8 +18,8 @@ package org.apache.jackrabbit.oak.jcr;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.jcr.AbstractRepositoryTest.dispose;
-import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_COUNTER;
-import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_INCREMENT;
+import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterPreProcess.PROP_COUNTER;
+import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterPreProcess.PROP_INCREMENT;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

@@ -16,27 +16,24 @@
  */
 package org.apache.jackrabbit.oak.plugins.atomic;
 
-import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.spi.commit.AsyncEditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
-import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
-/**
- * Provide an instance of {@link AtomicCounterPreProcess}
- */
+import aQute.bnd.annotation.component.Component;
+
 @Component
 @Service
-public class AtomicCounterEditorProvider implements EditorProvider {
-    
+public class AtomicCounterConsolidatorProvider implements AsyncEditorProvider{
+
     @Override
-    public Editor getRootEditor(final NodeState before, final NodeState after,
-                                final NodeBuilder builder, final CommitInfo info)
-                                    throws CommitFailedException {        
-        return new AtomicCounterPreProcess(builder);
+    public Editor getRootEditor(NodeState before, NodeState after, NodeBuilder builder,
+                                CommitInfo info) throws CommitFailedException {
+        return new AtomicCounterConsolidator(builder);
     }
+
 }

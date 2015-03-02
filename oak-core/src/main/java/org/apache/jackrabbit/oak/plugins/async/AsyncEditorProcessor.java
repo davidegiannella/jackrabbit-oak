@@ -18,6 +18,7 @@ package org.apache.jackrabbit.oak.plugins.async;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Lists.newArrayList;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.MISSING_NODE;
 
 import java.io.IOException;
@@ -26,8 +27,19 @@ import java.util.List;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.plugins.index.AsyncIndexUpdate;
 import org.apache.jackrabbit.oak.spi.commit.AsyncEditorProvider;
+import org.apache.jackrabbit.oak.spi.commit.CommitHook;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
+import org.apache.jackrabbit.oak.spi.commit.CompositeEditor;
+import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
+import org.apache.jackrabbit.oak.spi.commit.Editor;
+import org.apache.jackrabbit.oak.spi.commit.EditorDiff;
+import org.apache.jackrabbit.oak.spi.commit.EditorHook;
+import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
+import org.apache.jackrabbit.oak.spi.commit.VisibleEditor;
+import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.stats.StopwatchLogger;
@@ -36,6 +48,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
 
 /**
  * the director which orchestrate the asynchronous editors
@@ -116,28 +129,49 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
                 LOG.info("Initial update");
                 before = MISSING_NODE;
             }
-        }
-        
-        // creating the checkpoint
-        String afterCheckpoint = store.checkpoint(DEFAULT_LIFETIME, ImmutableMap.of(
-                "creator", AsyncEditorProcessor.class.getSimpleName(),
-                "thread", Thread.currentThread().getName()));
-        NodeState after = store.retrieve(afterCheckpoint);
-        if (after == null) {
-            swl.stop(
-                String.format(
-                    "Unable to create newly created checkpoint %s, skipping the update",
-                    afterCheckpoint
-                ));
-            closeStopwatch(swl);
-            return;
-        }
+            
+            // creating the checkpoint
+            String afterCheckpoint = store.checkpoint(DEFAULT_LIFETIME, ImmutableMap.of(
+                    "creator", AsyncEditorProcessor.class.getSimpleName(),
+                    "thread", Thread.currentThread().getName()));
+            NodeState after = store.retrieve(afterCheckpoint);
+            if (after == null) {
+                swl.stop(
+                    String.format(
+                        "Unable to create newly created checkpoint %s, skipping the update",
+                        afterCheckpoint
+                    ));
+                closeStopwatch(swl);
+                return;
+            }
 
-        swl.split("checkpoint created");
-        
-        // TODO update runs the commit hooks
-        // TODO release the checkpoint
-        
+            swl.split(String.format("checkpoint '%s' created in", afterCheckpoint));
+            
+            String checkpointToRelease = afterCheckpoint;
+
+            // TODO process commit hooks
+            try {
+                NodeBuilder builder = store.getRoot().builder();
+                List<Editor> editors = newArrayList();
+                for (EditorProvider provider : editorProviders) {
+                    editors.add(provider.getRootEditor(before, after, builder, CommitInfo.EMPTY));
+                }
+                Editor editor = CompositeEditor.compose(editors);
+                CommitFailedException exception = EditorDiff.process(editor,
+                    before, after);                
+                
+                if (exception != null) {
+                    LOG.debug("Exception found. Throwing it up.");
+                    throw exception;
+                }
+            } catch (CommitFailedException e) {
+                LOG.error("Error while processing commit hooks", e);
+            } finally {
+                // TODO release the checkpoint
+            }
+
+        }
+                
         swl.stop("Processing asynchronous editors completed in");
         closeStopwatch(swl);
     }

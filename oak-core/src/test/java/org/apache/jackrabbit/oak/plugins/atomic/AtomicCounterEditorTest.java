@@ -21,9 +21,9 @@ import static com.google.common.collect.ImmutableList.of;
 import static org.apache.jackrabbit.JcrConstants.JCR_MIXINTYPES;
 import static org.apache.jackrabbit.oak.api.Type.LONG;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
-import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PREFIX_PROP_COUNTER;
-import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_COUNTER;
-import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_INCREMENT;
+import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterPreProcess.PREFIX_PROP_COUNTER;
+import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterPreProcess.PROP_COUNTER;
+import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterPreProcess.PROP_INCREMENT;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 import static org.junit.Assert.assertEquals;
@@ -49,7 +49,7 @@ public class AtomicCounterEditorTest {
     public void childNodeAdded() throws CommitFailedException {
         NodeBuilder builder = EMPTY_NODE.builder();
         
-        Editor editor = new AtomicCounterEditor(EMPTY_NODE.builder());
+        Editor editor = new AtomicCounterPreProcess(EMPTY_NODE.builder());
         
         assertNull("without the mixin we should not process",
             editor.childNodeAdded("foo", builder.getNodeState()));
@@ -57,7 +57,7 @@ public class AtomicCounterEditorTest {
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
         assertTrue("with the mixin set we should get a proper Editor",
-            editor.childNodeAdded("foo", builder.getNodeState()) instanceof AtomicCounterEditor);
+            editor.childNodeAdded("foo", builder.getNodeState()) instanceof AtomicCounterPreProcess);
     }
     
     @Test
@@ -67,14 +67,14 @@ public class AtomicCounterEditorTest {
         PropertyState property;
         
         builder = EMPTY_NODE.builder();
-        editor = new AtomicCounterEditor(builder);
+        editor = new AtomicCounterPreProcess(builder);
         property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
         editor.propertyAdded(property);
         assertNoCounters(builder.getProperties());
         
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
-        editor = new AtomicCounterEditor(builder);
+        editor = new AtomicCounterPreProcess(builder);
         property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
         editor.propertyAdded(property);
         assertNull("the oak:increment should never be set", builder.getProperty(PROP_INCREMENT));
@@ -89,14 +89,14 @@ public class AtomicCounterEditorTest {
         
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
-        editor = new AtomicCounterEditor(builder);
+        editor = new AtomicCounterPreProcess(builder);
         property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
         
         editor.propertyAdded(property);
         assertTotalCounters(builder.getProperties(), 1);
         editor.propertyAdded(property);
         assertTotalCounters(builder.getProperties(), 2);
-        AtomicCounterEditor.consolidateCount(builder);
+        AtomicCounterPreProcess.consolidateCount(builder);
         assertNotNull(builder.getProperty(PROP_COUNTER));
         assertEquals(2, builder.getProperty(PROP_COUNTER).getValue(LONG).longValue());
         assertNoCounters(builder.getProperties());
@@ -104,7 +104,7 @@ public class AtomicCounterEditorTest {
 
     /**
      * that a list of properties does not contains any property with name starting with
-     * {@link AtomicCounterEditor#PREFIX_PROP_COUNTER}
+     * {@link AtomicCounterPreProcess#PREFIX_PROP_COUNTER}
      * 
      * @param properties
      */
@@ -118,7 +118,7 @@ public class AtomicCounterEditorTest {
     }
     
     /**
-     * assert the total amount of {@link AtomicCounterEditor#PREFIX_PROP_COUNTER}
+     * assert the total amount of {@link AtomicCounterPreProcess#PREFIX_PROP_COUNTER}
      * 
      * @param properties
      */
