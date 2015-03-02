@@ -135,6 +135,9 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
 
         swl.split("checkpoint created");
         
+        // TODO update runs the commit hooks
+        // TODO release the checkpoint
+        
         swl.stop("Processing asynchronous editors completed in");
         closeStopwatch(swl);
     }
