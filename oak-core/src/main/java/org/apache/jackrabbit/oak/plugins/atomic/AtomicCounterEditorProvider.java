@@ -27,7 +27,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
 /**
- * Provide an instance of {@link AtomicCounterPreProcess}
+ * Provide an instance of {@link AtomicCounterEditor}
  */
 @Component
 @Service
@@ -37,6 +37,6 @@ public class AtomicCounterEditorProvider implements AsyncEditorProvider {
     public Editor getRootEditor(final NodeState before, final NodeState after,
                                 final NodeBuilder builder, final CommitInfo info)
                                     throws CommitFailedException {        
-        return new AtomicCounterPreProcess(builder);
+        return new AtomicCounterEditor(builder);
     }
 }
