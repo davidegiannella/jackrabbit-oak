@@ -47,6 +47,7 @@ import org.apache.jackrabbit.oak.plugins.version.VersionEditorProvider;
 import org.apache.jackrabbit.oak.query.QueryEngineSettings;
 import org.apache.jackrabbit.oak.security.SecurityProviderImpl;
 import org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditorProvider;
+import org.apache.jackrabbit.oak.plugins.atomic.ConsolidatorEditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.AsyncEditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CompositeConflictHandler;
@@ -86,7 +87,7 @@ public class Jcr {
         with(new TypeEditorProvider());
         with(new ConflictValidatorProvider());
         with(new AtomicCounterEditorProvider());
-//        oak.with((AsyncEditorProvider) new AtomicCounterEditorProvider());
+        oak.with((AsyncEditorProvider) new ConsolidatorEditorProvider());
         with(new ReferenceEditorProvider());
         with(new ReferenceIndexProvider());
 

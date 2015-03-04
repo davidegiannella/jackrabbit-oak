@@ -28,6 +28,7 @@ import java.util.List;
 import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.CommitFailedException;
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.AsyncIndexUpdate;
 import org.apache.jackrabbit.oak.spi.commit.AsyncEditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
@@ -84,10 +85,11 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
     @Override
     public void run() {
         StopwatchLogger swl = new StopwatchLogger(LOG);
-        swl.start("Processing asynchronous editors started -");
+        swl.start("Started -");
         
         if (!editorProviders.isEmpty()) {
             NodeState root = store.getRoot();
+            NodeBuilder builder = store.getRoot().builder();
 
             // check for concurrent updates
             NodeState async = root.getChildNode(ASYNC);
@@ -105,6 +107,9 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
                 closeStopwatch(swl);
                 return;
             }
+            
+            // storing the lease time
+            builder.child(ASYNC).setProperty(name + "-lease", currentTime + DEFAULT_LIFETIME, Type.LONG);
             
             // find the last checkpoint state, and check if there are recent changes
             NodeState before;
@@ -138,20 +143,20 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             if (after == null) {
                 swl.stop(
                     String.format(
-                        "Unable to create newly created checkpoint %s, skipping the update",
+                        "Unable to retrieve newly created checkpoint %s, skipping the update",
                         afterCheckpoint
                     ));
                 closeStopwatch(swl);
                 return;
             }
 
-            swl.split(String.format("checkpoint '%s' created in", afterCheckpoint));
+            swl.split(String.format("checkpoints before: '%s', after: '%s' done in",
+                beforeCheckpoint, afterCheckpoint));
             
             String checkpointToRelease = afterCheckpoint;
 
             // TODO process commit hooks
             try {
-                NodeBuilder builder = store.getRoot().builder();
                 List<Editor> editors = newArrayList();
                 for (EditorProvider provider : editorProviders) {
                     editors.add(provider.getRootEditor(before, after, builder, CommitInfo.EMPTY));
@@ -167,12 +172,16 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             } catch (CommitFailedException e) {
                 LOG.error("Error while processing commit hooks", e);
             } finally {
-                // TODO release the checkpoint
+                if (checkpointToRelease != null) {
+                    store.release(checkpointToRelease);
+                }
             }
-
+            
+            // cleaning up lease time 
+            builder.child(ASYNC).removeProperty(name + "-lease");
         }
-                
-        swl.stop("Processing asynchronous editors completed in");
+        
+        swl.stop("Completed in");
         closeStopwatch(swl);
     }
     

@@ -139,7 +139,6 @@ public class AtomicCounterEditor extends DefaultEditor {
     @Override
     public void propertyAdded(final PropertyState after) throws CommitFailedException {
         if (shallWeProcessProperty(after, path, builder)) {
-            LOG.debug("propertyAdded()");
             setUniqueCounter(after.getValue(LONG));
             builder.removeProperty(PROP_INCREMENT);
         }
@@ -178,9 +177,9 @@ public class AtomicCounterEditor extends DefaultEditor {
 
     @Override
     public void leave(NodeState before, NodeState after) throws CommitFailedException {
-        if (update) {
-            consolidateCount(builder);
-        }
+//        if (update) {
+//            consolidateCount(builder);
+//        }
     }
 
     @Override
