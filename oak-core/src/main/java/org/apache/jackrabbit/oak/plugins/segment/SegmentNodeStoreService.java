@@ -17,6 +17,7 @@
 package org.apache.jackrabbit.oak.plugins.segment;
 
 import static com.google.common.base.Preconditions.checkState;
+import static java.util.Collections.emptyMap;
 import static org.apache.jackrabbit.oak.commons.PropertiesUtil.toBoolean;
 import static org.apache.jackrabbit.oak.commons.PropertiesUtil.toLong;
 import static org.apache.jackrabbit.oak.plugins.segment.compaction.CompactionStrategy.CLEANUP_DEFAULT;
@@ -25,6 +26,7 @@ import static org.apache.jackrabbit.oak.plugins.segment.compaction.CompactionStr
 import static org.apache.jackrabbit.oak.plugins.segment.compaction.CompactionStrategy.PAUSE_DEFAULT;
 import static org.apache.jackrabbit.oak.plugins.segment.compaction.CompactionStrategy.TIMESTAMP_DEFAULT;
 import static org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils.registerMBean;
+import static org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils.scheduleWithFixedDelay;
 
 import java.io.ByteArrayInputStream;
 import java.io.Closeable;
@@ -61,16 +63,21 @@ import org.apache.jackrabbit.oak.plugins.segment.compaction.CompactionStrategyMB
 import org.apache.jackrabbit.oak.plugins.segment.compaction.DefaultCompactionStrategyMBean;
 import org.apache.jackrabbit.oak.plugins.segment.file.FileStore;
 import org.apache.jackrabbit.oak.plugins.segment.file.FileStore.Builder;
+import org.apache.jackrabbit.oak.plugins.segment.file.FileStoreGCMonitor;
+import org.apache.jackrabbit.oak.plugins.segment.file.GCMonitorMBean;
 import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.spi.blob.GarbageCollectableBlobStore;
 import org.apache.jackrabbit.oak.spi.commit.Observable;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
+import org.apache.jackrabbit.oak.spi.gc.GCMonitor;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.spi.state.ProxyNodeStore;
 import org.apache.jackrabbit.oak.spi.state.RevisionGC;
 import org.apache.jackrabbit.oak.spi.state.RevisionGCMBean;
+import org.apache.jackrabbit.oak.spi.whiteboard.CompositeRegistration;
 import org.apache.jackrabbit.oak.spi.whiteboard.Registration;
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardExecutor;
+import org.apache.jackrabbit.oak.stats.Clock;
 import org.osgi.framework.Constants;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.component.ComponentContext;
@@ -81,6 +88,7 @@ import org.slf4j.LoggerFactory;
  * An OSGi wrapper for the segment node store.
  */
 @Component(policy = ConfigurationPolicy.REQUIRE)
+@Property(name = "oak.nodestore.description", value = {"nodeStoreType=segment"}, propertyPrivate = true)
 public class SegmentNodeStoreService extends ProxyNodeStore
         implements Observable, SegmentStoreProvider {
 
@@ -135,6 +143,8 @@ public class SegmentNodeStoreService extends ProxyNodeStore
 
     private ObserverTracker observerTracker;
 
+    private GCMonitorTracker gcMonitor;
+
     private ComponentContext context;
 
     @Reference(cardinality = ReferenceCardinality.OPTIONAL_UNARY,
@@ -147,6 +157,7 @@ public class SegmentNodeStoreService extends ProxyNodeStore
     private Registration revisionGCRegistration;
     private Registration blobGCRegistration;
     private Registration compactionStrategyRegistration;
+    private Registration fsgcMonitorMBean;
     private WhiteboardExecutor executor;
     private boolean customBlobStore;
 
@@ -243,11 +254,13 @@ public class SegmentNodeStoreService extends ProxyNodeStore
         };
 
         OsgiWhiteboard whiteboard = new OsgiWhiteboard(context.getBundleContext());
+        gcMonitor = new GCMonitorTracker();
+        gcMonitor.start(whiteboard);
         Builder storeBuilder = FileStore.newFileStore(new File(directory))
                 .withCacheSize(Integer.parseInt(cache))
                 .withMaxFileSize(Integer.parseInt(size))
                 .withMemoryMapping("64".equals(mode))
-                .withWhiteBoard(whiteboard);
+                .withGCMonitor(gcMonitor);
         if (customBlobStore) {
             log.info("Initializing SegmentNodeStore with BlobStore [{}]", blobStore);
             store = storeBuilder.withBlobStore(blobStore).create()
@@ -256,6 +269,13 @@ public class SegmentNodeStoreService extends ProxyNodeStore
             store = storeBuilder.create()
                     .setCompactionStrategy(compactionStrategy);
         }
+
+        FileStoreGCMonitor fsgcMonitor = new FileStoreGCMonitor(Clock.SIMPLE);
+        fsgcMonitorMBean = new CompositeRegistration(
+                whiteboard.register(GCMonitor.class, fsgcMonitor, emptyMap()),
+                registerMBean(whiteboard, GCMonitorMBean.class, fsgcMonitor, GCMonitorMBean.TYPE,
+                        "File Store garbage collection monitor"),
+                scheduleWithFixedDelay(whiteboard, fsgcMonitor, 1));
 
         delegate = new SegmentNodeStore(store);
         observerTracker = new ObserverTracker(delegate);
@@ -329,6 +349,7 @@ public class SegmentNodeStoreService extends ProxyNodeStore
         unregisterNodeStore();
 
         observerTracker.stop();
+        gcMonitor.stop();
         delegate = null;
 
         store.close();
@@ -369,6 +390,10 @@ public class SegmentNodeStoreService extends ProxyNodeStore
         if (compactionStrategyRegistration != null) {
             compactionStrategyRegistration.unregister();
             compactionStrategyRegistration = null;
+        }
+        if (fsgcMonitorMBean != null) {
+            fsgcMonitorMBean.unregister();
+            fsgcMonitorMBean = null;
         }
         if (executor != null) {
             executor.stop();

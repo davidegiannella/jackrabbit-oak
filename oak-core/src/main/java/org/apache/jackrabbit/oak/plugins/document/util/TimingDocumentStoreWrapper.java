@@ -317,6 +317,11 @@ public class TimingDocumentStoreWrapper implements DocumentStore {
         }
     }
 
+    @Override
+    public Map<String, String> getMetadata() {
+        return base.getMetadata();
+    }
+
     private void logCommonCall(long start, String key) {
         int time = (int) (System.currentTimeMillis() - start);
         if (time <= 0) {

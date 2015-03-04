@@ -955,4 +955,10 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
             assertTrue(cmc2.longValue() == cmc3.longValue());
         }
     }
+
+    @Test
+    public void description() throws Exception{
+        Map<String, String> desc = ds.getMetadata();
+        assertNotNull(desc.get("type"));
+    }
 }
