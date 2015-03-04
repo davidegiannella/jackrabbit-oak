@@ -86,8 +86,8 @@ public class Jcr {
         with(new NamespaceEditorProvider());
         with(new TypeEditorProvider());
         with(new ConflictValidatorProvider());
-        with(new AtomicCounterEditorProvider());
-        oak.with((AsyncEditorProvider) new AtomicCounterConsolidatorProvider());
+//        with(new AtomicCounterEditorProvider());
+        oak.with((AsyncEditorProvider) new AtomicCounterEditorProvider());
         with(new ReferenceEditorProvider());
         with(new ReferenceIndexProvider());
 

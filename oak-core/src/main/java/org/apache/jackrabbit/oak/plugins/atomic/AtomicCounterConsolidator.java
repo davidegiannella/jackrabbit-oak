@@ -48,9 +48,35 @@ public class AtomicCounterConsolidator extends AtomicCounterEditor {
     
     @Override
     public void propertyAdded(final PropertyState after) throws CommitFailedException {
-        LOG.debug("propertyAdded() - {}", after);
+        if (increment(after)) {
+            LOG.debug("propertyAdded() - {}", after);            
+        }
         update = shallWeProcessProperty(after, path, builder);
     }
+
+    
+    private boolean increment(PropertyState p) {
+        return p.getName().equals(PROP_INCREMENT) || p.getName().startsWith(PREFIX_PROP_COUNTER);
+    }
+    
+    @Override
+    public void
+        propertyChanged(PropertyState before, PropertyState after) throws CommitFailedException {
+        if (increment(before) || increment(after)) {
+            LOG.debug("propertyChanged()");
+            LOG.debug("before: {}", before);
+            LOG.debug("after: {}", after);
+        }
+    }
+
+
+    @Override
+    public void propertyDeleted(PropertyState before) throws CommitFailedException {
+        if (increment(before)) {
+            LOG.debug("propertyDeleted() - {}", before);
+        }
+    }
+
 
     /**
      * <p>

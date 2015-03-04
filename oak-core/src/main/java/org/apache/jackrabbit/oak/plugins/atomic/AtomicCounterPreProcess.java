@@ -103,6 +103,7 @@ public class AtomicCounterPreProcess extends AtomicCounterEditor {
     @Override
     public void propertyAdded(final PropertyState after) throws CommitFailedException {
         if (shallWeProcessProperty(after, path, builder)) {
+            LOG.debug("propertyAdded()");
             setUniqueCounter(after.getValue(LONG));
             builder.removeProperty(PROP_INCREMENT);
         }

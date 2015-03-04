@@ -31,7 +31,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
  */
 @Component
 @Service
-public class AtomicCounterEditorProvider implements EditorProvider {
+public class AtomicCounterEditorProvider implements AsyncEditorProvider {
     
     @Override
     public Editor getRootEditor(final NodeState before, final NodeState after,
