@@ -144,9 +144,12 @@ public class AtomicCounterClusterIT {
             }
         }
         Futures.allAsList(tasks).get();
-        
-        alignCluster(mks);
 
+        // let the time for the async process to kick in.
+        alignCluster(mks);
+        Thread.sleep(5000);
+        alignCluster(mks);
+        
         raiseExceptions(exceptions);
         
         // assert the final situation
