@@ -203,21 +203,22 @@ public class AtomicCounterClusterIT {
         }
     }
 
-    /** 
+    /**
+     * <p> 
      * ensures that the cluster is aligned by running all the background operations
+     * </p>
+     * 
+     * <p>
+     * In order to use this you have to initialise the cluster with {@code setAsyncDelay(0)}.
+     * </p>
      * 
      * @param mks the list of {@link DocumentMK} composing the cluster. Cannot be null.
      */
     static void alignCluster(@Nonnull final List<DocumentMK> mks) {
-        for (DocumentMK mk : mks) {
-            mk.getNodeStore().runBackgroundOperations();
-        }
-        
-        try {
-            // FIXME we should remove this. Leave it for unlocking myself and proceeding with actual code.
-            Thread.sleep(5000);
-        } catch (InterruptedException e) {
-            LOG.error("Sleeping badly.", e);
+        for (int i = 0; i < 2; i++) {
+            for (DocumentMK mk : mks) {
+                mk.getNodeStore().runBackgroundOperations();
+            }            
         }
     }
     
@@ -235,7 +236,8 @@ public class AtomicCounterClusterIT {
         for (int i = 0; i < NUM_CLUSTER_NODES; i++) {
             DocumentMK mk = new DocumentMK.Builder()
                     .setMongoDB(createConnection(checkNotNull(clazz)).getDB())
-                    .setClusterId(i + 1).open();
+                    .setClusterId(i + 1)
+                    .setAsyncDelay(0).open();
             
             Repository repo = new Jcr(mk.getNodeStore()).createRepository();
             
