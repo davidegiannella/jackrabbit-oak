@@ -35,6 +35,7 @@ import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.CompositeEditor;
 import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
+import org.apache.jackrabbit.oak.spi.commit.CompositeHook;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorDiff;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
@@ -157,18 +158,20 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
 
             // TODO process commit hooks
             try {
-                List<Editor> editors = newArrayList();
-                for (EditorProvider provider : editorProviders) {
-                    editors.add(provider.getRootEditor(before, after, builder, CommitInfo.EMPTY));
-                }
-                Editor editor = CompositeEditor.compose(editors);
-                CommitFailedException exception = EditorDiff.process(editor,
-                    before, after);                
+//                List<Editor> editors = newArrayList();
+//                for (EditorProvider provider : editorProviders) {
+//                    editors.add(provider.getRootEditor(before, after, builder, CommitInfo.EMPTY));
+//                }
+//                Editor editor = CompositeEditor.compose(editors);
+//                CommitFailedException exception = EditorDiff.process(editor,
+//                    before, after);
+//                
+//                if (exception != null) {
+//                    LOG.debug("Exception found. Throwing it up.");
+//                    throw exception;
+//                }
+                store.merge(builder, new EditorHook(CompositeEditorProvider.compose(editorProviders)), CommitInfo.EMPTY);
                 
-                if (exception != null) {
-                    LOG.debug("Exception found. Throwing it up.");
-                    throw exception;
-                }
             } catch (CommitFailedException e) {
                 LOG.error("Error while processing commit hooks", e);
             } finally {

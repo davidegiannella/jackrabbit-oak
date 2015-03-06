@@ -161,9 +161,10 @@ public class AtomicCounterEditor extends DefaultEditor {
      */
     public static void consolidateCount(@Nonnull final NodeBuilder builder) {
         LOG.debug("consolidating...");
-        long count = builder.hasProperty(PROP_COUNTER)
+        final long initial = builder.hasProperty(PROP_COUNTER)
                         ? builder.getProperty(PROP_COUNTER).getValue(LONG)
-                        : 0;
+                        : 0; 
+        long count = initial; 
 
         for (PropertyState p : builder.getProperties()) {
             if (p.getName().startsWith(PREFIX_PROP_COUNTER)) {
@@ -172,7 +173,11 @@ public class AtomicCounterEditor extends DefaultEditor {
             }
         }
 
-        builder.setProperty(PROP_COUNTER, count);
+        if (count != initial) {
+            LOG.debug("setting '{}'. initial counter: {}, new counter: {}", PROP_COUNTER, initial,
+                count);
+            builder.setProperty(PROP_COUNTER, count);
+        }
     }
 
     @Override

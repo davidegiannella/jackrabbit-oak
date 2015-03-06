@@ -16,6 +16,10 @@
  */
 package org.apache.jackrabbit.oak.plugins.atomic;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import javax.annotation.Nonnull;
+
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.spi.commit.DefaultEditor;
@@ -30,8 +34,8 @@ public class ConsolidatorEditor extends DefaultEditor {
     private NodeBuilder builder;
     private String path;
     
-    private static boolean isProperty(PropertyState p) {
-        return AtomicCounterEditor.PROP_COUNTER.equals(p.getName()) || AtomicCounterEditor.PROP_INCREMENT.equals(p.getName()) || p.getName().startsWith(AtomicCounterEditor.PREFIX_PROP_COUNTER);
+    private static boolean isProperty(@Nonnull final PropertyState p) {
+        return checkNotNull(p).getName().startsWith(AtomicCounterEditor.PREFIX_PROP_COUNTER);
     }
      public ConsolidatorEditor(NodeBuilder builder) {
         this("", builder);
@@ -45,38 +49,19 @@ public class ConsolidatorEditor extends DefaultEditor {
     @Override
     public void propertyAdded(PropertyState after) throws CommitFailedException {
         if (isProperty(after)) {
-            LOG.debug("propertyAdded - {}", after);
+            LOG.debug("propertyAdded");
+            AtomicCounterEditor.consolidateCount(builder);
         }
     }
-
-    @Override
-    public void
-        propertyChanged(PropertyState before, PropertyState after) throws CommitFailedException {
-        if (isProperty(before) || isProperty(after)) {
-            LOG.debug("propertyChanged - before: {}, after: {}", before, after);
-        }
-    }
-
-    @Override
-    public void propertyDeleted(PropertyState before) throws CommitFailedException {
-        if (isProperty(before)) {
-            LOG.debug("propertyDeleted - {}", before);
-        }
-    }
-
-//    @Override
-//    public void leave(NodeState before, NodeState after) throws CommitFailedException {
-//        LOG.debug("left...");
-//    }
     
     @Override
     public Editor childNodeAdded(String name, NodeState after) throws CommitFailedException {
-        return new ConsolidatorEditor(path + '/' + name, builder);
+        return new ConsolidatorEditor(path + '/' + name, builder.getChildNode(name));
     }
 
     @Override
     public Editor childNodeChanged(String name, NodeState before, NodeState after) throws CommitFailedException {
-        return new ConsolidatorEditor(path + '/' + name, builder);
+        return new ConsolidatorEditor(path + '/' + name, builder.getChildNode(name));
     }
 
 }

@@ -114,11 +114,13 @@ public class AtomicCounterClusterIT {
             
         }
         
+        final int numIncrements = 1;
+        
         // for each cluster node, 100 sessions pushing random increments
         List<ListenableFutureTask<Void>> tasks = Lists.newArrayList();
         for (Repository rep : repos) {
             final Repository r = rep;
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < numIncrements; i++) {
                 ListenableFutureTask<Void> task = ListenableFutureTask.create(new Callable<Void>() {
 
                         @Override
@@ -146,23 +148,27 @@ public class AtomicCounterClusterIT {
         }
         Futures.allAsList(tasks).get();
 
-        // let the time for the async process to kick in.
+        // let the time for the async process to kick in and run.
         alignCluster(mks);
-        Thread.sleep(AsyncProcessor.DEFAULT_DELAY * 1000);
+        Thread.sleep(10000);
         alignCluster(mks);
         
         raiseExceptions(exceptions);
         
         // assert the final situation
-        try {
-            session = repos.get(0).login(ADMIN);
-            counter = session.getNode(counterPath);
-            assertEquals(
-                "Wrong counter", 
-                expected.get(), 
-                counter.getProperty(PROP_COUNTER).getLong());
-        } finally {
-            session.logout();
+        for (int i = 0; i < repos.size(); i++) {
+            Repository r = repos.get(i);
+            try {
+                session = r.login(ADMIN);
+                counter = session.getNode(counterPath);
+                assertEquals(
+                    "Wrong counter on node " + (i + 1), 
+                    expected.get(), 
+                    counter.getProperty(PROP_COUNTER).getLong());
+            } finally {
+                session.logout();
+            }
+            
         }
     }
     
