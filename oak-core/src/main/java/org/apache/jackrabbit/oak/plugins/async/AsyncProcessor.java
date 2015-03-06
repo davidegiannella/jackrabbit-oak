@@ -37,7 +37,7 @@ public abstract class AsyncProcessor {
     
     /**
      * Default delay in seconds on which the async process will run. Can be changed by providing on
-     * startup something like {@code -Doak.async.delay=10} where {@code 10} is the desired seconds
+     * startup something like {@code -Doak.async.delay=10} where {@code 10} are the desired seconds
      */
     public static final long DEFAULT_DELAY = Long.getLong("oak.async.delay", 5L); 
 
