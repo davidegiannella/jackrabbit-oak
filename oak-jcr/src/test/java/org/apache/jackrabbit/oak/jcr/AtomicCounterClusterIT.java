@@ -44,6 +44,7 @@ import javax.jcr.SimpleCredentials;
 
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
+import org.apache.jackrabbit.oak.plugins.async.AsyncProcessor;
 import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
 import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
 import org.junit.After;
@@ -147,7 +148,7 @@ public class AtomicCounterClusterIT {
 
         // let the time for the async process to kick in.
         alignCluster(mks);
-        Thread.sleep(5000);
+        Thread.sleep(AsyncProcessor.DEFAULT_DELAY * 1000);
         alignCluster(mks);
         
         raiseExceptions(exceptions);

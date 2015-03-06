@@ -34,6 +34,12 @@ public abstract class AsyncProcessor {
      */
     public static final String ASYNC = ":async";
     public static final long DEFAULT_LIFETIME = TimeUnit.DAYS.toMillis(1000);
+    
+    /**
+     * Default delay in seconds on which the async process will run. Can be changed by providing on
+     * startup something like {@code -Doak.async.delay=10} where {@code 10} is the desired seconds
+     */
+    public static final long DEFAULT_DELAY = Long.getLong("oak.async.delay", 5L); 
 
     /**
      * Checks whether there are no visible changes between the given states.

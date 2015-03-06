@@ -59,6 +59,7 @@ import org.apache.jackrabbit.oak.api.jmx.RepositoryManagementMBean;
 import org.apache.jackrabbit.oak.core.ContentRepositoryImpl;
 import org.apache.jackrabbit.oak.management.RepositoryManager;
 import org.apache.jackrabbit.oak.plugins.async.AsyncEditorProcessor;
+import org.apache.jackrabbit.oak.plugins.async.AsyncProcessor;
 import org.apache.jackrabbit.oak.plugins.commit.ConflictHook;
 import org.apache.jackrabbit.oak.plugins.index.AsyncIndexUpdate;
 import org.apache.jackrabbit.oak.plugins.index.CompositeIndexEditorProvider;
@@ -539,7 +540,7 @@ public class Oak {
         // Asynchronous commits
         AsyncEditorProcessor aep = new AsyncEditorProcessor("asynceditor", store,
             asyncEditorProviders);
-        regs.add(scheduleWithFixedDelay(whiteboard, aep, 5, true));
+        regs.add(scheduleWithFixedDelay(whiteboard, aep, AsyncProcessor.DEFAULT_DELAY, true));
         
         if (asyncIndexing) {
             String name = "async";
