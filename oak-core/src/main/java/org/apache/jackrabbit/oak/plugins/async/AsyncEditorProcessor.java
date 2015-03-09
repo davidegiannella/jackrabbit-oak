@@ -159,7 +159,6 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             } catch (CommitFailedException e) {
                 LOG.error("Error while processing commit hooks", e);
             } finally {
-                LOG.debug("beforeCheckpoint: {}, afterCheckpoint: {}", beforeCheckpoint, afterCheckpoint);
                 if (checkpointToRelease != null) {
                     LOG.debug("releasing checkpoint: {}", checkpointToRelease);
                     store.release(checkpointToRelease);

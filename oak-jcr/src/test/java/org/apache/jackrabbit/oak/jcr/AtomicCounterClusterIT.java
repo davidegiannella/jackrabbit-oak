@@ -114,7 +114,7 @@ public class AtomicCounterClusterIT {
             
         }
         
-        final int numIncrements = 1;
+        final int numIncrements = 100;
         
         // for each cluster node, 100 sessions pushing random increments
         List<ListenableFutureTask<Void>> tasks = Lists.newArrayList();
