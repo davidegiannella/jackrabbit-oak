@@ -95,23 +95,6 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
 
             // check for concurrent updates
             NodeState async = root.getChildNode(ASYNC);
-            long leaseEndTime = async.getLong(name + "-lease");
-            long currentTime = System.currentTimeMillis();
-            if (leaseEndTime > currentTime) {
-                swl.stop(
-                    String.format(
-                        "Another copy of '%s' is running. " +
-                        "Time left before expiration: %ds. Skipping. Process completed in",
-                        name,
-                        (leaseEndTime - currentTime) / 1000
-                        )
-                    );
-                closeStopwatch(swl);
-                return;
-            }
-            
-            // storing the lease time
-            builder.child(ASYNC).setProperty(name + "-lease", currentTime + DEFAULT_LIFETIME, Type.LONG);
             
             // find the last checkpoint state, and check if there are recent changes
             NodeState before;
