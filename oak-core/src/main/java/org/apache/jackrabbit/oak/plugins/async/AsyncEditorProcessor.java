@@ -40,6 +40,7 @@ import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorDiff;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
+import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.commit.VisibleEditor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -156,26 +157,28 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             
             String checkpointToRelease = afterCheckpoint;
 
-            // TODO process commit hooks
             try {
-//                List<Editor> editors = newArrayList();
-//                for (EditorProvider provider : editorProviders) {
-//                    editors.add(provider.getRootEditor(before, after, builder, CommitInfo.EMPTY));
-//                }
-//                Editor editor = CompositeEditor.compose(editors);
-//                CommitFailedException exception = EditorDiff.process(editor,
-//                    before, after);
-//                
-//                if (exception != null) {
-//                    LOG.debug("Exception found. Throwing it up.");
-//                    throw exception;
-//                }
-                store.merge(builder, new EditorHook(CompositeEditorProvider.compose(editorProviders)), CommitInfo.EMPTY);
+                // process commit hooks
+                List<Editor> editors = newArrayList();
+                for (EditorProvider provider : editorProviders) {
+                    editors.add(provider.getRootEditor(before, after, builder, CommitInfo.EMPTY));
+                }
+                Editor editor = CompositeEditor.compose(editors);
+                CommitFailedException exception = EditorDiff.process(editor,
+                    before, after);
                 
+                if (exception != null) {
+                    LOG.debug("Exception found. Throwing it up.");
+                    throw exception;
+                }
+                store.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+                checkpointToRelease = beforeCheckpoint;
             } catch (CommitFailedException e) {
                 LOG.error("Error while processing commit hooks", e);
             } finally {
+                LOG.debug("beforeCheckpoint: {}, afterCheckpoint: {}", beforeCheckpoint, afterCheckpoint);
                 if (checkpointToRelease != null) {
+                    LOG.debug("releasing checkpoint: {}", checkpointToRelease);
                     store.release(checkpointToRelease);
                 }
             }
