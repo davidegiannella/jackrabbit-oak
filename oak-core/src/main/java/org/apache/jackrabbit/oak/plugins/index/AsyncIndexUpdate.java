@@ -398,7 +398,7 @@ public class AsyncIndexUpdate extends AsyncProcessor implements Runnable {
                 postAsyncRunStatsStatus(indexStats);
             }
             if (indexUpdate.isReindexingPerformed()) {
-                log.info("Reindexing completed for indexes: {} in {}", indexUpdate.getAllReIndexedIndexes(), watch);
+                log.info("Reindexing completed for indexes: {} in {}", indexUpdate.getReindexStats(), watch);
             }
         } finally {
             callback.close();
