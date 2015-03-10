@@ -28,6 +28,7 @@ import java.util.List;
 import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.CommitFailedException;
+import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.AsyncIndexUpdate;
 import org.apache.jackrabbit.oak.spi.commit.AsyncEditorProvider;
@@ -44,6 +45,7 @@ import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.commit.VisibleEditor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.state.NodeStateDiff;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.stats.StopwatchLogger;
 import org.slf4j.Logger;
@@ -84,6 +86,40 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
         this.name = name;
     }
     
+    private static boolean noChanges(NodeState before, NodeState after) {
+        return after.compareAgainstBaseState(before, new NodeStateDiff() {
+            @Override
+            public boolean propertyDeleted(PropertyState before) {
+                return true;
+            }
+            
+            @Override
+            public boolean propertyChanged(PropertyState before, PropertyState after) {
+                return true;
+            }
+            
+            @Override
+            public boolean propertyAdded(PropertyState after) {
+                return true;
+            }
+            
+            @Override
+            public boolean childNodeDeleted(String name, NodeState before) {
+                return true;
+            }
+            
+            @Override
+            public boolean childNodeChanged(String name, NodeState before, NodeState after) {
+                return after.compareAgainstBaseState(before, this);
+            }
+            
+            @Override
+            public boolean childNodeAdded(String name, NodeState after) {
+                return true;
+            }
+        });
+    }
+    
     @Override
     public void run() {
         StopwatchLogger swl = new StopwatchLogger(LOG);
@@ -107,9 +143,8 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
                             beforeCheckpoint, name);
                     beforeCheckpoint = null;
                     before = MISSING_NODE;
-                } else if (noVisibleChanges(state, root)) {
-                    swl.stop("No changes since last checkpoint;"
-                            + " skipping the update");
+                } else if (noChanges(state, root)) {
+                    swl.stop("No changes since last checkpoint;" + " skipping the update");
                     closeStopwatch(swl);
                     return;
                 } else {
