@@ -22,6 +22,7 @@ import static com.google.common.collect.Lists.newArrayList;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.MISSING_NODE;
 
 import java.io.IOException;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -49,6 +50,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStateDiff;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.stats.StopwatchLogger;
+import org.apache.jackrabbit.util.ISO8601;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,6 +71,8 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
     private final List<AsyncEditorProvider> editorProviders;
     private final NodeStore store;
     private final String name;
+    private final String leaseName;
+    private final String lastIndexed;
     
     /**
      * instantiate an asynchronous processor for editor
@@ -86,6 +90,8 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
         this.editorProviders = Collections.unmodifiableList(checkNotNull(editorProviders));
         this.store = checkNotNull(store);
         this.name = name;
+        this.leaseName = name + "-lease";
+        this.lastIndexed = name + "-lastIndexed";
     }
     
     private static boolean noChanges(NodeState before, NodeState after) {
@@ -138,6 +144,17 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
 
             // check for concurrent updates
             NodeState async = root.getChildNode(ASYNC);
+            long leaseEndTime = async.getLong(leaseName);
+            long currentTime = System.currentTimeMillis();
+            if (leaseEndTime > currentTime) {
+                swl.stop(
+                    String.format(
+                        "another copy of %s update is running. Skipping this one. Time left for expiration %ds",
+                        name, (leaseEndTime - currentTime)/1000
+                        ));
+                closeStopwatch(swl);
+                return;
+            }
             
             // find the last checkpoint state, and check if there are recent changes
             NodeState before;
@@ -163,6 +180,7 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             }
             
             // creating the checkpoint
+            String afterTime = ISO8601.format(Calendar.getInstance());
             String afterCheckpoint = store.checkpoint(DEFAULT_LIFETIME, ImmutableMap.of(
                     "creator", AsyncEditorProcessor.class.getSimpleName(),
                     "thread", Thread.currentThread().getName()));
@@ -183,6 +201,9 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             String checkpointToRelease = afterCheckpoint;
 
             try {
+                
+                long lease = setLease(store, leaseName, beforeCheckpoint, name);
+                
                 // process commit hooks
                 List<Editor> editors = newArrayList();
                 for (EditorProvider provider : editorProviders) {
@@ -197,12 +218,21 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
                     throw exception;
                 }
 
-                builder.child(ASYNC).setProperty(name, afterCheckpoint);
-                checkpointToRelease = beforeCheckpoint;
+                builder.child(ASYNC)
+                    .setProperty(name, afterCheckpoint)
+                    .setProperty(lastIndexed, afterTime, Type.DATE);
                 
-                store.merge(builder, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+                builder.child(ASYNC).removeProperty(leaseName);
+                
+                mergeWithConcurrencyCheck(builder, beforeCheckpoint, lease, name, store);
+
+                checkpointToRelease = beforeCheckpoint;
             } catch (CommitFailedException e) {
-                LOG.error("Error while processing commit hooks", e);
+                if (e == CONCURRENT_UPDATE) {
+                    LOG.debug("Concurrent update detected in {}", name);
+                } else {
+                    LOG.error("Error while processing commit hooks", e);                    
+                }
             } finally {
                 if (checkpointToRelease != null) {
                     LOG.debug("releasing checkpoint: {}", checkpointToRelease);
@@ -227,4 +257,23 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             LOG.debug("ignoring", e);
         }
     }
+    
+    private static long setLease(@Nonnull final NodeStore store, 
+                                 @Nonnull final String leaseName,
+                                 @Nonnull String checkpoint,
+                                 @Nonnull String name) throws CommitFailedException {
+        NodeState root = checkNotNull(store).getRoot();
+        final long now = System.currentTimeMillis();
+        final long lease = now + 2 * ASYNC_TIMEOUT;
+        long beforeLease = root.getChildNode(ASYNC).getLong(checkNotNull(leaseName));
+        if (beforeLease > now) {
+            throw CONCURRENT_UPDATE;
+        }
+
+        NodeBuilder builder = root.builder();
+        NodeBuilder async = builder.child(ASYNC);
+        async.setProperty(leaseName, lease);
+        mergeWithConcurrencyCheck(builder, checkpoint, beforeLease, name, store);
+        return lease;
+    }    
 }

@@ -40,7 +40,6 @@ import javax.management.openmbean.OpenDataException;
 import javax.management.openmbean.OpenType;
 import javax.management.openmbean.SimpleType;
 
-import com.google.common.base.Objects;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
@@ -50,16 +49,9 @@ import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.api.jmx.IndexStatsMBean;
 import org.apache.jackrabbit.oak.plugins.async.AsyncProcessor;
-import org.apache.jackrabbit.oak.plugins.commit.AnnotatingConflictHandler;
-import org.apache.jackrabbit.oak.plugins.commit.ConflictHook;
-import org.apache.jackrabbit.oak.plugins.commit.ConflictValidatorProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdate.MissingIndexProviderStrategy;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
-import org.apache.jackrabbit.oak.spi.commit.CommitHook;
-import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
-import org.apache.jackrabbit.oak.spi.commit.CompositeHook;
 import org.apache.jackrabbit.oak.spi.commit.EditorDiff;
-import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.commit.VisibleEditor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -75,30 +67,9 @@ public class AsyncIndexUpdate extends AsyncProcessor implements Runnable {
     private static final Logger log = LoggerFactory
             .getLogger(AsyncIndexUpdate.class);
 
-    private static final CommitFailedException CONCURRENT_UPDATE = new CommitFailedException(
-            "Async", 1, "Concurrent update detected");
+    public final String name;
 
-    /**
-     * Timeout in milliseconds after which an async job would be considered as
-     * timed out. Another node in cluster would wait for timeout before
-     * taking over a running job
-     */
-    private static final long ASYNC_TIMEOUT;
-
-    static {
-        int value = 15;
-        try {
-            value = Integer.parseInt(System.getProperty(
-                    "oak.async.lease.timeout", "15"));
-        } catch (NumberFormatException e) {
-            // use default
-        }
-        ASYNC_TIMEOUT = TimeUnit.MINUTES.toMillis(value);
-    }
-
-    private final String name;
-
-    private final NodeStore store;
+    public final NodeStore store;
 
     private final IndexEditorProvider provider;
 
@@ -179,7 +150,7 @@ public class AsyncIndexUpdate extends AsyncProcessor implements Runnable {
             NodeBuilder async = builder.child(ASYNC);
             async.setProperty(leaseName, lease);
             updateTempCheckpoints(async, checkpoint, afterCheckpoint);
-            mergeWithConcurrencyCheck(builder, checkpoint, beforeLease);
+            mergeWithConcurrencyCheck(builder, checkpoint, beforeLease, name, store);
 
             // reset updates counter
             indexStats.setUpdates(this.updates);
@@ -225,7 +196,7 @@ public class AsyncIndexUpdate extends AsyncProcessor implements Runnable {
             NodeBuilder builder = store.getRoot().builder();
             NodeBuilder async = builder.child(ASYNC);
             async.removeProperty(leaseName);
-            mergeWithConcurrencyCheck(builder, async.getString(name), lease);
+            mergeWithConcurrencyCheck(builder, async.getString(name), lease, name, store);
         }
 
         @Override
@@ -238,7 +209,7 @@ public class AsyncIndexUpdate extends AsyncProcessor implements Runnable {
                     long newLease = now + 2 * ASYNC_TIMEOUT;
                     NodeBuilder builder = store.getRoot().builder();
                     builder.child(ASYNC).setProperty(leaseName, newLease);
-                    mergeWithConcurrencyCheck(builder, checkpoint, lease);
+                    mergeWithConcurrencyCheck(builder, checkpoint, lease, name, store);
                     lease = newLease;
                 }
             }
@@ -393,7 +364,7 @@ public class AsyncIndexUpdate extends AsyncProcessor implements Runnable {
                 }
                 updatePostRunStatus = true;
             }
-            mergeWithConcurrencyCheck(builder, beforeCheckpoint, callback.lease);
+            mergeWithConcurrencyCheck(builder, beforeCheckpoint, callback.lease, name, store);
             if (updatePostRunStatus) {
                 postAsyncRunStatsStatus(indexStats);
             }
@@ -403,31 +374,6 @@ public class AsyncIndexUpdate extends AsyncProcessor implements Runnable {
         } finally {
             callback.close();
         }
-    }
-
-    private void mergeWithConcurrencyCheck(
-            NodeBuilder builder, final String checkpoint, final long lease)
-            throws CommitFailedException {
-        CommitHook concurrentUpdateCheck = new CommitHook() {
-            @Override @Nonnull
-            public NodeState processCommit(
-                    NodeState before, NodeState after, CommitInfo info)
-                    throws CommitFailedException {
-                // check for concurrent updates by this async task
-                NodeState async = before.getChildNode(ASYNC);
-                if (checkpoint == null || Objects.equal(checkpoint, async.getString(name))
-                        && lease == async.getLong(name + "-lease")) {
-                    return after;
-                } else {
-                    throw CONCURRENT_UPDATE;
-                }
-            }
-        };
-        CompositeHook hooks = new CompositeHook(
-                new ConflictHook(new AnnotatingConflictHandler()),
-                new EditorHook(new ConflictValidatorProvider()),
-                concurrentUpdateCheck);
-        store.merge(builder, hooks, CommitInfo.EMPTY);
     }
 
     private static void preAsyncRunStatsStats(AsyncIndexStats stats) {
