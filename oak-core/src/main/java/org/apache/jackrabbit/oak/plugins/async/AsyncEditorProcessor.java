@@ -24,6 +24,7 @@ import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.MISSING_NO
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import javax.annotation.Nonnull;
 
@@ -53,6 +54,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 
 /**
@@ -88,34 +90,39 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
     
     private static boolean noChanges(NodeState before, NodeState after) {
         return after.compareAgainstBaseState(before, new NodeStateDiff() {
+            private final Set<String> ignores = ImmutableSet.of(ASYNC);
+            
             @Override
             public boolean propertyDeleted(PropertyState before) {
-                return true;
+                return false;
             }
             
             @Override
             public boolean propertyChanged(PropertyState before, PropertyState after) {
-                return true;
+                return false;
             }
             
             @Override
             public boolean propertyAdded(PropertyState after) {
-                return true;
+                return false;
             }
             
             @Override
             public boolean childNodeDeleted(String name, NodeState before) {
-                return true;
+                return ignores.contains(name);
             }
             
             @Override
             public boolean childNodeChanged(String name, NodeState before, NodeState after) {
+                if (ignores.contains(name)) {
+                    return true;
+                }
                 return after.compareAgainstBaseState(before, this);
             }
             
             @Override
             public boolean childNodeAdded(String name, NodeState after) {
-                return true;
+                return ignores.contains(name);
             }
         });
     }
