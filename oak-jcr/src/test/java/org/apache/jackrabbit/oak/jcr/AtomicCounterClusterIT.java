@@ -16,8 +16,6 @@
  */
 package org.apache.jackrabbit.oak.jcr;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static org.apache.jackrabbit.oak.jcr.AbstractRepositoryTest.dispose;
 import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_COUNTER;
 import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_INCREMENT;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
@@ -25,7 +23,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assume.assumeTrue;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -35,20 +32,12 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 
-import javax.annotation.Nonnull;
-import javax.jcr.Credentials;
 import javax.jcr.Node;
 import javax.jcr.Repository;
 import javax.jcr.Session;
-import javax.jcr.SimpleCredentials;
 
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
-import org.apache.jackrabbit.oak.plugins.async.AsyncProcessor;
-import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
-import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -59,7 +48,7 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFutureTask;
 
-public class AtomicCounterClusterIT {
+public class AtomicCounterClusterIT  extends DocumentClusterIT {
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
     private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterClusterIT.class);
     
@@ -153,7 +142,7 @@ public class AtomicCounterClusterIT {
         Thread.sleep(10000);
         alignCluster(mks);
         
-        raiseExceptions(exceptions);
+        raiseExceptions(exceptions, LOG);
         
         // assert the final situation
         for (int i = 0; i < repos.size(); i++) {
@@ -170,116 +159,5 @@ public class AtomicCounterClusterIT {
             }
             
         }
-    }
-    
-    // ------------------------------------------------ < common with ConcurrentAddNodesClusterIT >
-    
-    List<Repository> repos = new ArrayList<Repository>();
-    List<DocumentMK> mks = new ArrayList<DocumentMK>();
-
-    /**
-     * the number of nodes we'd like to run against
-     */
-    static final int NUM_CLUSTER_NODES = Integer.getInteger("it.documentmk.cluster.nodes", 5);
-    
-    /**
-     * credentials for logging in as {@code admin}
-     */
-    static final Credentials ADMIN = new SimpleCredentials("admin", "admin".toCharArray());
-    
-    @Before
-    public void before() throws Exception {
-        dropDB(this.getClass());
-        initRepository(this.getClass());
-    }
-
-    @After
-    public void after() throws Exception {
-        for (Repository repo : repos) {
-            dispose(repo);
-        }
-        for (DocumentMK mk : mks) {
-            mk.dispose();
-        }
-        dropDB(this.getClass());
-    }
-
-    static void raiseExceptions(final Map<String, Exception> exceptions) throws Exception {
-        if (exceptions != null) {
-            for (Map.Entry<String, Exception> entry : exceptions.entrySet()) {
-                LOG.error("Exception in thread {}", entry.getKey(), entry.getValue());
-                throw entry.getValue();
-            }
-        }
-    }
-
-    /**
-     * <p> 
-     * ensures that the cluster is aligned by running all the background operations
-     * </p>
-     * 
-     * <p>
-     * In order to use this you have to initialise the cluster with {@code setAsyncDelay(0)}.
-     * </p>
-     * 
-     * @param mks the list of {@link DocumentMK} composing the cluster. Cannot be null.
-     */
-    static void alignCluster(@Nonnull final List<DocumentMK> mks) {
-        for (int i = 0; i < 2; i++) {
-            for (DocumentMK mk : mks) {
-                mk.getNodeStore().runBackgroundOperations();
-            }            
-        }
-    }
-    
-    /**
-     * set up the cluster connections
-     * 
-     * @param clazz class used for logging into Mongo itself
-     * @param mks the list of mks to work on.
-     * @param repos list of {@link Repository} created on each {@code mks}
-     * @throws Exception
-     */
-    static void setUpCluster(@Nonnull final Class<?> clazz, 
-                             @Nonnull final List<DocumentMK> mks,
-                             @Nonnull final List<Repository> repos) throws Exception {
-        for (int i = 0; i < NUM_CLUSTER_NODES; i++) {
-            DocumentMK mk = new DocumentMK.Builder()
-                    .setMongoDB(createConnection(checkNotNull(clazz)).getDB())
-                    .setClusterId(i + 1)
-                    .setAsyncDelay(0).open();
-            
-            Repository repo = new Jcr(mk.getNodeStore()).createRepository();
-            
-            mks.add(mk);
-            repos.add(repo);
-        }        
-    }
-    
-    static MongoConnection createConnection(@Nonnull final Class<?> clazz) throws Exception {
-        return OakMongoNSRepositoryStub.createConnection(
-                checkNotNull(clazz).getSimpleName());
-    }
-
-    static void dropDB(@Nonnull final Class<?> clazz) throws Exception {
-        MongoConnection con = createConnection(checkNotNull(clazz));
-        try {
-            con.getDB().dropDatabase();
-        } finally {
-            con.close();
-        }
-    }
-
-    static void initRepository(@Nonnull final Class<?> clazz) throws Exception {
-        MongoConnection con = createConnection(checkNotNull(clazz));
-        DocumentMK mk = new DocumentMK.Builder()
-                .setMongoDB(con.getDB())
-                .setClusterId(1).open();
-        Repository repository = new Jcr(mk.getNodeStore()).createRepository();
-        Session session = repository.login(
-                new SimpleCredentials("admin", "admin".toCharArray()));
-        session.logout();
-        dispose(repository);
-        mk.dispose(); // closes connection as well
     }
 }

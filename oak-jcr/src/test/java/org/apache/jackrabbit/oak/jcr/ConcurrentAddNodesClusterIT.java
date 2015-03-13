@@ -17,7 +17,6 @@
 package org.apache.jackrabbit.oak.jcr;
 
 import static java.lang.Thread.UncaughtExceptionHandler;
-import static org.apache.jackrabbit.oak.jcr.AbstractRepositoryTest.dispose;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -45,9 +44,7 @@ import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
 import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
-import org.junit.After;
 import org.junit.Assume;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -55,7 +52,7 @@ import org.junit.Test;
 /**
  * Concurrently add nodes with multiple sessions on multiple cluster nodes.
  */
-public class ConcurrentAddNodesClusterIT {
+public class ConcurrentAddNodesClusterIT extends DocumentClusterIT {
 
     private static final int NUM_CLUSTER_NODES = 5;
     private static final int NODE_COUNT = 100;
@@ -71,23 +68,6 @@ public class ConcurrentAddNodesClusterIT {
     @BeforeClass
     public static void mongoDBAvailable() {
         Assume.assumeTrue(OakMongoNSRepositoryStub.isMongoDBAvailable());
-    }
-
-    @Before
-    public void before() throws Exception {
-        dropDB();
-        initRepository();
-    }
-
-    @After
-    public void after() throws Exception {
-        for (Repository repo : repos) {
-            dispose(repo);
-        }
-        for (DocumentMK mk : mks) {
-            mk.dispose();
-        }
-        dropDB();
     }
 
     @Test
@@ -373,30 +353,6 @@ public class ConcurrentAddNodesClusterIT {
         return OakMongoNSRepositoryStub.createConnection(
                 ConcurrentAddNodesClusterIT.class.getSimpleName());
     }
-
-    private static void dropDB() throws Exception {
-        MongoConnection con = createConnection();
-        try {
-            con.getDB().dropDatabase();
-        } finally {
-            con.close();
-        }
-    }
-
-    private static void initRepository() throws Exception {
-        MongoConnection con = createConnection();
-        DocumentMK mk = new DocumentMK.Builder()
-                .setMongoDB(con.getDB())
-                .setClusterId(1).open();
-        Repository repository = new Jcr(mk.getNodeStore()).createRepository();
-        Session session = repository.login(
-                new SimpleCredentials("admin", "admin".toCharArray()));
-        session.logout();
-        dispose(repository);
-        mk.dispose(); // closes connection as well
-    }
-
-
     private static void ensureIndex(Node root, String propertyName)
             throws RepositoryException {
         Node indexDef = root.getNode(IndexConstants.INDEX_DEFINITIONS_NAME);
