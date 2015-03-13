@@ -31,6 +31,8 @@ import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Objects;
 
@@ -39,7 +41,8 @@ import com.google.common.base.Objects;
  * methods
  */
 public abstract class AsyncProcessor {
-
+    private static final Logger LOG = LoggerFactory.getLogger(AsyncProcessor.class);
+    
     /**
      * Name of the hidden node under which information about the checkpoints
      * seen and indexed by each async indexer is kept.
@@ -86,6 +89,13 @@ public abstract class AsyncProcessor {
                     throws CommitFailedException {
                 // check for concurrent updates by this async task
                 NodeState async = before.getChildNode(ASYNC);
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace("concurrentUpdateCheck.processCommit()");
+                    LOG.trace("checkpoint: {}", checkpoint);
+                    LOG.trace("async.name: {}", async.getString(name));
+                    LOG.trace("async.lease: {}", async.getLong(name + "-lease"));
+                    LOG.trace("lease: {}", lease);
+                }
                 if (checkpoint == null || Objects.equal(checkpoint, async.getString(name))
                         && lease == async.getLong(name + "-lease")) {
                     return after;

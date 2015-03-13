@@ -124,7 +124,11 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             }
         });
     }
-        
+    
+    private NodeBuilder refreshBuilder(@Nonnull NodeStore store) {
+        return checkNotNull(store).getRoot().builder();
+    }
+    
     @Override
     public void run() {
         StopwatchLogger swl = new StopwatchLogger(LOG);
@@ -132,8 +136,7 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
         
         if (!editorProviders.isEmpty()) {
             NodeState root = store.getRoot();
-            NodeBuilder builder = store.getRoot().builder();
-
+            
             // check for concurrent updates
             NodeState async = root.getChildNode(ASYNC);
             long leaseEndTime = async.getLong(leaseName);
@@ -160,7 +163,7 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
                     beforeCheckpoint = null;
                     before = MISSING_NODE;
                 } else if (noChanges(state, root)) {
-                    swl.stop("No changes since last checkpoint;" + " skipping the update");
+                    swl.stop("No changes since last checkpoint;" + " skipping the update. Done in");
                     closeStopwatch(swl);
                     return;
                 } else {
@@ -190,7 +193,7 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             swl.split(String.format("checkpoints before: '%s', after: '%s' done in",
                 beforeCheckpoint, afterCheckpoint));
             
-            processCommits(beforeCheckpoint, afterCheckpoint, afterTime, before, after, builder);
+            processCommits(beforeCheckpoint, afterCheckpoint, afterTime, before, after);
         }
         
         swl.stop("Completed in");
@@ -199,11 +202,13 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
 
     private void processCommits(final String beforeCheckpoint, final String afterCheckpoint, 
                                 final String afterTime, final NodeState before, 
-                                final NodeState after, final NodeBuilder builder) {
+                                final NodeState after) {
         String checkpointToRelease = afterCheckpoint; 
 
         try {
             long lease = setLease(store, leaseName, beforeCheckpoint, name);
+            
+            NodeBuilder builder = refreshBuilder(store);
             
             // process commit hooks
             List<Editor> editors = newArrayList();
@@ -222,11 +227,10 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             builder.child(ASYNC)
                 .setProperty(name, afterCheckpoint)
                 .setProperty(lastIndexed, afterTime, Type.DATE);
+
             
             builder.child(ASYNC).removeProperty(leaseName);
-            
             mergeWithConcurrencyCheck(builder, beforeCheckpoint, lease, name, store);
-
             checkpointToRelease = beforeCheckpoint;
         } catch (CommitFailedException e) {
             if (e == CONCURRENT_UPDATE) {

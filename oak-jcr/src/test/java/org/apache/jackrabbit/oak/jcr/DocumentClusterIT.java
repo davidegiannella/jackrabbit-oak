@@ -54,6 +54,8 @@ public abstract class DocumentClusterIT {
      */
     static final Credentials ADMIN = new SimpleCredentials("admin", "admin".toCharArray());
     
+    static final int NOT_PROVIDED = Integer.MIN_VALUE;
+    
     @Before
     public void before() throws Exception {
         dropDB(this.getClass());
@@ -120,11 +122,24 @@ public abstract class DocumentClusterIT {
     static void setUpCluster(@Nonnull final Class<?> clazz, 
                              @Nonnull final List<DocumentMK> mks,
                              @Nonnull final List<Repository> repos) throws Exception {
+        setUpCluster(clazz, mks, repos, NOT_PROVIDED);
+    }
+
+    static void setUpCluster(@Nonnull final Class<?> clazz, 
+                             @Nonnull final List<DocumentMK> mks,
+                             @Nonnull final List<Repository> repos,
+                             final int asyncDelay) throws Exception {
         for (int i = 0; i < NUM_CLUSTER_NODES; i++) {
-            DocumentMK mk = new DocumentMK.Builder()
-                    .setMongoDB(createConnection(checkNotNull(clazz)).getDB())
-                    .setClusterId(i + 1)
-                    .setAsyncDelay(0).open();
+            DocumentMK.Builder builder = new DocumentMK.Builder(); 
+            
+            builder.setMongoDB(createConnection(checkNotNull(clazz)).getDB())
+                   .setClusterId(i + 1);
+            
+            if (asyncDelay != NOT_PROVIDED) {
+                builder.setAsyncDelay(asyncDelay);
+            }
+                    
+            DocumentMK mk = builder.open();
             
             Repository repo = new Jcr(mk.getNodeStore()).createRepository();
             
@@ -132,7 +147,7 @@ public abstract class DocumentClusterIT {
             repos.add(repo);
         }        
     }
-    
+
     static MongoConnection createConnection(@Nonnull final Class<?> clazz) throws Exception {
         return OakMongoNSRepositoryStub.createConnection(
                 checkNotNull(clazz).getSimpleName());

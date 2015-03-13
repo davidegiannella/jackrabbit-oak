@@ -60,7 +60,7 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
     
     @Test
     public void increments() throws Exception {
-        setUpCluster(this.getClass(), mks, repos);
+        setUpCluster(this.getClass(), mks, repos, 0);
 
         final String counterPath;
         final Random rnd = new Random(14);
@@ -159,5 +159,11 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
             }
             
         }
+    }
+    
+    @Test
+    public void longRunning() throws Exception {
+        setUpCluster(getClass(), mks, repos);
+        Thread.sleep(60000);
     }
 }
