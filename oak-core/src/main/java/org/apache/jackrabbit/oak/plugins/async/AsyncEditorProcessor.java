@@ -32,19 +32,12 @@ import javax.annotation.Nonnull;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
-import org.apache.jackrabbit.oak.plugins.index.AsyncIndexUpdate;
 import org.apache.jackrabbit.oak.spi.commit.AsyncEditorProvider;
-import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.CompositeEditor;
-import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
-import org.apache.jackrabbit.oak.spi.commit.CompositeHook;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorDiff;
-import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
-import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
-import org.apache.jackrabbit.oak.spi.commit.VisibleEditor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStateDiff;
@@ -57,7 +50,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
 
 /**
  * the director which orchestrate the asynchronous editors
@@ -132,7 +124,7 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             }
         });
     }
-    
+        
     @Override
     public void run() {
         StopwatchLogger swl = new StopwatchLogger(LOG);
@@ -198,56 +190,58 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             swl.split(String.format("checkpoints before: '%s', after: '%s' done in",
                 beforeCheckpoint, afterCheckpoint));
             
-            String checkpointToRelease = afterCheckpoint;
-
-            try {
-                
-                long lease = setLease(store, leaseName, beforeCheckpoint, name);
-                
-                // process commit hooks
-                List<Editor> editors = newArrayList();
-                for (EditorProvider provider : editorProviders) {
-                    editors.add(provider.getRootEditor(before, after, builder, CommitInfo.EMPTY));
-                }
-                Editor editor = CompositeEditor.compose(editors);
-                CommitFailedException exception = EditorDiff.process(editor,
-                    before, after);
-                
-                if (exception != null) {
-                    LOG.debug("Exception found. Throwing it up.");
-                    throw exception;
-                }
-
-                builder.child(ASYNC)
-                    .setProperty(name, afterCheckpoint)
-                    .setProperty(lastIndexed, afterTime, Type.DATE);
-                
-                builder.child(ASYNC).removeProperty(leaseName);
-                
-                mergeWithConcurrencyCheck(builder, beforeCheckpoint, lease, name, store);
-
-                checkpointToRelease = beforeCheckpoint;
-            } catch (CommitFailedException e) {
-                if (e == CONCURRENT_UPDATE) {
-                    LOG.debug("Concurrent update detected in {}", name);
-                } else {
-                    LOG.error("Error while processing commit hooks", e);                    
-                }
-            } finally {
-                if (checkpointToRelease != null) {
-                    LOG.debug("releasing checkpoint: {}", checkpointToRelease);
-                    if (!store.release(checkpointToRelease)) {
-                        LOG.debug("Unable to release checkpoint {}", checkpointToRelease);
-                    }
-                }
-            }
-            
-            // cleaning up lease time 
-            builder.child(ASYNC).removeProperty(name + "-lease");
+            processCommits(beforeCheckpoint, afterCheckpoint, afterTime, before, after, builder);
         }
         
         swl.stop("Completed in");
         closeStopwatch(swl);
+    }
+
+    private void processCommits(final String beforeCheckpoint, final String afterCheckpoint, 
+                                final String afterTime, final NodeState before, 
+                                final NodeState after, final NodeBuilder builder) {
+        String checkpointToRelease = afterCheckpoint; 
+
+        try {
+            long lease = setLease(store, leaseName, beforeCheckpoint, name);
+            
+            // process commit hooks
+            List<Editor> editors = newArrayList();
+            for (EditorProvider provider : editorProviders) {
+                editors.add(provider.getRootEditor(before, after, builder, CommitInfo.EMPTY));
+            }
+            Editor editor = CompositeEditor.compose(editors);
+            CommitFailedException exception = EditorDiff.process(editor,
+                before, after);
+            
+            if (exception != null) {
+                LOG.debug("Exception found. Throwing it up.");
+                throw exception;
+            }
+
+            builder.child(ASYNC)
+                .setProperty(name, afterCheckpoint)
+                .setProperty(lastIndexed, afterTime, Type.DATE);
+            
+            builder.child(ASYNC).removeProperty(leaseName);
+            
+            mergeWithConcurrencyCheck(builder, beforeCheckpoint, lease, name, store);
+
+            checkpointToRelease = beforeCheckpoint;
+        } catch (CommitFailedException e) {
+            if (e == CONCURRENT_UPDATE) {
+                LOG.debug("Concurrent update detected in {}", name);
+            } else {
+                LOG.error("Error while processing commit hooks", e);                    
+            }
+        } finally {
+            if (checkpointToRelease != null) {
+                LOG.debug("releasing checkpoint: {}", checkpointToRelease);
+                if (!store.release(checkpointToRelease)) {
+                    LOG.debug("Unable to release checkpoint {}", checkpointToRelease);
+                }
+            }
+        }            
     }
     
     private static void closeStopwatch(@Nonnull final StopwatchLogger swl) {
