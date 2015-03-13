@@ -76,45 +76,6 @@ public abstract class AsyncProcessor {
         ASYNC_TIMEOUT = TimeUnit.MINUTES.toMillis(value);
     }
 
-    /**
-     * Checks whether there are no visible changes between the given states.
-     */
-    protected static boolean noVisibleChanges(NodeState before, NodeState after) {
-        return after.compareAgainstBaseState(before, new NodeStateDiff() {
-            @Override
-            public boolean propertyAdded(PropertyState after) {
-                return isHidden(after.getName());
-            }
-            @Override
-            public boolean propertyChanged(
-                    PropertyState before, PropertyState after) {
-                return isHidden(after.getName());
-            }
-            @Override
-            public boolean propertyDeleted(PropertyState before) {
-                return isHidden(before.getName());
-            }
-            @Override
-            public boolean childNodeAdded(String name, NodeState after) {
-                return isHidden(name);
-            }
-            @Override
-            public boolean childNodeChanged(
-                    String name, NodeState before, NodeState after) {
-                return isHidden(name)
-                        || after.compareAgainstBaseState(before, this);
-            }
-            @Override
-            public boolean childNodeDeleted(String name, NodeState before) {
-                return isHidden(name);
-            }
-        });
-    }
-
-    private static boolean isHidden(String name) {
-        return name.charAt(0) == ':';
-    }
-
     protected static void mergeWithConcurrencyCheck(final NodeBuilder builder, 
                                                     final String checkpoint, 
                                                     final long lease,
