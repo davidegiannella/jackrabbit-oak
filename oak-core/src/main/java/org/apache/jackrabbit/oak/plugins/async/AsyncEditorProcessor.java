@@ -141,7 +141,7 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
             if (leaseEndTime > currentTime) {
                 swl.stop(
                     String.format(
-                        "another copy of %s update is running. Skipping this one. Time left for expiration %ds",
+                        "another copy of %s update is running. Skipping this one. Time left for expiration %ds. Done in",
                         name, (leaseEndTime - currentTime)/1000
                         ));
                 closeStopwatch(swl);
