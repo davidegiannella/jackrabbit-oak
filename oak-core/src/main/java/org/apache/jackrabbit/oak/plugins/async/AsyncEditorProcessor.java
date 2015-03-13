@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.CommitFailedException;
@@ -129,6 +130,11 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
         return checkNotNull(store).getRoot().builder();
     }
     
+    @CheckForNull
+    private String getCheckpointId() {
+        return store.getRoot().getChildNode(ASYNC).getString(name);
+    }
+    
     @Override
     public void run() {
         StopwatchLogger swl = new StopwatchLogger(LOG);
@@ -206,7 +212,7 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
         String checkpointToRelease = afterCheckpoint; 
 
         try {
-            long lease = setLease(store, leaseName, beforeCheckpoint, name);
+            long lease = setLease(store, leaseName, getCheckpointId(), name);
             
             NodeBuilder builder = refreshBuilder(store);
             
@@ -230,7 +236,7 @@ public class AsyncEditorProcessor extends AsyncProcessor implements Runnable {
 
             
             builder.child(ASYNC).removeProperty(leaseName);
-            mergeWithConcurrencyCheck(builder, beforeCheckpoint, lease, name, store);
+            mergeWithConcurrencyCheck(builder, getCheckpointId(), lease, name, store);
             checkpointToRelease = beforeCheckpoint;
         } catch (CommitFailedException e) {
             if (e == CONCURRENT_UPDATE) {

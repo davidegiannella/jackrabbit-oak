@@ -39,6 +39,7 @@ import javax.jcr.Session;
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -161,9 +162,9 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
         }
     }
     
-    @Test
+    @Test @Ignore("louncher to inspect logging. Don't enable")
     public void longRunning() throws Exception {
         setUpCluster(getClass(), mks, repos);
-        Thread.sleep(60000);
+        Thread.sleep(20000);
     }
 }
