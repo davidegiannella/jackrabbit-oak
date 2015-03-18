@@ -55,7 +55,7 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
     
     @BeforeClass
     public static void assumtions() {
-        assumeTrue(FIXTURES.contains(Fixture.DOCUMENT_MK));
+        assumeTrue(FIXTURES.contains(Fixture.DOCUMENT_NS));
         assumeTrue(OakMongoNSRepositoryStub.isMongoDBAvailable());
     }
     
