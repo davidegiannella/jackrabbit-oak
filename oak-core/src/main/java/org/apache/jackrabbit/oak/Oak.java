@@ -510,6 +510,23 @@ public class Oak {
         return this.whiteboard;
     }
 
+    private void registerAsyncIndex(@Nonnull final String name, 
+                                    @Nonnull final List<Registration> regs,
+                                    @Nonnull final IndexEditorProvider indexEditors) {
+        checkNotNull(regs);
+        
+        AsyncIndexUpdate task = new AsyncIndexUpdate(
+                checkNotNull(name), store,
+                checkNotNull(indexEditors));
+        
+        regs.add(scheduleWithFixedDelay(whiteboard, task, 5, true));
+        regs.add(registerMBean(whiteboard, IndexStatsMBean.class,
+                task.getIndexStats(), IndexStatsMBean.TYPE, name));
+        // Register AsyncIndexStats for execution stats update
+        regs.add(
+            scheduleWithFixedDelay(whiteboard, task.getIndexStats(), 1, false));        
+    }
+    
     public ContentRepository createContentRepository() {
         final List<Registration> regs = Lists.newArrayList();
         regs.add(whiteboard.register(Executor.class, getExecutor(), Collections.emptyMap()));
@@ -524,22 +541,16 @@ public class Oak {
                 .compose(editorProviders)));
 
         if (asyncIndexing) {
-            String name = "async";
-            AsyncIndexUpdate task = new AsyncIndexUpdate(name, store,
-                    indexEditors);
-            regs.add(scheduleWithFixedDelay(whiteboard, task, 5, true));
-            regs.add(registerMBean(whiteboard, IndexStatsMBean.class,
-                    task.getIndexStats(), IndexStatsMBean.TYPE, name));
-            // Register AsyncIndexStats for execution stats update
-            regs.add(
-                scheduleWithFixedDelay(whiteboard, task.getIndexStats(), 1, false));
+            String async = "async";
+            registerAsyncIndex(async, regs, indexEditors);
+            registerAsyncIndex(AsyncIndexUpdate.ASYNC_SLOW, regs, indexEditors);
 
             PropertyIndexAsyncReindex asyncPI = new PropertyIndexAsyncReindex(
                     new AsyncIndexUpdate(IndexConstants.ASYNC_REINDEX_VALUE,
                             store, indexEditors, true), getExecutor());
             regs.add(registerMBean(whiteboard,
                     PropertyIndexAsyncReindexMBean.class, asyncPI,
-                    PropertyIndexAsyncReindexMBean.TYPE, name));
+                    PropertyIndexAsyncReindexMBean.TYPE, async));
         }
         
         regs.add(registerMBean(whiteboard, NodeCounterMBean.class,

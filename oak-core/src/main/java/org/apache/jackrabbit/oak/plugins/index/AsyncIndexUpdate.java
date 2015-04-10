@@ -135,6 +135,12 @@ public class AsyncIndexUpdate implements Runnable {
 
     private final MissingIndexProviderStrategy missingStrategy = new DefaultMissingIndexProviderStrategy();
 
+    /**
+     * used for registering an index in the "slow lane" for async indexing. In the index
+     * configuration use {@code async='async-slow'}
+     */
+    public static final String ASYNC_SLOW = "async-slow";
+    
     public AsyncIndexUpdate(@Nonnull String name, @Nonnull NodeStore store,
             @Nonnull IndexEditorProvider provider, boolean switchOnSync) {
         this.name = checkNotNull(name);
