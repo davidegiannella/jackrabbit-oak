@@ -518,12 +518,6 @@ public class Oak {
 
     private void registerAsyncIndex(@Nonnull final String name, 
                                     @Nonnull final List<Registration> regs,
-                                    @Nonnull final IndexEditorProvider indexEditors) {
-        registerAsyncIndex(name, regs, indexEditors, false);
-    }
-    
-    private void registerAsyncIndex(@Nonnull final String name, 
-                                    @Nonnull final List<Registration> regs,
                                     @Nonnull final IndexEditorProvider indexEditors,
                                     final boolean forceNewExecutor) {
         checkNotNull(regs);
@@ -555,7 +549,7 @@ public class Oak {
 
         if (asyncIndexing) {
             String async = "async";
-            registerAsyncIndex(async, regs, indexEditors);
+            registerAsyncIndex(async, regs, indexEditors, false);
             registerAsyncIndex(AsyncIndexUpdate.ASYNC_SLOW, regs, indexEditors, true);
 
             PropertyIndexAsyncReindex asyncPI = new PropertyIndexAsyncReindex(
