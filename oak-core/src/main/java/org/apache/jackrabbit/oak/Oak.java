@@ -242,11 +242,17 @@ public class Oak {
                     Boolean concurrent = getValue(
                             properties, "scheduler.concurrent",
                             Boolean.class, Boolean.FALSE);
+                    ScheduledExecutorService exec;
+                    if (getValue(properties, "scheduler.forceNewExecutor", Boolean.class, Boolean.FALSE)) {
+                        exec = defaultScheduledExecutor();
+                    } else {
+                        exec = getScheduledExecutor();
+                    }
                     if (concurrent) {
-                        future = getScheduledExecutor().scheduleAtFixedRate(
+                        future = exec.scheduleAtFixedRate(
                                 runnable, period, period, TimeUnit.SECONDS);
                     } else {
-                        future = getScheduledExecutor().scheduleWithFixedDelay(
+                        future = exec.scheduleWithFixedDelay(
                                 runnable, period, period, TimeUnit.SECONDS);
                     }
                 }
@@ -513,13 +519,20 @@ public class Oak {
     private void registerAsyncIndex(@Nonnull final String name, 
                                     @Nonnull final List<Registration> regs,
                                     @Nonnull final IndexEditorProvider indexEditors) {
+        registerAsyncIndex(name, regs, indexEditors, false);
+    }
+    
+    private void registerAsyncIndex(@Nonnull final String name, 
+                                    @Nonnull final List<Registration> regs,
+                                    @Nonnull final IndexEditorProvider indexEditors,
+                                    final boolean forceNewExecutor) {
         checkNotNull(regs);
         
         AsyncIndexUpdate task = new AsyncIndexUpdate(
                 checkNotNull(name), store,
                 checkNotNull(indexEditors));
         
-        regs.add(scheduleWithFixedDelay(whiteboard, task, 5, true));
+        regs.add(scheduleWithFixedDelay(whiteboard, task, 5, true, forceNewExecutor));
         regs.add(registerMBean(whiteboard, IndexStatsMBean.class,
                 task.getIndexStats(), IndexStatsMBean.TYPE, name));
         // Register AsyncIndexStats for execution stats update
@@ -543,7 +556,7 @@ public class Oak {
         if (asyncIndexing) {
             String async = "async";
             registerAsyncIndex(async, regs, indexEditors);
-            registerAsyncIndex(AsyncIndexUpdate.ASYNC_SLOW, regs, indexEditors);
+            registerAsyncIndex(AsyncIndexUpdate.ASYNC_SLOW, regs, indexEditors, true);
 
             PropertyIndexAsyncReindex asyncPI = new PropertyIndexAsyncReindex(
                     new AsyncIndexUpdate(IndexConstants.ASYNC_REINDEX_VALUE,
