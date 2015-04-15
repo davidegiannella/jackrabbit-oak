@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,19 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.mk.htree;
-
-import org.apache.jackrabbit.mk.model.ChildNodeEntriesMap;
+package org.apache.jackrabbit.oak.plugins.document;
 
 /**
- * Leaf node structure in an <code>HTree</code>. 
+ * Stats about background write operations.
  */
-class HashBucket extends ChildNodeEntriesMap {
-    
-    public HashBucket() {        
-    }
-    
-    public HashBucket(ChildNodeEntriesMap other) {
-        super(other);
+class BackgroundWriteStats {
+
+    long clean;
+    long split;
+    long lock;
+    long write;
+    long num;
+
+    @Override
+    public String toString() {
+        return "clean:" + clean +
+                ", split:" + split+
+                ", lock:" + lock +
+                ", write:" + write +
+                ", num:" + num;
     }
 }
