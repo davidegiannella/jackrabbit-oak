@@ -156,7 +156,7 @@ public class SessionImpl implements JackrabbitSession {
             throws RepositoryException {
         ItemDelegate item = sd.getItem(oakPath);
         if (item instanceof NodeDelegate) {
-            return NodeImpl.createNodeOrNull((NodeDelegate) item, sessionContext);
+            return NodeImpl.createNode((NodeDelegate) item, sessionContext);
         } else if (item instanceof PropertyDelegate) {
             return new PropertyImpl((PropertyDelegate) item, sessionContext);
         } else {
@@ -693,8 +693,12 @@ public class SessionImpl implements JackrabbitSession {
                 } else if ("remove".equals(methodName)) {
                     permission = Permissions.REMOVE_PROPERTY;
                 }
-                Tree tree = dlg.getParent().getTree();
-                return accessMgr.hasPermissions(tree, ((PropertyDelegate) dlg).getPropertyState(), permission);
+                NodeDelegate parentDelegate = dlg.getParent();
+                if (parentDelegate != null) {
+                    return accessMgr.hasPermissions(parentDelegate.getTree(), ((PropertyDelegate) dlg).getPropertyState(), permission);
+                } else {
+                    return accessMgr.hasPermissions(dlg.getPath(), (permission == Permissions.MODIFY_PROPERTY) ? Session.ACTION_SET_PROPERTY : Session.ACTION_REMOVE);
+                }
             }
         }
         // TODO: add more best-effort checks
