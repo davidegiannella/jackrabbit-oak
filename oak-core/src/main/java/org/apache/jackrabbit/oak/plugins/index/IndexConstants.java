@@ -61,4 +61,9 @@ public interface IndexConstants {
     String DECLARING_NODE_TYPES = "declaringNodeTypes";
 
     String INDEX_CONTENT_NODE_NAME = ":index";
+    
+    /**
+     * value used to disable an index by providing it to the index definition {@code type}
+     */
+    String DISABLED_TYPE_VALUE = "disabled";
 }

@@ -19,10 +19,15 @@
 package org.apache.jackrabbit.oak.plugins.index;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.oak.api.jmx.IndexStatsMBean.STATUS_DONE;
 import static org.apache.jackrabbit.oak.commons.PathUtils.elements;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ASYNC_PROPERTY_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.DISABLED_TYPE_VALUE;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NODE_TYPE;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.REINDEX_PROPERTY_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.TYPE_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.MISSING_NODE;
 
 import java.util.Calendar;
@@ -44,6 +49,7 @@ import com.google.common.base.Objects;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
+
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
@@ -59,6 +65,7 @@ import org.apache.jackrabbit.oak.spi.commit.CompositeHook;
 import org.apache.jackrabbit.oak.spi.commit.EditorDiff;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.commit.VisibleEditor;
+import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStateDiff;
@@ -259,6 +266,37 @@ public class AsyncIndexUpdate implements Runnable {
 
     }
 
+    /**
+     * <p>
+     * returns true whether there's at least one index definitions that will process the async
+     * </p>
+     * <p>
+     * It inspects the index definitions under {@code /oak:index} and if there's any
+     * {@code async=&lt;name&gt;} it will return true. The current implementation is that
+     * {@code AsyncIndexUpdate.name} correspond to what is set in the index definition as
+     * {@code async} property value.
+     * </p>
+     * 
+     * @param root
+     * @return
+     */
+    private boolean anyIndexToProcess(@Nonnull final NodeState root) {
+        NodeState definitions = checkNotNull(root).getChildNode(INDEX_DEFINITIONS_NAME);
+        for (ChildNodeEntry definition : definitions.getChildNodeEntries()) {
+            NodeState n = definition.getNodeState();
+            String nodeType = n.getName(JCR_PRIMARYTYPE);
+            String type = n.getString(TYPE_PROPERTY_NAME);
+            String async = n.getString(ASYNC_PROPERTY_NAME);
+            
+            if (INDEX_DEFINITIONS_NODE_TYPE.equals(nodeType) && 
+                type != null && !DISABLED_TYPE_VALUE.equals(type)
+                && name.equals(async)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
     @Override
     public synchronized void run() {
         if (indexStats.isPaused()) {
@@ -268,6 +306,11 @@ public class AsyncIndexUpdate implements Runnable {
 
         NodeState root = store.getRoot();
 
+        if (!anyIndexToProcess(root)) {
+            log.debug("No index definitions with async='{}' found. Skipping.", name);
+            return;
+        }
+        
         // check for concurrent updates
         NodeState async = root.getChildNode(ASYNC);
         long leaseEndTime = async.getLong(name + "-lease");
