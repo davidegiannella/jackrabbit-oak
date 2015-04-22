@@ -18,12 +18,13 @@ package org.apache.jackrabbit.oak.benchmark;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableSet.of;
-import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ASYNC_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneIndexHelper.newLucenePropertyIndexDefinition;
 
 import java.io.File;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.Nonnull;
 import javax.jcr.Repository;
@@ -35,17 +36,15 @@ import org.apache.jackrabbit.oak.fixture.JcrCreator;
 import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
 import org.apache.jackrabbit.oak.jcr.Jcr;
-import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexProvider;
-import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneIndexHelper;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelper;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.lifecycle.RepositoryInitializer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
-
-import com.google.common.collect.ImmutableSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullTextTest.TestContext> {
 
@@ -54,6 +53,11 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
      */
     class TestContext {
         final Session session = loginWriter();
+        final String title;
+        
+        public TestContext(@Nonnull final String title) {
+            this.title = checkNotNull(title);
+        }
     }
 
     /**
@@ -84,14 +88,29 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
         
     }
     
+    private static final Logger LOG = LoggerFactory.getLogger(LucenePropertyFullTextTest.class);
     private WikipediaImport importer;    
     private Boolean storageEnabled;
-
+    private Thread asyncImporter;
+    private boolean stopAll;
+    
+    /**
+     * reference to the last added title. Used for looking up with queries.
+     */
+    private AtomicReference<String> lastTitle = new AtomicReference<String>();
+    
     public LucenePropertyFullTextTest(final File dump, 
                                       final boolean flat, 
                                       final boolean doReport, 
                                       final Boolean storageEnabled) {
-        this.importer = new WikipediaImport(dump, flat, doReport);
+        this.importer = new WikipediaImport(dump, flat, doReport) {
+
+            @Override
+            protected void pageAdded(String title, String text) {
+                LOG.debug("Setting title: {}", title);
+                lastTitle.set(title);
+            }
+        };
         this.storageEnabled = storageEnabled;
     }
 
@@ -106,6 +125,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
                        .with((Observer) provider)
                        .with(new LuceneIndexEditorProvider())
                        .with((new LuceneInitializerHelper("luceneGlobal", storageEnabled)).async())
+                       // the WikipediaImporter set a property `title`
                        .with(new LucenePropertyInitialiser("luceneTitle", of("title")));
                     return new Jcr(oak);
                 }
@@ -115,15 +135,40 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
     }
 
     @Override
-    protected void runTest() throws Exception {
-        // TODO Auto-generated method stub
-
+    protected void beforeSuite() throws Exception {
+        asyncImporter = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    importer.importWikipedia(loginWriter());
+                } catch (Exception e) {
+                    LOG.error("Error while importing the dump. Trying to halt everything.", e);
+                    stopAll = true;
+                }
+            }
+        });
+        asyncImporter.start();
     }
 
     @Override
-    public void run(Iterable<RepositoryFixture> fixtures) {
-        // TODO Auto-generated method stub
-
+    protected void afterSuite() throws Exception {
+        asyncImporter.join();
+    }
+    
+    @Override
+    protected void runTest() throws Exception {
+        if (lastTitle.get() == null) {
+            return;
+        }
+        runTest(new TestContext(lastTitle.get()));
     }
 
+    @Override
+    protected void runTest(final TestContext ec) throws Exception {
+        if (stopAll) {
+            return;
+        }
+        LOG.debug("looking up for: {}", ec.title);
+        TimeUnit.SECONDS.sleep(10);
+    }
 }
