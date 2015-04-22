@@ -18,6 +18,7 @@ package org.apache.jackrabbit.oak.benchmark;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableSet.of;
+import static java.lang.String.format;
 import static org.apache.jackrabbit.oak.api.Type.BOOLEAN;
 import static org.apache.jackrabbit.oak.api.Type.LONG;
 import static org.apache.jackrabbit.oak.api.Type.NAME;
@@ -35,12 +36,14 @@ import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstant
 
 import java.io.File;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.Nonnull;
 import javax.jcr.Repository;
 import javax.jcr.Session;
+import javax.jcr.query.Query;
+import javax.jcr.query.QueryManager;
+import javax.jcr.query.QueryResult;
 
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.Tree;
@@ -202,7 +205,9 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
         if (stopAll) {
             return;
         }
-        LOG.debug("looking up for: {}", ec.title);
-        TimeUnit.SECONDS.sleep(10);
+        QueryManager qm = ec.session.getWorkspace().getQueryManager();
+        String statement = format("SELECT * FROM [nt:base] WHERE [title] = '%s'", ec.title);
+        LOG.debug("statement: {}", statement);
+        QueryResult qr = qm.createQuery(statement, Query.JCR_SQL2).execute();
     }
 }
