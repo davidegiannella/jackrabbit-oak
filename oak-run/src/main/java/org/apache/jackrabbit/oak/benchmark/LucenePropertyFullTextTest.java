@@ -26,6 +26,7 @@ import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ASYNC_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NODE_TYPE;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.REINDEX_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.TYPE_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.COMPAT_MODE;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.INDEX_RULES;
@@ -44,6 +45,7 @@ import javax.jcr.Session;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
+import javax.jcr.query.RowIterator;
 
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.Tree;
@@ -53,6 +55,7 @@ import org.apache.jackrabbit.oak.fixture.JcrCreator;
 import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
 import org.apache.jackrabbit.oak.jcr.Jcr;
+import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelper;
@@ -99,12 +102,13 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
         @Override
         public void initialize(final NodeBuilder builder) {
             if (!isAlreadyThere(builder)) {
-                Tree t = TreeFactory.createTree(builder);
+                Tree t = TreeFactory.createTree(builder.child(INDEX_DEFINITIONS_NAME));
                 t = t.addChild(name);
                 t.setProperty("jcr:primaryType", INDEX_DEFINITIONS_NODE_TYPE, NAME);
                 t.setProperty(COMPAT_MODE, 2L, LONG);
                 t.setProperty(TYPE_PROPERTY_NAME, TYPE_LUCENE, STRING);
                 t.setProperty(ASYNC_PROPERTY_NAME, "async", STRING);
+                t.setProperty(REINDEX_PROPERTY_NAME, true);
                 
                 t = t.addChild(INDEX_RULES);
                 t.setOrderableChildren(true);
@@ -209,5 +213,9 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
         String statement = format("SELECT * FROM [nt:base] WHERE [title] = '%s'", ec.title);
         LOG.debug("statement: {}", statement);
         QueryResult qr = qm.createQuery(statement, Query.JCR_SQL2).execute();
+//        RowIterator rows = qr.getRows();
+//        while (rows.hasNext()) {
+//            rows.next();
+//        }
     }
 }
