@@ -18,8 +18,20 @@ package org.apache.jackrabbit.oak.benchmark;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableSet.of;
+import static org.apache.jackrabbit.oak.api.Type.BOOLEAN;
+import static org.apache.jackrabbit.oak.api.Type.LONG;
+import static org.apache.jackrabbit.oak.api.Type.NAME;
+import static org.apache.jackrabbit.oak.api.Type.STRING;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.ASYNC_PROPERTY_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
-import static org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneIndexHelper.newLucenePropertyIndexDefinition;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NODE_TYPE;
+import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.TYPE_PROPERTY_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.COMPAT_MODE;
+import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.INDEX_RULES;
+import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.PROP_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.PROP_NODE;
+import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.PROP_PROPERTY_INDEX;
+import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.TYPE_LUCENE;
 
 import java.io.File;
 import java.util.Set;
@@ -31,7 +43,9 @@ import javax.jcr.Repository;
 import javax.jcr.Session;
 
 import org.apache.jackrabbit.oak.Oak;
+import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.benchmark.wikipedia.WikipediaImport;
+import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.fixture.JcrCreator;
 import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
@@ -39,6 +53,7 @@ import org.apache.jackrabbit.oak.jcr.Jcr;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelper;
+import org.apache.jackrabbit.oak.plugins.tree.TreeFactory;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.lifecycle.RepositoryInitializer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
@@ -81,11 +96,30 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
         @Override
         public void initialize(final NodeBuilder builder) {
             if (!isAlreadyThere(builder)) {
-                newLucenePropertyIndexDefinition(builder.child(INDEX_DEFINITIONS_NAME), name,
-                    properties, "async");
+                Tree t = TreeFactory.createTree(builder);
+                t = t.addChild(name);
+                t.setProperty("jcr:primaryType", INDEX_DEFINITIONS_NODE_TYPE, NAME);
+                t.setProperty(COMPAT_MODE, 2L, LONG);
+                t.setProperty(TYPE_PROPERTY_NAME, TYPE_LUCENE, STRING);
+                t.setProperty(ASYNC_PROPERTY_NAME, "async", STRING);
+                
+                t = t.addChild(INDEX_RULES);
+                t.setOrderableChildren(true);
+                t.setProperty("jcr:primaryType", "nt:unstructured", NAME);
+                
+                t = t.addChild("nt:base");
+                
+                Tree propnode = t.addChild(PROP_NODE);
+                propnode.setOrderableChildren(true);
+                propnode.setProperty("jcr:primaryType", "nt:unstructured", NAME);
+                
+                for (String p : properties) {
+                    Tree t1 = propnode.addChild(PathUtils.getName(p));
+                    t1.setProperty(PROP_PROPERTY_INDEX, true, BOOLEAN);
+                    t1.setProperty(PROP_NAME, p);
+                }
             }
         }
-        
     }
     
     private static final Logger LOG = LoggerFactory.getLogger(LucenePropertyFullTextTest.class);
