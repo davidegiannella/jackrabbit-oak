@@ -229,7 +229,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
             // means we exited the loop as we found it.
             LOG.info("title '{}' found with a wait/try of {}ms", ec.title, sleptSoFar);
         } else {
-            LOG.info("title '{}' timed out with a way/try of {}ms.", ec.title, sleptSoFar);
+            LOG.warn("title '{}' timed out with a way/try of {}ms.", ec.title, sleptSoFar);
         }
     }
     
