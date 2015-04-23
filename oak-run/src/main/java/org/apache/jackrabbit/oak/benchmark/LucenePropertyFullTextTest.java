@@ -224,6 +224,13 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
             sleptSoFar += waitUnit;
             TimeUnit.MILLISECONDS.sleep(waitUnit);
         }
+        
+        if (sleptSoFar < maxWait) {
+            // means we exited the loop as we found it.
+            LOG.info("title '{}' found with a wait/try of {}ms", ec.title, sleptSoFar);
+        } else {
+            LOG.info("title '{}' timed out with a way/try of {}ms.", ec.title, sleptSoFar);
+        }
     }
     
     private boolean performQuery(@Nonnull final TestContext ec) throws RepositoryException {
