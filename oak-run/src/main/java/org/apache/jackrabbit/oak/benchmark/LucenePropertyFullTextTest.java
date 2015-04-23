@@ -167,7 +167,8 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
                        .with(new LuceneIndexEditorProvider())
                        .with((new LuceneInitializerHelper("luceneGlobal", storageEnabled)).async())
                        // the WikipediaImporter set a property `title`
-                       .with(new LucenePropertyInitialiser("luceneTitle", of("title")));
+                       .with(new LucenePropertyInitialiser("luceneTitle", of("title")))
+                       .withAsyncIndexing();
                     return new Jcr(oak);
                 }
             });
