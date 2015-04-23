@@ -187,6 +187,8 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
                 } catch (Exception e) {
                     LOG.error("Error while importing the dump. Trying to halt everything.", e);
                     stopAll = true;
+                } finally {
+                    issueHaltRequest("Wikipedia import completed.");
                 }
             }
         });
