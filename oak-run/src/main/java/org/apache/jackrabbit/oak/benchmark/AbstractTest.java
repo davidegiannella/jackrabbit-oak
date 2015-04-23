@@ -198,7 +198,13 @@ abstract class AbstractTest<T> extends Benchmark implements CSVResultGenerator {
             
             // Run a few iterations to warm up the system
             long warmupEnd = System.currentTimeMillis() + WARMUP;
-            while (System.currentTimeMillis() < warmupEnd && !haltRequested) {
+            boolean stop = false;
+            while (System.currentTimeMillis() < warmupEnd && !stop) {
+                if (!stop) {
+                    // we want to execute this at lease once. after that we consider the
+                    // `haltRequested` flag.
+                    stop = haltRequested;
+                }
                 execute();
             }
 
@@ -273,7 +279,13 @@ abstract class AbstractTest<T> extends Benchmark implements CSVResultGenerator {
         if (concurrencyLevel == 1) {
             // Run test iterations, and capture the execution times
             long runtimeEnd = System.currentTimeMillis() + RUNTIME;
-            while (System.currentTimeMillis() < runtimeEnd && !haltRequested) {
+            boolean stop = false;
+            while (System.currentTimeMillis() < runtimeEnd && !stop) {
+                if (!stop) {
+                    // we want to execute this at lease once. after that we consider the
+                    // `haltRequested` flag.
+                    stop = haltRequested;
+                }
                 statistics.addValue(execute());
             }
 
