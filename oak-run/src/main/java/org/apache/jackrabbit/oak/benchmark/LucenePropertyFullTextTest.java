@@ -37,10 +37,12 @@ import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstant
 
 import java.io.File;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.Nonnull;
 import javax.jcr.Repository;
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
@@ -55,7 +57,6 @@ import org.apache.jackrabbit.oak.fixture.JcrCreator;
 import org.apache.jackrabbit.oak.fixture.OakRepositoryFixture;
 import org.apache.jackrabbit.oak.fixture.RepositoryFixture;
 import org.apache.jackrabbit.oak.jcr.Jcr;
-import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelper;
@@ -128,7 +129,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
             }
         }
     }
-    
+        
     private static final Logger LOG = LoggerFactory.getLogger(LucenePropertyFullTextTest.class);
     private WikipediaImport importer;    
     private Boolean storageEnabled;
@@ -190,6 +191,9 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
             }
         });
         asyncImporter.start();
+
+        // allowing the async index to catch up. 
+        TimeUnit.SECONDS.sleep(10);
     }
 
     @Override
@@ -210,13 +214,29 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
         if (stopAll) {
             return;
         }
+        final long maxWait = TimeUnit.MINUTES.toMillis(5);
+        final long waitUnit = 50;
+        long sleptSoFar = 0;
+        
+        while (!performQuery(ec) && sleptSoFar < maxWait) {
+            LOG.debug("title '{}' not found. Waiting and retry. sleptSoFar: {}ms", ec.title,
+                sleptSoFar);
+            sleptSoFar += waitUnit;
+            TimeUnit.MILLISECONDS.sleep(waitUnit);
+        }
+    }
+    
+    private boolean performQuery(@Nonnull final TestContext ec) throws RepositoryException {
         QueryManager qm = ec.session.getWorkspace().getQueryManager();
         String statement = format("SELECT * FROM [nt:base] WHERE [title] = '%s'", ec.title);
         LOG.debug("statement: {}", statement);
         QueryResult qr = qm.createQuery(statement, Query.JCR_SQL2).execute();
-//        RowIterator rows = qr.getRows();
-//        while (rows.hasNext()) {
-//            rows.next();
-//        }
+        RowIterator rows = qr.getRows();
+        if (rows.hasNext()) {
+            rows.nextRow().getPath();
+            return true;
+        } else {
+            return false;
+        }
     }
 }
