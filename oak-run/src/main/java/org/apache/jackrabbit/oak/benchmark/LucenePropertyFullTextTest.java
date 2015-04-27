@@ -69,7 +69,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullTextTest.TestContext> {
-
+    private String currentFixture;
+    private boolean benchmarkCompleted;
+    
     /**
      * context used across the tests
      */
@@ -149,7 +151,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
 
             @Override
             protected void pageAdded(String title, String text) {
-                LOG.debug("Setting title: {}", title);
+                LOG.trace("Setting title: {}", title);
                 lastTitle.set(title);
             }
         };
@@ -159,6 +161,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
     @Override
     protected Repository[] createRepository(RepositoryFixture fixture) throws Exception {
         if (fixture instanceof OakRepositoryFixture) {
+            currentFixture = fixture.toString();
             return ((OakRepositoryFixture) fixture).setUpCluster(1, new JcrCreator() {
                 @Override
                 public Jcr customize(Oak oak) {
@@ -169,7 +172,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
                        .with((new LuceneInitializerHelper("luceneGlobal", storageEnabled)).async())
                        // the WikipediaImporter set a property `title`
                        .with(new LucenePropertyInitialiser("luceneTitle", of("title")))
-                       .withAsyncIndexing();
+                       .withAsyncIndexing("async", 5);
                     return new Jcr(oak);
                 }
             });
@@ -179,6 +182,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
 
     @Override
     protected void beforeSuite() throws Exception {
+        LOG.debug("beforeSuite() - {}", currentFixture);
         asyncImporter = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -188,7 +192,9 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
                     LOG.error("Error while importing the dump. Trying to halt everything.", e);
                     stopAll = true;
                 } finally {
-                    issueHaltRequest("Wikipedia import completed.");
+                    if (!benchmarkCompleted) {
+                        issueHaltRequest("Wikipedia import completed.");
+                    }
                 }
             }
         });
@@ -200,6 +206,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
 
     @Override
     protected void afterSuite() throws Exception {
+        LOG.debug("afterSuite() - {}", currentFixture);
         asyncImporter.join();
     }
     
@@ -221,7 +228,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
         long sleptSoFar = 0;
         
         while (!performQuery(ec) && sleptSoFar < maxWait) {
-            LOG.debug("title '{}' not found. Waiting and retry. sleptSoFar: {}ms", ec.title,
+            LOG.trace("title '{}' not found. Waiting and retry. sleptSoFar: {}ms", ec.title,
                 sleptSoFar);
             sleptSoFar += waitUnit;
             TimeUnit.MILLISECONDS.sleep(waitUnit);
@@ -238,7 +245,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
     private boolean performQuery(@Nonnull final TestContext ec) throws RepositoryException {
         QueryManager qm = ec.session.getWorkspace().getQueryManager();
         String statement = format("SELECT * FROM [nt:base] WHERE [title] = '%s'", ec.title);
-        LOG.debug("statement: {}", statement);
+        LOG.trace("statement: {}", statement);
         QueryResult qr = qm.createQuery(statement, Query.JCR_SQL2).execute();
         RowIterator rows = qr.getRows();
         if (rows.hasNext()) {
@@ -247,5 +254,12 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
         } else {
             return false;
         }
+    }
+
+    @Override
+    protected void issueHaltChildThreads() {
+        LOG.info("benchmark completed. Issuing an halt for the importer");
+        benchmarkCompleted = true;
+        this.importer.issueHaltImport();
     }
 }

@@ -118,10 +118,23 @@ abstract class AbstractTest<T> extends Benchmark implements CSVResultGenerator {
      * 
      * @param message an optional message that can be provided. It will logged at info level.
      */
-    void issueHaltRequest(@Nullable final String message) {
+    protected void issueHaltRequest(@Nullable final String message) {
         String m = message == null ? "" : message;
         LOG.info("halt requested. {}", m);
         haltRequested = true;
+    }
+
+    /**
+     * <p>
+     * this method will be called during the {@link #tearDown()} before the {@link #afterSuite()}.
+     * Override it if you have background processes you wish to stop.
+     * </p>
+     * <p>
+     * For example in case of big imports, the suite could be keep running for as long as the import
+     * is running, even if the tests are actually no longer executed.
+     * </p>
+     */
+    protected void issueHaltChildThreads() {
     }
     
     @Override
@@ -362,6 +375,7 @@ abstract class AbstractTest<T> extends Benchmark implements CSVResultGenerator {
      * @throws Exception if the benchmark can not be cleaned up
      */
     public void tearDown() throws Exception {
+        issueHaltChildThreads();
         this.running = false;
         for (Thread thread : threads) {
             thread.join();
