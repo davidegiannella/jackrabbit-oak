@@ -120,7 +120,7 @@ abstract class AbstractTest<T> extends Benchmark implements CSVResultGenerator {
      */
     void issueHaltRequest(@Nullable final String message) {
         String m = message == null ? "" : message;
-        LOG.info("halt requested. {}", message);
+        LOG.info("halt requested. {}", m);
         haltRequested = true;
     }
     
