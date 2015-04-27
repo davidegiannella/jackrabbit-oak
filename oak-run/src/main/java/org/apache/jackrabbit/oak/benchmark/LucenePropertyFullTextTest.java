@@ -69,8 +69,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullTextTest.TestContext> {
+    private static final Logger LOG = LoggerFactory.getLogger(LucenePropertyFullTextTest.class);
+    private WikipediaImport importer;    
+    private Boolean storageEnabled;
+    private Thread asyncImporter;
     private String currentFixture;
-    private boolean benchmarkCompleted;
+    private boolean benchmarkCompleted, importerCompleted;
     
     /**
      * context used across the tests
@@ -131,12 +135,6 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
             }
         }
     }
-        
-    private static final Logger LOG = LoggerFactory.getLogger(LucenePropertyFullTextTest.class);
-    private WikipediaImport importer;    
-    private Boolean storageEnabled;
-    private Thread asyncImporter;
-    private boolean stopAll;
     
     /**
      * reference to the last added title. Used for looking up with queries.
@@ -183,6 +181,8 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
     @Override
     protected void beforeSuite() throws Exception {
         LOG.debug("beforeSuite() - {}", currentFixture);
+        benchmarkCompleted = false;
+        importerCompleted = false;
         asyncImporter = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -190,9 +190,10 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
                     importer.importWikipedia(loginWriter());
                 } catch (Exception e) {
                     LOG.error("Error while importing the dump. Trying to halt everything.", e);
-                    stopAll = true;
+                    importerCompleted = true;
                 } finally {
                     if (!benchmarkCompleted) {
+                        importerCompleted = true;
                         issueHaltRequest("Wikipedia import completed.");
                     }
                 }
@@ -220,7 +221,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
 
     @Override
     protected void runTest(final TestContext ec) throws Exception {
-        if (stopAll) {
+        if (importerCompleted) {
             return;
         }
         final long maxWait = TimeUnit.MINUTES.toMillis(5);
@@ -258,8 +259,10 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
 
     @Override
     protected void issueHaltChildThreads() {
-        LOG.info("benchmark completed. Issuing an halt for the importer");
-        benchmarkCompleted = true;
-        this.importer.issueHaltImport();
+        if (!importerCompleted) {
+            LOG.info("benchmark completed. Issuing an halt for the importer");
+            benchmarkCompleted = true;
+            this.importer.issueHaltImport();
+        }
     }
 }
