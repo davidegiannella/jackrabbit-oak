@@ -68,6 +68,30 @@ import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * <p>
+ * Perform a benchmark on how long it takes for an ingested item to be available in a Lucene
+ * Property index when indexed in conjunction with a Global full-text lucene (same thread). It makes
+ * use of the {@link WikipediaImport} to use a Wikipedia dump for content injestion.
+ * </p>
+ * <p>
+ * Suggested dump: 
+ * {@linkplain https://dumps.wikimedia.org/enwiki/20150403/enwiki-20150403-pages-articles.xml.bz2}
+ * </p>
+ * <p>
+ * Usage example:
+ * </p>
+ * 
+ * <pre>
+ * java -Druntime=900 -Dlogback.configurationFile=logback-benchmark.xml \
+ *      -jar ~/.m2/repository/org/apache/jackrabbit/oak-run/1.4-SNAPSHOT/oak-run-1.4-SNAPSHOT.jar \
+ *      benchmark --wikipedia enwiki-20150403-pages-articles.xml.bz2 \
+ *      --base ~/tmp/oak/ LucenePropertyFullTextTest Oak-Tar Oak-Mongo
+ * </pre>
+ * <p>
+ * it will run the benchmark for 15 minutes against TarNS and MongoNS.
+ * </p>
+ */
 public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullTextTest.TestContext> {
     private static final Logger LOG = LoggerFactory.getLogger(LucenePropertyFullTextTest.class);
     private WikipediaImport importer;    
