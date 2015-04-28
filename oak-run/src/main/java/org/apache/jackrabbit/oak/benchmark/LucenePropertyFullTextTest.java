@@ -95,10 +95,10 @@ import org.slf4j.LoggerFactory;
 public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullTextTest.TestContext> {
     private static final Logger LOG = LoggerFactory.getLogger(LucenePropertyFullTextTest.class);
     private WikipediaImport importer;    
-    private Boolean storageEnabled;
     private Thread asyncImporter;
-    private String currentFixture;
     private boolean benchmarkCompleted, importerCompleted;
+    Boolean storageEnabled;
+    String currentFixture, currentTest;
     
     /**
      * context used across the tests
@@ -178,6 +178,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
             }
         };
         this.storageEnabled = storageEnabled;
+        this.currentTest = this.getClass().getSimpleName();
     }
 
     @Override
@@ -204,7 +205,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
 
     @Override
     protected void beforeSuite() throws Exception {
-        LOG.debug("beforeSuite() - {}", currentFixture);
+        LOG.debug("beforeSuite() - {} - {}", currentFixture, currentTest);
         benchmarkCompleted = false;
         importerCompleted = false;
         asyncImporter = new Thread(new Runnable() {
@@ -231,7 +232,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
 
     @Override
     protected void afterSuite() throws Exception {
-        LOG.debug("afterSuite() - {}", currentFixture);
+        LOG.debug("afterSuite() - {} - {}", currentFixture, currentTest);
         asyncImporter.join();
     }
     

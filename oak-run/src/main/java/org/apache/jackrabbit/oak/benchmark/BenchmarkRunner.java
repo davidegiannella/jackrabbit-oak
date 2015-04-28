@@ -294,6 +294,10 @@ public class BenchmarkRunner {
             new LucenePropertyFullTextTest(
                 wikipedia.value(options),
                 flatStructure.value(options),
+                report.value(options), withStorage.value(options)),
+            new LucenePropertyFTSeparated(
+                wikipedia.value(options),
+                flatStructure.value(options),
                 report.value(options), withStorage.value(options))
         };
 
