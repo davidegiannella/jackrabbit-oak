@@ -33,6 +33,10 @@ import org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneInitializerHelp
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 
+/**
+ * same as {@link LucenePropertyFullTextTest} but will initialise a repository where the global
+ * full-text runs on a separate thread from lucene property.
+ */
 public class LucenePropertyFTSeparated extends LucenePropertyFullTextTest {
 
     public LucenePropertyFTSeparated(final File dump, 
