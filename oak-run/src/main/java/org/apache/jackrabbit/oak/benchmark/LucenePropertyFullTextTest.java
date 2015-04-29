@@ -18,7 +18,6 @@ package org.apache.jackrabbit.oak.benchmark;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableSet.of;
-import static java.lang.String.format;
 import static org.apache.jackrabbit.oak.api.Type.BOOLEAN;
 import static org.apache.jackrabbit.oak.api.Type.LONG;
 import static org.apache.jackrabbit.oak.api.Type.NAME;
@@ -47,7 +46,6 @@ import javax.jcr.Session;
 import javax.jcr.ValueFactory;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
-import javax.jcr.query.QueryResult;
 import javax.jcr.query.RowIterator;
 
 import org.apache.jackrabbit.oak.Oak;
