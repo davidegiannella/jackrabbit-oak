@@ -44,6 +44,7 @@ import javax.annotation.Nonnull;
 import javax.jcr.Repository;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import javax.jcr.ValueFactory;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryManager;
 import javax.jcr.query.QueryResult;
@@ -262,18 +263,21 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
         
         if (sleptSoFar < maxWait) {
             // means we exited the loop as we found it.
-            LOG.info("title '{}' found with a wait/try of {}ms", ec.title, sleptSoFar);
+            LOG.info("{} - {} - title '{}' found with a wait/try of {}ms", currentFixture,
+                currentTest, ec.title, sleptSoFar);
         } else {
-            LOG.warn("title '{}' timed out with a way/try of {}ms.", ec.title, sleptSoFar);
+            LOG.warn("{} - {} - title '{}' timed out with a way/try of {}ms.", currentFixture,
+                currentTest, ec.title, sleptSoFar);
         }
     }
     
     private boolean performQuery(@Nonnull final TestContext ec) throws RepositoryException {
         QueryManager qm = ec.session.getWorkspace().getQueryManager();
-        String statement = format("SELECT * FROM [nt:base] WHERE [title] = '%s'", ec.title);
-        LOG.trace("statement: {}", statement);
-        QueryResult qr = qm.createQuery(statement, Query.JCR_SQL2).execute();
-        RowIterator rows = qr.getRows();
+        ValueFactory vf = ec.session.getValueFactory();
+        Query q = qm.createQuery("SELECT * FROM [nt:base] WHERE [title] = $title", Query.JCR_SQL2);
+        q.bindValue("title", vf.createValue(ec.title));
+        LOG.trace("statement: {} - title: {}", q.getStatement(), ec.title);        
+        RowIterator rows = q.execute().getRows();
         if (rows.hasNext()) {
             rows.nextRow().getPath();
             return true;
