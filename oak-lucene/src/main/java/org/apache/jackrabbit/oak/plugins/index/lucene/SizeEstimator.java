@@ -16,9 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-@Version("1.1.0")
-@Export(optional = "provide:=true")
-package org.apache.jackrabbit.oak.management;
+package org.apache.jackrabbit.oak.plugins.index.lucene;
 
-import aQute.bnd.annotation.Version;
-import aQute.bnd.annotation.Export;
+public interface SizeEstimator {
+
+    /**
+     * Get the estimated size, or -1 if not known.
+     * 
+     * @return the size
+     */
+    long getSize();
+    
+}
