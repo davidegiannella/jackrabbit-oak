@@ -77,7 +77,7 @@ public abstract class DocumentClusterIT {
      * raise the exception passed into the provided Map
      * 
      * @param exceptions
-     * @param log
+     * @param log may be null. If valid Logger it will be logged
      * @throws Exception
      */
     static void raiseExceptions(@Nonnull final Map<String, Exception> exceptions, 
