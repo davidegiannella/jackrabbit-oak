@@ -40,11 +40,15 @@ import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
+import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
+import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.ImmutableSet;
 
 public class AsyncConflictsIT extends DocumentClusterIT {
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
@@ -65,21 +69,8 @@ public class AsyncConflictsIT extends DocumentClusterIT {
         
         setUpCluster(this.getClass(), mks, repos, NOT_PROVIDED);
         defineIndex(repos.get(0));
-        
-//        alignCluster(mks);
-//        
-//        // ensuring all the cluster nodes sees the index definition
-//        for (Repository r : repos) {
-//            Session s = r.login(ADMIN);
-//            try {
-//                assumeTrue(s.getRootNode().hasNode("oak:index"));
-//                assumeTrue(s.getRootNode().getNode("oak:index").hasNode(INDEX_DEF_NODE));
-//            } finally {
-//                s.logout();
-//            }
-//        }
-        
-        final int numberNodes = 100000;
+                
+        final int numberNodes = 10000;
         
         LOG.info("adding {} nodes", numberNodes);
         Session s = repos.get(0).login(ADMIN);
@@ -91,7 +82,6 @@ public class AsyncConflictsIT extends DocumentClusterIT {
                 test.addNode("node" + i);
                 test.setProperty(INDEX_PROPERTY, generator.nextInt(numberNodes/3));
                 if (i % 1024 == 0) {
-                    LOG.debug("Saving nodes. {}/{}", i, numberNodes);
                     s.save();
                 }
             }
@@ -104,9 +94,6 @@ public class AsyncConflictsIT extends DocumentClusterIT {
         }
         
         LOG.info("Nodes added.");
-//        alignCluster(mks);
-//        Thread.sleep(10000);
-//        alignCluster(mks);
         
         // issuing re-index
         LOG.info("issuing re-index and wait for finish");
@@ -121,7 +108,6 @@ public class AsyncConflictsIT extends DocumentClusterIT {
             s.logout();
         }
         while (!isReindexFinished()) {
-            LOG.debug("Reindex still running");
             Thread.sleep(5000);
         }
         
@@ -133,7 +119,6 @@ public class AsyncConflictsIT extends DocumentClusterIT {
         try {
             boolean reindex = s.getNode("/oak:index/" + INDEX_DEF_NODE).getProperty(REINDEX_PROPERTY_NAME)
                 .getBoolean();
-            LOG.debug("{}", reindex);
             return !reindex;
         } finally {
             s.logout();
@@ -164,5 +149,15 @@ public class AsyncConflictsIT extends DocumentClusterIT {
         } finally {
             session.logout();
         }
+    }
+
+    @Override
+    protected Set<IndexEditorProvider> additionalIndexEditorProviders() {
+        return ImmutableSet.of((IndexEditorProvider) new LuceneIndexEditorProvider());
+    }
+
+    @Override
+    protected boolean isAsyncIndexing() {
+        return true;
     }
 }

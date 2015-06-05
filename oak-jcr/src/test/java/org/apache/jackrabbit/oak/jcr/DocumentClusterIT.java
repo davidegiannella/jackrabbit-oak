@@ -190,8 +190,12 @@ public abstract class DocumentClusterIT {
         Set<IndexEditorProvider> ieps = additionalIndexEditorProviders();
         if (ieps != null) {
             for (IndexEditorProvider p : ieps) {
-                j.with(p);
+                j = j.with(p);
             }
+        }
+        
+        if (isAsyncIndexing()) {
+            j = j.withAsyncIndexing();
         }
         
         Repository repository = j.createRepository();
@@ -214,5 +218,15 @@ public abstract class DocumentClusterIT {
      */
     protected Set<IndexEditorProvider> additionalIndexEditorProviders() {
         return null;
+    }
+    
+    /**
+     * override to change default behaviour. If {@code true} will enable the async indexing in the
+     * cluster. Default is {@code false}
+     * 
+     * @return
+     */
+    protected boolean isAsyncIndexing() {
+        return false;
     }
 }
