@@ -59,7 +59,19 @@ public abstract class DocumentClusterIT {
     @Before
     public void before() throws Exception {
         dropDB(this.getClass());
-        initRepository(this.getClass());
+        
+        List<Repository> rs = new ArrayList<Repository>();
+        List<DocumentMK> ds = new ArrayList<DocumentMK>();
+        
+        initRepository(this.getClass(), rs, ds);
+        
+        Repository repository = rs.get(0);
+        DocumentMK mk = ds.get(0);
+        
+        Session session = repository.login(ADMIN);
+        session.logout();
+        dispose(repository);
+        mk.dispose(); // closes connection as well
     }
 
     @After
@@ -162,16 +174,16 @@ public abstract class DocumentClusterIT {
         }
     }
 
-    static void initRepository(@Nonnull final Class<?> clazz) throws Exception {
+    protected void initRepository(@Nonnull final Class<?> clazz, 
+                                  @Nonnull final List<Repository> repos, 
+                                  @Nonnull final List<DocumentMK> mks) throws Exception {
         MongoConnection con = createConnection(checkNotNull(clazz));
         DocumentMK mk = new DocumentMK.Builder()
                 .setMongoDB(con.getDB())
                 .setClusterId(1).open();
         Repository repository = new Jcr(mk.getNodeStore()).createRepository();
-        Session session = repository.login(
-                new SimpleCredentials("admin", "admin".toCharArray()));
-        session.logout();
-        dispose(repository);
-        mk.dispose(); // closes connection as well
+        
+        repos.add(repository);
+        mks.add(mk);
     }
 }
