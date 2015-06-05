@@ -42,6 +42,7 @@ import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,7 +70,7 @@ public class AsyncConflictsIT extends DocumentClusterIT {
         assumeTrue(OakMongoNSRepositoryStub.isMongoDBAvailable());
     }
     
-    @Test
+    @Test @Ignore("OAK-2961")
     public void updates() throws Exception {
         final Map<String, Exception> exceptions = Collections.synchronizedMap(new HashMap<String, Exception>());
         final Random generator = new Random(3);
