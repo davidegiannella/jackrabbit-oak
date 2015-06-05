@@ -22,6 +22,7 @@ import static org.apache.jackrabbit.oak.jcr.AbstractRepositoryTest.dispose;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -32,6 +33,7 @@ import javax.jcr.SimpleCredentials;
 
 import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
 import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
+import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
 import org.junit.After;
 import org.junit.Before;
 import org.slf4j.Logger;
@@ -63,7 +65,7 @@ public abstract class DocumentClusterIT {
         List<Repository> rs = new ArrayList<Repository>();
         List<DocumentMK> ds = new ArrayList<DocumentMK>();
         
-        initRepository(this.getClass(), rs, ds);
+        initRepository(this.getClass(), rs, ds, 1, NOT_PROVIDED);
         
         Repository repository = rs.get(0);
         DocumentMK mk = ds.get(0);
@@ -131,32 +133,18 @@ public abstract class DocumentClusterIT {
      * @param repos list of {@link Repository} created on each {@code mks}
      * @throws Exception
      */
-    static void setUpCluster(@Nonnull final Class<?> clazz, 
+    void setUpCluster(@Nonnull final Class<?> clazz, 
                              @Nonnull final List<DocumentMK> mks,
                              @Nonnull final List<Repository> repos) throws Exception {
         setUpCluster(clazz, mks, repos, NOT_PROVIDED);
     }
 
-    static void setUpCluster(@Nonnull final Class<?> clazz, 
+    void setUpCluster(@Nonnull final Class<?> clazz, 
                              @Nonnull final List<DocumentMK> mks,
                              @Nonnull final List<Repository> repos,
                              final int asyncDelay) throws Exception {
         for (int i = 0; i < NUM_CLUSTER_NODES; i++) {
-            DocumentMK.Builder builder = new DocumentMK.Builder(); 
-            
-            builder.setMongoDB(createConnection(checkNotNull(clazz)).getDB())
-                   .setClusterId(i + 1);
-            
-            if (asyncDelay != NOT_PROVIDED) {
-                builder.setAsyncDelay(asyncDelay);
-            }
-                    
-            DocumentMK mk = builder.open();
-            
-            Repository repo = new Jcr(mk.getNodeStore()).createRepository();
-            
-            mks.add(mk);
-            repos.add(repo);
+            initRepository(clazz, repos, mks, i + 1, asyncDelay);
         }        
     }
 
@@ -174,16 +162,57 @@ public abstract class DocumentClusterIT {
         }
     }
 
+    /**
+     * initialise the repository
+     * 
+     * @param clazz the current class. Used for logging. Cannot be null.
+     * @param repos list to which add the created repository. Cannot be null.
+     * @param mks list to which add the created MK. Cannot be null.
+     * @param clusterId the cluster ID to use. Must be greater than 0.
+     * @param asyncDelay the async delay to set. For default use {@link #NOT_PROVIDED}
+     * @throws Exception
+     */
     protected void initRepository(@Nonnull final Class<?> clazz, 
                                   @Nonnull final List<Repository> repos, 
-                                  @Nonnull final List<DocumentMK> mks) throws Exception {
-        MongoConnection con = createConnection(checkNotNull(clazz));
-        DocumentMK mk = new DocumentMK.Builder()
-                .setMongoDB(con.getDB())
-                .setClusterId(1).open();
-        Repository repository = new Jcr(mk.getNodeStore()).createRepository();
+                                  @Nonnull final List<DocumentMK> mks,
+                                  final int clusterId,
+                                  final int asyncDelay) throws Exception {
+        DocumentMK.Builder builder = new DocumentMK.Builder(); 
+        builder.setMongoDB(createConnection(checkNotNull(clazz)).getDB());
+        if (asyncDelay != NOT_PROVIDED) {
+            builder.setAsyncDelay(asyncDelay);
+        }
+        builder.setClusterId(clusterId);
         
-        repos.add(repository);
-        mks.add(mk);
+        DocumentMK mk = builder.open();
+        Jcr j = new Jcr(mk.getNodeStore());
+        
+        Set<IndexEditorProvider> ieps = additionalIndexEditorProviders();
+        if (ieps != null) {
+            for (IndexEditorProvider p : ieps) {
+                j.with(p);
+            }
+        }
+        
+        Repository repository = j.createRepository();
+        
+        checkNotNull(repos).add(repository);
+        checkNotNull(mks).add(mk);
+    }
+    
+    /**
+     * <p>
+     * the default {@link #initRepository(Class, List, List, int, int)} uses this for registering
+     * any additional {@link IndexEditorProvider}. Override and return all the provider you'd like
+     * to have running other than the OOTB one.
+     * </p>
+     * 
+     * <p>
+     * the default implementation returns {@code null}
+     * </p>
+     * @return
+     */
+    protected Set<IndexEditorProvider> additionalIndexEditorProviders() {
+        return null;
     }
 }
