@@ -32,7 +32,9 @@ import javax.jcr.PathNotFoundException;
 import javax.jcr.Property;
 import javax.jcr.RepositoryException;
 import javax.jcr.UnsupportedRepositoryOperationException;
+import javax.jcr.lock.Lock;
 import javax.jcr.lock.LockException;
+import javax.jcr.lock.LockManager;
 import javax.jcr.nodetype.NodeType;
 import javax.jcr.util.TraversingItemVisitor;
 import javax.jcr.version.Version;
@@ -47,6 +49,7 @@ import org.apache.jackrabbit.oak.jcr.delegate.SessionDelegate;
 import org.apache.jackrabbit.oak.jcr.delegate.VersionDelegate;
 import org.apache.jackrabbit.oak.jcr.delegate.VersionHistoryDelegate;
 import org.apache.jackrabbit.oak.jcr.delegate.VersionManagerDelegate;
+import org.apache.jackrabbit.oak.jcr.lock.LockManagerImpl;
 import org.apache.jackrabbit.oak.jcr.session.SessionContext;
 import org.apache.jackrabbit.oak.jcr.session.operation.SessionOperation;
 
@@ -78,7 +81,7 @@ public class VersionManagerImpl implements VersionManager {
                         final boolean removeExisting)
             throws RepositoryException {
         final SessionDelegate sessionDelegate = sessionContext.getSessionDelegate();
-        sessionDelegate.performVoid(new SessionOperation("restore", true) {
+        sessionDelegate.performVoid(new SessionOperation<Void>("restore", true) {
             @Override
             public void performVoid() throws RepositoryException {
                 String oakPath = getOakPathOrThrowNotFound(absPath);
@@ -164,7 +167,7 @@ public class VersionManagerImpl implements VersionManager {
             throw new VersionException("Restore of root version not possible");
         }
         final SessionDelegate sessionDelegate = sessionContext.getSessionDelegate();
-        sessionDelegate.performVoid(new SessionOperation("restore", true) {
+        sessionDelegate.performVoid(new SessionOperation<Void>("restore", true) {
             @Override
             public void performVoid() throws RepositoryException {
                 // check for pending changes
@@ -325,7 +328,7 @@ public class VersionManagerImpl implements VersionManager {
     @Override
     public void checkout(final String absPath) throws RepositoryException {
         final SessionDelegate sessionDelegate = sessionContext.getSessionDelegate();
-        sessionDelegate.performVoid(new SessionOperation("checkout", true) {
+        sessionDelegate.performVoid(new SessionOperation<Void>("checkout", true) {
             @Override
             public void performVoid() throws RepositoryException {
                 String oakPath = getOakPathOrThrowNotFound(absPath);
@@ -373,8 +376,12 @@ public class VersionManagerImpl implements VersionManager {
 
     private void checkNotLocked(String absPath) throws RepositoryException {
         // TODO: avoid nested calls
-        if (sessionContext.getWorkspace().getLockManager().isLocked(absPath)) {
-            throw new LockException("Node at " + absPath + " is locked");
+        LockManagerImpl lockManager = sessionContext.getWorkspace().getLockManager();
+        if (lockManager.isLocked(absPath)) {
+            NodeDelegate node = sessionContext.getSessionDelegate().getNode(absPath);
+            if (!lockManager.canUnlock(node)) {
+                throw new LockException("Node at " + absPath + " is locked");    
+            }
         }
     }
 

@@ -1170,13 +1170,11 @@ public final class DocumentNodeStore
     @CheckForNull
     NodeDocument updateCommitRoot(UpdateOp commit) throws DocumentStoreException {
         // use batch commit when there are only revision and modified updates
-        // and collision checks
         boolean batch = true;
         for (Map.Entry<Key, Operation> op : commit.getChanges().entrySet()) {
             String name = op.getKey().getName();
             if (NodeDocument.isRevisionsEntry(name)
-                    || NodeDocument.MODIFIED_IN_SECS.equals(name)
-                    || NodeDocument.COLLISIONS.equals(name)) {
+                    || NodeDocument.MODIFIED_IN_SECS.equals(name)) {
                 continue;
             }
             batch = false;
@@ -1625,7 +1623,7 @@ public final class DocumentNodeStore
             internalRunBackgroundUpdateOperations();
         } catch (RuntimeException e) {
             if (isDisposed.get()) {
-                LOG.warn("Background update operation failed: " + e.toString(), e);
+                LOG.warn("Background update operation failed (will be retried with next run): " + e.toString(), e);
                 return;
             }
             throw e;

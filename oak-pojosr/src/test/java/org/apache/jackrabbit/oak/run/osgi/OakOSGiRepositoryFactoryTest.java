@@ -36,7 +36,7 @@ import javax.jcr.RepositoryFactory;
 import javax.jcr.Session;
 import javax.jcr.SimpleCredentials;
 
-import de.kalpatec.pojosr.framework.launch.PojoServiceRegistry;
+import org.apache.felix.connect.launch.PojoServiceRegistry;
 import org.apache.commons.io.FileUtils;
 import org.apache.jackrabbit.api.JackrabbitRepository;
 import org.apache.jackrabbit.api.JackrabbitSession;
@@ -49,14 +49,14 @@ import org.apache.jackrabbit.oak.spi.security.user.action.AbstractAuthorizableAc
 import org.apache.jackrabbit.oak.spi.security.user.action.AuthorizableAction;
 import org.apache.jackrabbit.oak.spi.security.user.action.AuthorizableActionProvider;
 import org.junit.Before;
-import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import static org.apache.commons.io.FilenameUtils.concat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-@Ignore("OAK-1522")
 public class OakOSGiRepositoryFactoryTest {
 
     private String repositoryHome;
@@ -64,9 +64,12 @@ public class OakOSGiRepositoryFactoryTest {
     private Map config = new HashMap();
     private String newPassword;
 
+    @Rule
+    public final TemporaryFolder tmpFolder = new TemporaryFolder();
+
     @Before
     public void setUp() throws IOException {
-        repositoryHome = concat(getBaseDir(), "target/repository");
+        repositoryHome = tmpFolder.getRoot().getAbsolutePath();
         config.put("org.apache.jackrabbit.repository.home", repositoryHome);
 
         File repoHome = new File(repositoryHome);

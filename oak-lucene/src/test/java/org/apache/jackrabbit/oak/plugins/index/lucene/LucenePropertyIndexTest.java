@@ -894,6 +894,37 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         assertSortedString();
     }
 
+    @Test
+    public void sortQueriesWithStringIgnoredMulti_OrderedProps() throws Exception {
+        Tree idx = createIndex("test1", of("foo", "bar"));
+        idx.setProperty(createProperty(INCLUDE_PROPERTY_NAMES, of("bar"), STRINGS));
+        idx.setProperty(createProperty(ORDERED_PROP_NAMES, of("foo"), STRINGS));
+        idx.addChild(PROP_NODE).addChild("foo");
+        root.commit();
+
+        Tree test = root.getTree("/").addChild("test");
+        List<String> values = createStrings(NUMBER_OF_NODES);
+        List<Tuple> tuples = Lists.newArrayListWithCapacity(values.size());
+        for(int i = 0; i < values.size(); i++){
+            Tree child = test.addChild("n" + i);
+            child.setProperty("foo", values.get(i));
+            child.setProperty("bar", "baz");
+            tuples.add(new Tuple(values.get(i), child.getPath()));
+        }
+
+        //Add a wrong multi-valued property
+        Tree child = test.addChild("a");
+        child.setProperty("foo", of("w", "z"), Type.STRINGS);
+        child.setProperty("bar", "baz");
+        root.commit();
+
+        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo]", Lists
+            .newArrayList(Iterables.concat(Lists.newArrayList("/test/a"), getSortedPaths(tuples, OrderDirection.ASC))));
+        assertOrderedQuery("select [jcr:path] from [nt:base] where [bar] = 'baz' order by [foo] DESC", Lists
+            .newArrayList(Iterables.concat(getSortedPaths(tuples, OrderDirection.DESC), Lists.newArrayList("/test/a")
+            )));
+    }
+
     void assertSortedString() throws CommitFailedException {
         Tree test = root.getTree("/").addChild("test");
         List<String> values = createStrings(NUMBER_OF_NODES);
@@ -1356,6 +1387,92 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         String queryString = "/jcr:root//element(*, nt:base)[jcr:contains(jcr:content, 'foo' )]";
 
         assertQuery(queryString, "xpath", asList("/test/b"));
+    }
+
+    @Test
+    public void unionSortResultCount() throws Exception {
+        // Index Definition
+        Tree idx = createIndex("test1", of("propa", "propb", "propc"));
+        idx.setProperty(createProperty(ORDERED_PROP_NAMES, of("propc"), STRINGS));
+        useV2(idx);
+
+        // create test data
+        Tree test = root.getTree("/").addChild("test");
+        root.commit();
+
+        List<Integer> nodes = Lists.newArrayList();
+        Random r = new Random();
+        int seed = -2;
+        for (int i = 0; i < 1000; i++) {
+            Tree a = test.addChild("a" + i);
+            a.setProperty("propa", "fooa");
+            seed += 2;
+            int num = r.nextInt(100);
+            a.setProperty("propc", num);
+            nodes.add(num);
+        }
+
+        seed = -1;
+        for (int i = 0; i < 1000; i++) {
+            Tree a = test.addChild("b" + i);
+            a.setProperty("propb", "foob");
+            seed += 2;
+            int num = 100 + r.nextInt(100);
+            a.setProperty("propc",  num);
+            nodes.add(num);
+        }
+        root.commit();
+
+        // scan count scans the whole result set
+        String query =
+            "measure /jcr:root//element(*, nt:base)[(@propa = 'fooa' or @propb = 'foob')] order by @propc";
+        assertThat(measureWithLimit(query, XPATH, 100), containsString("scanCount: 101"));
+    }
+
+
+    @Test
+    public void unionSortQueries() throws Exception {
+        // Index Definition
+        Tree idx = createIndex("test1", of("propa", "propb", "propc", "propd"));
+        idx.setProperty(createProperty(ORDERED_PROP_NAMES, of("propd"), STRINGS));
+        useV2(idx);
+
+        // create test data
+        Tree test = root.getTree("/").addChild("test");
+        root.commit();
+
+        int seed = -3;
+        for (int i = 0; i < 5; i++) {
+            Tree a = test.addChild("a" + i);
+            a.setProperty("propa", "a" + i);
+            seed += 3;
+            a.setProperty("propd", seed);
+        }
+
+        seed = -2;
+        for (int i = 0; i < 5; i++) {
+            Tree a = test.addChild("b" + i);
+            a.setProperty("propb", "b" + i);
+            seed += 3;
+            a.setProperty("propd", seed);
+        }
+        seed = -1;
+        for (int i = 0; i < 5; i++) {
+            Tree a = test.addChild("c" + i);
+            a.setProperty("propc", "c" + i);
+            seed += 3;
+            a.setProperty("propd", seed);
+        }
+        root.commit();
+
+        assertQuery(
+            "/jcr:root//element(*, nt:base)[(@propa = 'a4' or @propb = 'b3')] order by @propd",
+            XPATH,
+            asList("/test/b3", "/test/a4"));
+        assertQuery(
+            "/jcr:root//element(*, nt:base)[(@propa = 'a3' or @propb = 'b0' or @propc = 'c2')] order by @propd",
+            XPATH,
+            asList("/test/b0", "/test/c2", "/test/a3"));
     }
 
     private Tree createFileNode(Tree tree, String name, String content, String mimeType){

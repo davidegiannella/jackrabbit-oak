@@ -19,13 +19,15 @@
 
 package org.apache.jackrabbit.oak.run.osgi
 
-import de.kalpatec.pojosr.framework.launch.BundleDescriptor
-import de.kalpatec.pojosr.framework.launch.PojoServiceRegistry
+import org.apache.felix.connect.launch.BundleDescriptor
+import org.apache.felix.connect.launch.PojoServiceRegistry
 import groovy.json.JsonOutput
 import org.apache.commons.io.FileUtils
 import org.junit.After
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.osgi.framework.Constants
 import org.osgi.service.cm.Configuration
 import org.osgi.service.cm.ConfigurationAdmin
@@ -39,21 +41,16 @@ class ConfigTest {
     PojoServiceRegistry registry
     ConfigurationAdmin cm
 
+    @Rule
+    public final TemporaryFolder tmpFolder = new TemporaryFolder()
+
     @Before
     void setUp(){
-        workDir = new File("target", "ConfigTest");
-        workDir.mkdirs()
+        workDir = tmpFolder.getRoot();
         config  = [
                 (REPOSITORY_HOME) : workDir.absolutePath,
                 'magic.spell' : 'Alohomora'
         ]
-    }
-
-    @After
-    void tearDown(){
-        if(workDir.exists()) {
-            FileUtils.cleanDirectory(workDir);
-        }
     }
 
     @Test
