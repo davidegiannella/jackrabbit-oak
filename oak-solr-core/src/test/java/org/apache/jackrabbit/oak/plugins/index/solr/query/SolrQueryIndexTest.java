@@ -19,6 +19,7 @@ package org.apache.jackrabbit.oak.plugins.index.solr.query;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 
 import javax.annotation.Nonnull;
 
@@ -26,6 +27,7 @@ import org.apache.jackrabbit.oak.api.Result;
 import org.apache.jackrabbit.oak.plugins.index.solr.TestUtils;
 import org.apache.jackrabbit.oak.plugins.index.solr.configuration.DefaultSolrConfiguration;
 import org.apache.jackrabbit.oak.plugins.index.solr.configuration.OakSolrConfiguration;
+import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.query.QueryEngineSettings;
 import org.apache.jackrabbit.oak.query.ast.Operator;
 import org.apache.jackrabbit.oak.query.ast.SelectorImpl;
@@ -33,16 +35,23 @@ import org.apache.jackrabbit.oak.query.index.FilterImpl;
 import org.apache.jackrabbit.oak.spi.query.Cursor;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
+import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
+import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.solr.client.solrj.SolrServer;
 import org.apache.solr.common.SolrInputDocument;
 import org.junit.Test;
 
+import static com.google.common.collect.ImmutableList.of;
+import static org.apache.jackrabbit.oak.api.Type.UNDEFINED;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry;
+import static org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry.Order.DESCENDING;
 
 /**
  * Testcase for {@link org.apache.jackrabbit.oak.plugins.index.solr.query.SolrQueryIndex}
@@ -428,5 +437,21 @@ public class SolrQueryIndexTest {
         long sizeFastApprox = cursor.getSize(Result.SizePrecision.FAST_APPROXIMATION, 100000);
         assertTrue(Math.abs(sizeExact - sizeApprox) < 10);
         assertTrue(Math.abs(sizeExact - sizeFastApprox) > 10000);
+    }
+    
+    @Test
+    public void orderByJcrScore() {
+        NodeBuilder root = EmptyNodeState.EMPTY_NODE.builder();
+        NodeState state = root.getNodeState();
+        SolrServer solr = TestUtils.createSolrServer();
+        OakSolrConfiguration conf = TestUtils.getTestConfiguration();
+        SolrQueryIndex index = new SolrQueryIndex("solr", solr, conf);
+        
+        String statement = "SELECT * FROM [nt:base] AS a ORDER BY jcr:score";
+        SelectorImpl selector = new SelectorImpl(state, "a");
+        FilterImpl filter = new FilterImpl(selector, statement, new QueryEngineSettings());
+        List<IndexPlan> plans = index.getPlans(filter, of(new OrderEntry("jcr:score", UNDEFINED, DESCENDING)), state);
+        assertFalse("We expect at least a plan", plans.isEmpty());
+        index.query(plans.get(0), state);
     }
 }
