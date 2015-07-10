@@ -444,10 +444,19 @@ public class SolrQueryIndexTest {
         NodeBuilder root = EmptyNodeState.EMPTY_NODE.builder();
         NodeState state = root.getNodeState();
         SolrServer solr = TestUtils.createSolrServer();
-        OakSolrConfiguration conf = TestUtils.getTestConfiguration();
+        OakSolrConfiguration conf = new DefaultSolrConfiguration() {
+            @Override
+            public int getRows() {
+                return 10000;
+            }
+            @Override
+            public boolean useForPathRestrictions() {
+                return true;
+            }
+        };
         SolrQueryIndex index = new SolrQueryIndex("solr", solr, conf);
         
-        String statement = "SELECT * FROM [nt:base] AS a ORDER BY jcr:score";
+        String statement = "SELECT * FROM [nt:base] AS a WHERE ISCHILDNODE('/content') ORDER BY jcr:score";
         SelectorImpl selector = new SelectorImpl(state, "a");
         FilterImpl filter = new FilterImpl(selector, statement, new QueryEngineSettings());
         List<IndexPlan> plans = index.getPlans(filter, of(new OrderEntry("jcr:score", UNDEFINED, DESCENDING)), state);
