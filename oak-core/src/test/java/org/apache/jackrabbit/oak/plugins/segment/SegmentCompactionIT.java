@@ -26,9 +26,9 @@ import static com.google.common.util.concurrent.Futures.addCallback;
 import static com.google.common.util.concurrent.Futures.immediateCancelledFuture;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 import static java.io.File.createTempFile;
+import static java.lang.Integer.MAX_VALUE;
 import static java.lang.String.valueOf;
 import static java.lang.System.getProperty;
-import static java.util.concurrent.Executors.newScheduledThreadPool;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.commons.io.FileUtils.deleteDirectory;
@@ -53,6 +53,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import javax.annotation.Nonnull;
 import javax.management.InstanceAlreadyExistsException;
@@ -62,11 +63,13 @@ import javax.management.MalformedObjectNameException;
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectName;
 
+import com.google.common.base.Predicate;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListenableScheduledFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import org.apache.jackrabbit.oak.api.Blob;
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.commons.jmx.AnnotatedStandardMBean;
 import org.apache.jackrabbit.oak.plugins.segment.compaction.CompactionStrategy;
@@ -109,13 +112,13 @@ public class SegmentCompactionIT {
     private final MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
 
     private final Random rnd = new Random();
-    private final ListeningScheduledExecutorService scheduler =
-            listeningDecorator(newScheduledThreadPool(50));
+    private final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(50);
+    private final ListeningScheduledExecutorService scheduler = listeningDecorator(executor);
     private final FileStoreGCMonitor fileStoreGCMonitor = new FileStoreGCMonitor(Clock.SIMPLE);
     private final TestGCMonitor gcMonitor = new TestGCMonitor(fileStoreGCMonitor);
     private final Set<ListenableScheduledFuture<?>> writers = newConcurrentHashSet();
     private final Set<ListenableScheduledFuture<?>> readers = newConcurrentHashSet();
-    private final Set<Reference> references = newConcurrentHashSet();
+    private final Set<ListenableScheduledFuture<?>> references = newConcurrentHashSet();
     private final SegmentCompactionITMBean segmentCompactionMBean = new SegmentCompactionITMBean();
     private final CompactionStrategy compactionStrategy = new CompactionStrategy(
             false, false, CLEAN_OLD, 60000, MEMORY_THRESHOLD_DEFAULT) {
@@ -136,10 +139,20 @@ public class SegmentCompactionIT {
     private volatile int maxWriters = 10;
     private volatile long maxStoreSize = 200000000000L;
     private volatile int maxBlobSize = 1000000;
+    private volatile int maxStringSize = 10000;
     private volatile int maxReferences = 10;
+    private volatile int maxWriteOps = 10000;
+    private volatile int maxNodeCount = 1000;
+    private volatile int maxPropertyCount = 1000;
+    private volatile int nodeRemoveRatio = 10;
+    private volatile int propertyRemoveRatio = 10;
+    private volatile int nodeAddRatio = 40;
+    private volatile int addStringRatio = 20;
+    private volatile int addBinaryRatio = 20;
     private volatile int compactionInterval = 1;
     private volatile boolean stopping;
     private volatile Reference rootReference;
+    private volatile long fileStoreSize;
 
     public synchronized void stop() {
         stopping = true;
@@ -167,15 +180,11 @@ public class SegmentCompactionIT {
     }
 
     public void removeReferences(int count) {
-        Iterator<Reference> it = references.iterator();
-        while (it.hasNext() && count-- > 0) {
-            it.next().run();
-            it.remove();
-        }
+        remove(references, count);
     }
 
-    private static void remove(Set<ListenableScheduledFuture<?>> futures, int count) {
-        Iterator<ListenableScheduledFuture<?>> it = futures.iterator();
+    private static void remove(Set<ListenableScheduledFuture<?>> ops, int count) {
+        Iterator<ListenableScheduledFuture<?>> it = ops.iterator();
         while (it.hasNext() && count-- > 0) {
             it.next().cancel(false);
         }
@@ -231,6 +240,9 @@ public class SegmentCompactionIT {
             if (mBeanRegistration != null) {
                 mBeanRegistration.unregister();
             }
+            remove(writers, MAX_VALUE);
+            remove(readers, MAX_VALUE);
+            remove(references, MAX_VALUE);
             scheduler.shutdown();
             if (fileStore != null) {
                 fileStore.close();
@@ -245,6 +257,7 @@ public class SegmentCompactionIT {
 
     @Test
     public void run() throws InterruptedException {
+        scheduleSizeMonitor();
         scheduleCompactor();
         addReaders(maxReaders);
         addWriters(maxWriters);
@@ -254,6 +267,15 @@ public class SegmentCompactionIT {
                 wait();
             }
         }
+    }
+
+    private void scheduleSizeMonitor() {
+        scheduler.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                fileStoreSize = fileStore.size();
+            }
+        }, 1, 1, MINUTES);
     }
 
     private synchronized void scheduleCompactor() {
@@ -275,22 +297,23 @@ public class SegmentCompactionIT {
 
     private void scheduleWriter() {
         if (writers.size() < maxWriters) {
-            final ListenableScheduledFuture<Void> writer = scheduler.schedule(
-                    new RandomWriter(rnd, nodeStore, rnd.nextInt(500), "W" + rnd.nextInt(5)),
-                    rnd.nextInt(30), SECONDS);
-            writers.add(writer);
-            addCallback(writer, new FutureCallback<Void>() {
+            final RandomWriter writer = new RandomWriter(rnd, nodeStore, rnd.nextInt(maxWriteOps), "W" + rnd.nextInt(5));
+            final ListenableScheduledFuture<Void> futureWriter = scheduler.schedule(
+                    writer, rnd.nextInt(30), SECONDS);
+            writers.add(futureWriter);
+            addCallback(futureWriter, new FutureCallback<Void>() {
                 @Override
                 public void onSuccess(Void result) {
-                    writers.remove(writer);
-                    if (!writer.isCancelled()) {
+                    writers.remove(futureWriter);
+                    if (!futureWriter.isCancelled()) {
                         scheduleWriter();
                     }
                 }
 
                 @Override
                 public void onFailure(Throwable t) {
-                    writers.remove(writer);
+                    writer.cancel();
+                    writers.remove(futureWriter);
                     segmentCompactionMBean.error("Writer error", t);
                 }
             });
@@ -299,15 +322,17 @@ public class SegmentCompactionIT {
 
     private void scheduleReader() {
         if (readers.size() < maxReaders) {
-            final ListenableScheduledFuture<?> reader = rnd.nextBoolean()
-                ? scheduler.schedule(new RandomNodeReader(rnd, nodeStore), rnd.nextInt(30), SECONDS)
-                : scheduler.schedule(new RandomPropertyReader(rnd, nodeStore), rnd.nextInt(30), SECONDS);
-            readers.add(reader);
-            addCallback(reader, new FutureCallback<Object>() {
+            final RandomReader<?> reader = rnd.nextBoolean()
+                ? new RandomNodeReader(rnd, nodeStore)
+                : new RandomPropertyReader(rnd, nodeStore);
+            final ListenableScheduledFuture<?> futureReader = scheduler.schedule(
+                    reader, rnd.nextInt(30), SECONDS);
+            readers.add(futureReader);
+            addCallback(futureReader, new FutureCallback<Object>() {
                 @Override
                 public void onSuccess(Object node) {
-                    readers.remove(reader);
-                    if (!reader.isCancelled()) {
+                    readers.remove(futureReader);
+                    if (!futureReader.isCancelled()) {
                         if (rnd.nextBoolean()) {
                             scheduleReference(node);
                         } else {
@@ -318,7 +343,8 @@ public class SegmentCompactionIT {
 
                 @Override
                 public void onFailure(Throwable t) {
-                    readers.remove(reader);
+                    reader.cancel();
+                    readers.remove(futureReader);
                     segmentCompactionMBean.error("Node reader error", t);
                 }
             });
@@ -328,20 +354,21 @@ public class SegmentCompactionIT {
     private void scheduleReference(Object object) {
         if (references.size() < maxReferences) {
             final Reference reference = new Reference(object);
-            final ListenableScheduledFuture<?> ref = scheduler.schedule(
+            final ListenableScheduledFuture<?> futureReference = scheduler.schedule(
                     reference, rnd.nextInt(600), SECONDS);
-            references.add(reference);
-            addCallback(ref, new FutureCallback<Object>() {
+            references.add(futureReference);
+            addCallback(futureReference, new FutureCallback<Object>() {
                 @Override
                 public void onSuccess(Object result) {
                     references.remove(reference);
-                    if (!ref.isCancelled()) {
+                    if (!futureReference.isCancelled()) {
                         scheduleReader();
                     }
                 }
 
                 @Override
                 public void onFailure(Throwable t) {
+                    reference.run();
                     references.remove(reference);
                     segmentCompactionMBean.error("Reference error", t);
                 }
@@ -357,6 +384,8 @@ public class SegmentCompactionIT {
         private final int opCount;
         private final String itemPrefix;
 
+        private volatile boolean cancelled;
+
         RandomWriter(Random rnd, NodeStore nodeStore, int opCount, String itemPrefix) {
             this.rnd = rnd;
             this.nodeStore = nodeStore;
@@ -364,27 +393,39 @@ public class SegmentCompactionIT {
             this.itemPrefix = itemPrefix;
         }
 
+
+        public void cancel() {
+            cancelled = true;
+        }
+
         @Override
-        public Void call() throws Exception {
+        public Void call() throws IOException, CommitFailedException {
             NodeBuilder root = nodeStore.getRoot().builder();
-            boolean deleteOnly = fileStore.size() > maxStoreSize;
-            for (int k = 0; k < opCount; k++) {
-                modify(nodeStore, root, deleteOnly);
+            for (int k = 0; k < opCount && !cancelled; k++) {
+                modify(nodeStore, root);
             }
-            nodeStore.merge(root, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+            if (!cancelled) {
+                nodeStore.merge(root, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+            }
             return null;
         }
 
-        private void modify(NodeStore nodeStore, NodeBuilder nodeBuilder, boolean deleteOnly)
-                throws IOException {
-            int k = rnd.nextInt(100);
-            if (k < 10) {
+        private void modify(NodeStore nodeStore, NodeBuilder nodeBuilder) throws IOException {
+            int p0 = nodeRemoveRatio;
+            int p1 = p0 + propertyRemoveRatio;
+            int p2 = p1 + nodeAddRatio;
+            int p3 = p2 + addStringRatio;
+            double p = p3 + addBinaryRatio;
+
+            boolean deleteOnly = fileStoreSize > maxStoreSize;
+            double k = rnd.nextDouble();
+            if (k < p0/p) {
                 chooseRandomNode(nodeBuilder).remove();
-            } else if (k < 20) {
+            } else if (k < p1/p) {
                 removeRandomProperty(chooseRandomNode(nodeBuilder));
-            } else if (k < 60 && !deleteOnly)  {
+            } else if (k < p2/p && !deleteOnly)  {
                 addRandomNode(nodeBuilder);
-            } else if (k < 80 && !deleteOnly) {
+            } else if (k < p3/p && !deleteOnly) {
                 addRandomValue(nodeBuilder);
             } else if (!deleteOnly) {
                 addRandomBlob(nodeStore, nodeBuilder);
@@ -394,6 +435,14 @@ public class SegmentCompactionIT {
         private NodeBuilder chooseRandomNode(NodeBuilder nodeBuilder) {
             NodeBuilder childBuilder = nodeBuilder;
             for (int k = 0; k < rnd.nextInt(1000); k++) {
+                childBuilder = randomStep(nodeBuilder, nodeBuilder = childBuilder);
+            }
+            return childBuilder;
+        }
+
+        private NodeBuilder chooseRandomNode(NodeBuilder nodeBuilder, Predicate<NodeBuilder> predicate) {
+            NodeBuilder childBuilder = chooseRandomNode(nodeBuilder);
+            while (!predicate.apply(childBuilder)) {
                 childBuilder = randomStep(nodeBuilder, nodeBuilder = childBuilder);
             }
             return childBuilder;
@@ -419,23 +468,34 @@ public class SegmentCompactionIT {
         }
 
         private void addRandomNode(NodeBuilder nodeBuilder) {
-            if (nodeBuilder.getChildNodeCount(1000) < 1000) {
-                chooseRandomNode(nodeBuilder).setChildNode('N' + itemPrefix + rnd.nextInt(1000));
-            }
+            chooseRandomNode(nodeBuilder, new Predicate<NodeBuilder>() {
+                @Override
+                public boolean apply(NodeBuilder builder) {
+                    return builder.getChildNodeCount(maxNodeCount) < maxNodeCount;
+                }
+            }).setChildNode('N' + itemPrefix + rnd.nextInt(maxNodeCount));
         }
 
         private void addRandomValue(NodeBuilder nodeBuilder) {
-            if (nodeBuilder.getPropertyCount() < 1000) {
-                chooseRandomNode(nodeBuilder).setProperty('P' + itemPrefix + rnd.nextInt(1000),
-                        randomAlphabetic(rnd.nextInt(10000)));
-            }
+            chooseRandomNode(nodeBuilder, new Predicate<NodeBuilder>() {
+                @Override
+                public boolean apply(NodeBuilder builder) {
+                    return builder.getPropertyCount() < maxPropertyCount;
+                }
+            })
+            .setProperty('P' + itemPrefix + rnd.nextInt(maxPropertyCount),
+                    randomAlphabetic(rnd.nextInt(maxStringSize)));
         }
 
         private void addRandomBlob(NodeStore nodeStore, NodeBuilder nodeBuilder) throws IOException {
-            if (nodeBuilder.getPropertyCount() < 1000) {
-                chooseRandomNode(nodeBuilder).setProperty('B' + itemPrefix + rnd.nextInt(1000),
-                        createBlob(nodeStore, rnd.nextInt(maxBlobSize)));
-            }
+            chooseRandomNode(nodeBuilder, new Predicate<NodeBuilder>() {
+                @Override
+                public boolean apply(NodeBuilder builder) {
+                    return builder.getPropertyCount() < maxPropertyCount;
+                }
+            })
+            .setProperty('B' + itemPrefix + rnd.nextInt(maxPropertyCount),
+                    createBlob(nodeStore, rnd.nextInt(maxBlobSize)));
         }
 
         private Blob createBlob(NodeStore nodeStore, int size) throws IOException {
@@ -449,9 +509,15 @@ public class SegmentCompactionIT {
         protected final Random rnd;
         protected final NodeStore nodeStore;
 
+        protected volatile boolean cancelled;
+
         RandomReader(Random rnd, NodeStore nodeStore) {
             this.rnd = rnd;
             this.nodeStore = nodeStore;
+        }
+
+        public void cancel() {
+            cancelled = true;
         }
 
         private NodeState randomStep(NodeState parent, NodeState node) {
@@ -467,7 +533,7 @@ public class SegmentCompactionIT {
 
         protected final NodeState chooseRandomNode(NodeState parent) {
             NodeState child = parent;
-            for (int k = 0; k < rnd.nextInt(1000); k++) {
+            for (int k = 0; k < rnd.nextInt(1000) && !cancelled; k++) {
                 child = randomStep(parent, parent = child);
             }
             return child;
@@ -611,6 +677,16 @@ public class SegmentCompactionIT {
         }
 
         @Override
+        public void setCorePoolSize(int corePoolSize) {
+            executor.setCorePoolSize(corePoolSize);
+        }
+
+        @Override
+        public int getCorePoolSize() {
+            return executor.getCorePoolSize();
+        }
+
+        @Override
         public void setCompactionInterval(int minutes) {
             if (compactionInterval != minutes) {
                 compactionInterval = minutes;
@@ -681,6 +757,16 @@ public class SegmentCompactionIT {
         }
 
         @Override
+        public void setMaxStringSize(int size) {
+            maxStringSize = size;
+        }
+
+        @Override
+        public int getMaxStringSize() {
+            return maxStringSize;
+        }
+
+        @Override
         public void setMaxBlobSize(int size) {
             maxBlobSize = size;
         }
@@ -702,6 +788,89 @@ public class SegmentCompactionIT {
         @Override
         public int getMaxReferences() {
             return maxReferences;
+        }
+
+        @Override
+        public void setMaxWriteOps(int count) {
+            checkArgument(count >= 0);
+            maxWriteOps = count;
+        }
+
+        @Override
+        public int getMaxWriteOps() {
+            return maxWriteOps;
+        }
+
+        @Override
+        public void setMaxNodeCount(int count) {
+            checkArgument(count >= 0);
+            maxNodeCount = count;
+        }
+
+        @Override
+        public int getMaxNodeCount() {
+            return maxNodeCount;
+        }
+
+        @Override
+        public void setMaxPropertyCount(int count) {
+            checkArgument(count >= 0);
+            maxPropertyCount = count;
+        }
+
+        @Override
+        public int getMaxPropertyCount() {
+            return maxPropertyCount;
+        }
+
+        @Override
+        public void setNodeRemoveRatio(int ratio) {
+            nodeRemoveRatio = ratio;
+        }
+
+        @Override
+        public int getNodeRemoveRatio() {
+            return nodeRemoveRatio;
+        }
+
+        @Override
+        public void setPropertyRemoveRatio(int ratio) {
+            propertyRemoveRatio = ratio;
+        }
+
+        @Override
+        public int getPropertyRemoveRatio() {
+            return propertyRemoveRatio;
+        }
+
+        @Override
+        public void setNodeAddRatio(int ratio) {
+            nodeAddRatio = ratio;
+        }
+
+        @Override
+        public int getNodeAddRatio() {
+            return nodeAddRatio;
+        }
+
+        @Override
+        public void setAddStringRatio(int ratio) {
+            addStringRatio = ratio;
+        }
+
+        @Override
+        public int getAddStringRatio() {
+            return addStringRatio;
+        }
+
+        @Override
+        public void setAddBinaryRatio(int ratio) {
+            addBinaryRatio = ratio;
+        }
+
+        @Override
+        public int getAddBinaryRatio() {
+            return addBinaryRatio;
         }
 
         @Override
@@ -740,12 +909,7 @@ public class SegmentCompactionIT {
 
         @Override
         public long getFileStoreSize() {
-            try {
-                return fileStore.size();
-            } catch (IOException e) {
-                error("Error getting size of file store", e);
-                return -1;
-            }
+            return fileStoreSize;
         }
 
         private CompactionMap getCompactionMap() {

@@ -461,7 +461,7 @@ public class FileStore implements SegmentStore {
 
         CompactionGainEstimate estimate = estimateCompactionGain();
         long gain = estimate.estimateCompactionGain(offset);
-        if (gain >= 10) {
+        if (gain >= compactionStrategy.getGainThreshold()) {
             gcMonitor.info(
                     "Estimated compaction in {}, gain is {}% ({}/{}) or ({}/{}), so running compaction",
                     watch, gain, estimate.getReachableSize(),
@@ -559,7 +559,7 @@ public class FileStore implements SegmentStore {
         return dataFiles;
     }
 
-    public synchronized long size() throws IOException {
+    public synchronized long size() {
         long size = writeFile.length();
         for (TarReader reader : readers) {
             size += reader.size();

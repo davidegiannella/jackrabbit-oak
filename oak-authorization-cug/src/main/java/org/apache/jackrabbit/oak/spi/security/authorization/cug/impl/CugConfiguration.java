@@ -71,7 +71,7 @@ import org.apache.jackrabbit.oak.spi.xml.ProtectedItemImporter;
 
 @Component(metatype = true,
         label = "Apache Jackrabbit Oak CUG Configuration",
-        description = "Authorization configuration dedicated to setup and evaluation 'closed user group' permissions.",
+        description = "Authorization configuration dedicated to setup and evaluate 'Closed User Group' permissions.",
         policy = ConfigurationPolicy.REQUIRE)
 @Service({AuthorizationConfiguration.class, SecurityConfiguration.class})
 @Properties({
@@ -130,7 +130,7 @@ public class CugConfiguration extends ConfigurationBase implements Authorization
         if (!enabled || supportedPaths.isEmpty() || getExclude().isExcluded(principals)) {
             return EmptyPermissionProvider.getInstance();
         } else {
-            return new CugPermissionProvider(root, principals, supportedPaths, getContext());
+            return new CugPermissionProvider(root, principals, supportedPaths, getSecurityProvider().getConfiguration(AuthorizationConfiguration.class).getContext());
         }
     }
 
