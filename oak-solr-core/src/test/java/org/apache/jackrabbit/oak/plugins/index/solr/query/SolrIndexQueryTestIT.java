@@ -19,11 +19,16 @@ package org.apache.jackrabbit.oak.plugins.index.solr.query;
 import java.util.Iterator;
 import java.util.List;
 
+import javax.jcr.query.Query;
+
 import com.google.common.collect.ImmutableList;
 
+import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.ContentRepository;
+import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Tree;
+import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.CompositeIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexProvider;
@@ -51,7 +56,9 @@ import org.junit.Test;
 
 import static com.google.common.collect.ImmutableList.of;
 import static java.util.Arrays.asList;
+import static javax.jcr.query.Query.JCR_SQL2;
 import static junit.framework.Assert.assertEquals;
+import static org.apache.jackrabbit.oak.api.Type.NAME;
 import static org.apache.jackrabbit.oak.api.Type.STRINGS;
 import static org.apache.jackrabbit.oak.api.Type.UNDEFINED;
 import static org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry.Order.DESCENDING;
@@ -508,21 +515,23 @@ public class SolrIndexQueryTestIT extends AbstractQueryTest {
     }
     
     @Test
-    public void orderByJcrScore() {
-        NodeBuilder root = EmptyNodeState.EMPTY_NODE.builder();
-        NodeState state = root.getNodeState();
-        SolrServer solr = TestUtils.createSolrServer();
-        OakSolrConfiguration conf = new DefaultSolrConfiguration() {
-            @Override
-            public int getRows() {
-                return 10000;
-            }
-            @Override
-            public boolean useForPathRestrictions() {
-                return true;
-            }
-        };
-        SolrQueryIndex index = new SolrQueryIndex("solr", solr, conf);
+    public void orderByJcrScore() throws Exception {
+        Tree index = root.getTree("/oak:index/" + TEST_INDEX_NAME);
+        assertTrue(index.exists());
+
+        index.remove();
+        root.commit();
+
+        for (PropertyState p : index.getProperties()) {
+            System.out.println(p.getName() + ": " + p.getValue(Type.STRING));
+        }
+        
+        Tree content = root.getTree("/").addChild("content");
+        Tree a = content.addChild("a");
+        a.setProperty(JcrConstants.JCR_PRIMARYTYPE, JcrConstants.NT_UNSTRUCTURED, NAME);
+        a.setProperty("type", "doc doc doc");
+        root.commit();
+        
         
 //        String statement = "SELECT * FROM [nt:base] AS a WHERE ISCHILDNODE('/content') ORDER BY jcr:score";
         
@@ -532,11 +541,9 @@ public class SolrIndexQueryTestIT extends AbstractQueryTest {
             "and isdescendantnode(a, '/content/') " +
             "order by [jcr:score] desc";
 
-        SelectorImpl selector = new SelectorImpl(state, "a");
-        FilterImpl filter = new FilterImpl(selector, statement, new QueryEngineSettings());
-        List<IndexPlan> plans = index.getPlans(filter, of(new OrderEntry("jcr:score", UNDEFINED, DESCENDING)), state);
-        assertFalse("We expect at least a plan", plans.isEmpty());
-        index.query(plans.get(0), state);
+        Iterator<String> results = executeQuery(statement, JCR_SQL2, true).iterator();
+        assertTrue(results.hasNext());
+        assertEquals("/content/a", results.next());
+        assertFalse(results.hasNext());
     }
-
 }
