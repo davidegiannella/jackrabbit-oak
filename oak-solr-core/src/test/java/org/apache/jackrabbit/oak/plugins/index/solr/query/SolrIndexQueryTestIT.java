@@ -17,6 +17,7 @@
 package org.apache.jackrabbit.oak.plugins.index.solr.query;
 
 import java.util.Iterator;
+import java.util.List;
 
 import com.google.common.collect.ImmutableList;
 
@@ -27,20 +28,33 @@ import org.apache.jackrabbit.oak.plugins.index.CompositeIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.solr.TestUtils;
+import org.apache.jackrabbit.oak.plugins.index.solr.configuration.DefaultSolrConfiguration;
+import org.apache.jackrabbit.oak.plugins.index.solr.configuration.OakSolrConfiguration;
 import org.apache.jackrabbit.oak.plugins.index.solr.index.SolrIndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.solr.util.SolrIndexInitializer;
+import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.AbstractQueryTest;
+import org.apache.jackrabbit.oak.query.QueryEngineSettings;
+import org.apache.jackrabbit.oak.query.ast.SelectorImpl;
+import org.apache.jackrabbit.oak.query.index.FilterImpl;
 import org.apache.jackrabbit.oak.spi.query.CompositeQueryIndexProvider;
+import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
+import org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
+import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.solr.client.solrj.SolrServer;
 import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import static com.google.common.collect.ImmutableList.of;
 import static java.util.Arrays.asList;
 import static junit.framework.Assert.assertEquals;
 import static org.apache.jackrabbit.oak.api.Type.STRINGS;
+import static org.apache.jackrabbit.oak.api.Type.UNDEFINED;
+import static org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry.Order.DESCENDING;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
@@ -492,4 +506,37 @@ public class SolrIndexQueryTestIT extends AbstractQueryTest {
         assertEquals("/test/b", result.next());
         assertFalse(result.hasNext());
     }
+    
+    @Test
+    public void orderByJcrScore() {
+        NodeBuilder root = EmptyNodeState.EMPTY_NODE.builder();
+        NodeState state = root.getNodeState();
+        SolrServer solr = TestUtils.createSolrServer();
+        OakSolrConfiguration conf = new DefaultSolrConfiguration() {
+            @Override
+            public int getRows() {
+                return 10000;
+            }
+            @Override
+            public boolean useForPathRestrictions() {
+                return true;
+            }
+        };
+        SolrQueryIndex index = new SolrQueryIndex("solr", solr, conf);
+        
+//        String statement = "SELECT * FROM [nt:base] AS a WHERE ISCHILDNODE('/content') ORDER BY jcr:score";
+        
+        String statement = "select [jcr:path], [jcr:score], [rep:excerpt] " +
+            "from [nt:unstructured] as a " + 
+            "where contains(*, 'doc') " +
+            "and isdescendantnode(a, '/content/') " +
+            "order by [jcr:score] desc";
+
+        SelectorImpl selector = new SelectorImpl(state, "a");
+        FilterImpl filter = new FilterImpl(selector, statement, new QueryEngineSettings());
+        List<IndexPlan> plans = index.getPlans(filter, of(new OrderEntry("jcr:score", UNDEFINED, DESCENDING)), state);
+        assertFalse("We expect at least a plan", plans.isEmpty());
+        index.query(plans.get(0), state);
+    }
+
 }
