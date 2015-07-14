@@ -92,7 +92,6 @@ public class SolrIndexQueryTestIT extends AbstractQueryTest {
         solrServer = provider.getSolrServer();
         try {
             return new Oak().with(new InitialContent())
-                    .with(new SolrIndexInitializer())
                     .with(new OpenSecurityProvider())
                     .with(new CompositeQueryIndexProvider(
                             new SolrQueryIndexProvider(provider, provider),
@@ -519,22 +518,17 @@ public class SolrIndexQueryTestIT extends AbstractQueryTest {
         Tree index = root.getTree("/oak:index/" + TEST_INDEX_NAME);
         assertTrue(index.exists());
 
-        index.remove();
+        index.setProperty("pathRestrictions", true);
+        index.setProperty("rows", 10000);
+        index.setProperty("reindex", true);
         root.commit();
-
-        for (PropertyState p : index.getProperties()) {
-            System.out.println(p.getName() + ": " + p.getValue(Type.STRING));
-        }
         
         Tree content = root.getTree("/").addChild("content");
         Tree a = content.addChild("a");
         a.setProperty(JcrConstants.JCR_PRIMARYTYPE, JcrConstants.NT_UNSTRUCTURED, NAME);
         a.setProperty("type", "doc doc doc");
         root.commit();
-        
-        
-//        String statement = "SELECT * FROM [nt:base] AS a WHERE ISCHILDNODE('/content') ORDER BY jcr:score";
-        
+                
         String statement = "select [jcr:path], [jcr:score], [rep:excerpt] " +
             "from [nt:unstructured] as a " + 
             "where contains(*, 'doc') " +
