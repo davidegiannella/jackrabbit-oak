@@ -428,5 +428,5 @@ public class SolrQueryIndexTest {
         long sizeFastApprox = cursor.getSize(Result.SizePrecision.FAST_APPROXIMATION, 100000);
         assertTrue(Math.abs(sizeExact - sizeApprox) < 10);
         assertTrue(Math.abs(sizeExact - sizeFastApprox) > 10000);
-    }
+    }    
 }
