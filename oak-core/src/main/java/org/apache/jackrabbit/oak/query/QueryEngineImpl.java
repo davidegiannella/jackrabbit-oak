@@ -121,11 +121,14 @@ public abstract class QueryEngineImpl implements QueryEngine {
             parser.setAllowNumberLiterals(false);
             parser.setAllowTextLiterals(false);
         }
+        
+        Query q;
+        
         if (SQL2.equals(language) || JQOM.equals(language)) {
-            return parser.parse(statement);
+            q = parser.parse(statement, false);
         } else if (SQL.equals(language)) {
             parser.setSupportSQL1(true);
-            return parser.parse(statement);
+            q = parser.parse(statement, false);
         } else if (XPATH.equals(language)) {
             XPathToSQL2Converter converter = new XPathToSQL2Converter();
             String sql2 = converter.convert(statement);
@@ -133,7 +136,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
             try {
                 // OAK-874: No artificial XPath selector name in wildcards
                 parser.setIncludeSelectorNameInWildcardColumns(false);
-                return parser.parse(sql2);
+                q = parser.parse(sql2, false);
             } catch (ParseException e) {
                 ParseException e2 = new ParseException(
                         statement + " converted to SQL-2 " + e.getMessage(), 0);
@@ -143,6 +146,16 @@ public abstract class QueryEngineImpl implements QueryEngine {
         } else {
             throw new ParseException("Unsupported language: " + language, 0);
         }
+        
+        try {
+            q.init();
+        } catch (Exception e) {
+            ParseException e2 = new ParseException(statement + ": " + e.getMessage(), 0);
+            e2.initCause(e);
+            throw e2;
+        }
+
+        return q;
     }
     
     @Override
