@@ -1126,4 +1126,8 @@ public class QueryImpl implements Query {
         return sum.min(max).max(min).longValue();
     }
 
+    @Override
+    public Query optimise() {
+        return this;
+    }
 }

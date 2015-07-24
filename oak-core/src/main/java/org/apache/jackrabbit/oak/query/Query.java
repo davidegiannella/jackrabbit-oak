@@ -16,7 +16,10 @@ package org.apache.jackrabbit.oak.query;
 import java.util.Iterator;
 import java.util.List;
 
+import javax.annotation.Nonnull;
+
 import aQute.bnd.annotation.ProviderType;
+
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Result;
 import org.apache.jackrabbit.oak.api.Tree;
@@ -118,4 +121,13 @@ public interface Query {
      * @return if sorted by index
      */
     boolean isSortedByIndex();
+    
+    /**
+     * Perform optimisation on the object itself.
+     * 
+     * @return {@code this} if no optimisations are possible or a new instance of a {@link Query}.
+     *         Cannot return null.
+     */
+    @Nonnull
+    Query optimise();
 }
