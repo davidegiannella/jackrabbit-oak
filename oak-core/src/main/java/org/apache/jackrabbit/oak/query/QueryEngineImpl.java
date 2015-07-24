@@ -68,6 +68,12 @@ public abstract class QueryEngineImpl implements QueryEngine {
      * disabled for testing purposes.
      */
     private boolean traversalEnabled = true;
+    
+    /**
+     * Whether the query engine should be forced to use the optimised version of the query if
+     * available.
+     */
+    private boolean forceOptimised;
 
     /**
      * @return Execution context for a single query execution.
@@ -225,4 +231,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
         MDC.remove(OAK_QUERY_ANALYZE);
     }
 
+    protected void setForceOptimised(boolean forceOptimised) {
+        this.forceOptimised = forceOptimised;
+    }
 }

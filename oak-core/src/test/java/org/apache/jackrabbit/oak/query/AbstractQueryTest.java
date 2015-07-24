@@ -304,6 +304,10 @@ public abstract class AbstractQueryTest {
     protected void setTraversalEnabled(boolean traversalEnabled) {
         ((QueryEngineImpl) qe).setTraversalEnabled(traversalEnabled);
     }
+    
+    protected void setForceOptimised(final boolean forceOptimised) {
+        ((QueryEngineImpl) qe).setForceOptimised(forceOptimised);
+    }
 
     protected static String readRow(ResultRow row, boolean pathOnly) {
         if (pathOnly) {
