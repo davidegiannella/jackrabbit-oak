@@ -150,7 +150,7 @@ public final class DocumentNodeStore
      * Use fair mode for background operation lock.
      */
     private boolean fairBackgroundOperationLock =
-            Boolean.getBoolean("oak.fairBackgroundOperationLock");
+            Boolean.parseBoolean(System.getProperty("oak.fairBackgroundOperationLock", "true"));
 
     /**
      * How long to remember the relative order of old revision of all cluster
@@ -272,7 +272,17 @@ public final class DocumentNodeStore
 
     private Thread backgroundReadThread;
 
+    /**
+     * Monitor object to synchronize background reads.
+     */
+    private final Object backgroundReadMonitor = new Object();
+
     private Thread backgroundUpdateThread;
+
+    /**
+     * Monitor object to synchronize background writes.
+     */
+    private final Object backgroundWriteMonitor = new Object();
 
     /**
      * Background thread performing the clusterId lease renew.
@@ -342,8 +352,14 @@ public final class DocumentNodeStore
     private final BlobSerializer blobSerializer = new BlobSerializer() {
         @Override
         public String serialize(Blob blob) {
+
             if (blob instanceof BlobStoreBlob) {
-                return ((BlobStoreBlob) blob).getBlobId();
+                BlobStoreBlob bsb = (BlobStoreBlob) blob;
+                BlobStore bsbBlobStore = bsb.getBlobStore();
+                //see if the blob has been created from another store
+                if (bsbBlobStore != null && bsbBlobStore.equals(blobStore)) {
+                    return bsb.getBlobId();
+                }
             }
 
             String id;
@@ -1632,27 +1648,29 @@ public final class DocumentNodeStore
         }
     }
 
-    private synchronized void internalRunBackgroundUpdateOperations() {
-        long start = clock.getTime();
-        long time = start;
-        // clean orphaned branches and collisions
-        cleanOrphanedBranches();
-        cleanCollisions();
-        long cleanTime = clock.getTime() - time;
-        time = clock.getTime();
-        // split documents (does not create new revisions)
-        backgroundSplit();
-        long splitTime = clock.getTime() - time;
-        // write back pending updates to _lastRev
-        BackgroundWriteStats stats = backgroundWrite();
-        stats.split = splitTime;
-        stats.clean = cleanTime;
-        String msg = "Background operations stats ({})";
-        if (clock.getTime() - start > TimeUnit.SECONDS.toMillis(10)) {
-            // log as info if it took more than 10 seconds
-            LOG.info(msg, stats);
-        } else {
-            LOG.debug(msg, stats);
+    private void internalRunBackgroundUpdateOperations() {
+        synchronized (backgroundWriteMonitor) {
+            long start = clock.getTime();
+            long time = start;
+            // clean orphaned branches and collisions
+            cleanOrphanedBranches();
+            cleanCollisions();
+            long cleanTime = clock.getTime() - time;
+            time = clock.getTime();
+            // split documents (does not create new revisions)
+            backgroundSplit();
+            long splitTime = clock.getTime() - time;
+            // write back pending updates to _lastRev
+            BackgroundWriteStats stats = backgroundWrite();
+            stats.split = splitTime;
+            stats.clean = cleanTime;
+            String msg = "Background operations stats ({})";
+            if (clock.getTime() - start > TimeUnit.SECONDS.toMillis(10)) {
+                // log as info if it took more than 10 seconds
+                LOG.info(msg, stats);
+            } else {
+                LOG.debug(msg, stats);
+            }
         }
     }
 
@@ -1674,17 +1692,19 @@ public final class DocumentNodeStore
     }
 
     /** OAK-2624 : background read operations are split from background update ops */
-    private synchronized void internalRunBackgroundReadOperations() {
-        long start = clock.getTime();
-        // pull in changes from other cluster nodes
-        BackgroundReadStats readStats = backgroundRead(true);
-        long readTime = clock.getTime() - start;
-        String msg = "Background read operations stats (read:{} {})";
-        if (clock.getTime() - start > TimeUnit.SECONDS.toMillis(10)) {
-            // log as info if it took more than 10 seconds
-            LOG.info(msg, readTime, readStats);
-        } else {
-            LOG.debug(msg, readTime, readStats);
+    private void internalRunBackgroundReadOperations() {
+        synchronized (backgroundReadMonitor) {
+            long start = clock.getTime();
+            // pull in changes from other cluster nodes
+            BackgroundReadStats readStats = backgroundRead(true);
+            long readTime = clock.getTime() - start;
+            String msg = "Background read operations stats (read:{} {})";
+            if (clock.getTime() - start > TimeUnit.SECONDS.toMillis(10)) {
+                // log as info if it took more than 10 seconds
+                LOG.info(msg, readTime, readStats);
+            } else {
+                LOG.debug(msg, readTime, readStats);
+            }
         }
     }
 

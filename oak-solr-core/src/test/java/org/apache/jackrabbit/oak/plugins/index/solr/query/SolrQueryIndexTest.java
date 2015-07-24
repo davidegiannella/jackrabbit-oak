@@ -32,12 +32,18 @@ import org.apache.jackrabbit.oak.query.ast.SelectorImpl;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
 import org.apache.jackrabbit.oak.spi.query.Cursor;
 import org.apache.jackrabbit.oak.spi.query.Filter;
+import org.apache.jackrabbit.oak.spi.query.IndexRow;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.params.SolrParams;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
@@ -45,7 +51,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Testcase for {@link org.apache.jackrabbit.oak.plugins.index.solr.query.SolrQueryIndex}
+ * Tests for {@link org.apache.jackrabbit.oak.plugins.index.solr.query.SolrQueryIndex}
  */
 public class SolrQueryIndexTest {
 
@@ -60,7 +66,7 @@ public class SolrQueryIndexTest {
 
         FilterImpl filter = new FilterImpl(selector, "", new QueryEngineSettings());
         double cost = solrQueryIndex.getCost(filter, root);
-        assertTrue(Double.POSITIVE_INFINITY == cost);
+        assertEquals(Double.POSITIVE_INFINITY, cost, 0);
     }
 
     @Test
@@ -76,11 +82,11 @@ public class SolrQueryIndexTest {
         FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where isdescendantnode(a, '/test')", new QueryEngineSettings());
         filter.restrictPath("/test", Filter.PathRestriction.ALL_CHILDREN);
         double cost = solrQueryIndex.getCost(filter, root);
-        assertTrue(Double.POSITIVE_INFINITY == cost);
+        assertEquals(Double.POSITIVE_INFINITY, cost, 0);
     }
 
     @Test
-    public void testCostWithPathRestrictionsEnabled() throws Exception {
+    public void testCostWithOnlyPathRestrictionsEnabled() throws Exception {
         NodeState root = mock(NodeState.class);
         when(root.getNames(any(String.class))).thenReturn(Collections.<String>emptySet());
         SelectorImpl selector = new SelectorImpl(root, "a");
@@ -97,7 +103,34 @@ public class SolrQueryIndexTest {
         FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where isdescendantnode(a, '/test')", new QueryEngineSettings());
         filter.restrictPath("/test", Filter.PathRestriction.ALL_CHILDREN);
         double cost = solrQueryIndex.getCost(filter, root);
-        assertTrue(10 == cost);
+        assertEquals(Double.POSITIVE_INFINITY, cost, 0);
+    }
+
+    @Test
+    public void testCostWithPropertyAndPathRestrictionsEnabled() throws Exception {
+        NodeState root = mock(NodeState.class);
+        when(root.getNames(any(String.class))).thenReturn(Collections.<String>emptySet());
+        SelectorImpl selector = new SelectorImpl(root, "a");
+
+        SolrServer solrServer = mock(SolrServer.class);
+        OakSolrConfiguration configuration = new DefaultSolrConfiguration() {
+            @Override
+            public boolean useForPathRestrictions() {
+                return true;
+            }
+
+            @Override
+            public boolean useForPropertyRestrictions() {
+                return true;
+            }
+        };
+        SolrQueryIndex solrQueryIndex = new SolrQueryIndex("solr", solrServer, configuration);
+
+        FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where isdescendantnode(a, '/test')", new QueryEngineSettings());
+        filter.restrictPath("/test", Filter.PathRestriction.ALL_CHILDREN);
+        filter.restrictProperty("foo", Operator.EQUAL, PropertyValues.newString("bar"));
+        double cost = solrQueryIndex.getCost(filter, root);
+        assertEquals(5, cost, 0);
     }
 
     @Test
@@ -113,7 +146,7 @@ public class SolrQueryIndexTest {
         FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where name = 'hello')", new QueryEngineSettings());
         filter.restrictProperty("name", Operator.EQUAL, PropertyValues.newString("hello"));
         double cost = solrQueryIndex.getCost(filter, root);
-        assertTrue(Double.POSITIVE_INFINITY == cost);
+        assertEquals(Double.POSITIVE_INFINITY, cost, 0);
     }
 
     @Test
@@ -134,7 +167,7 @@ public class SolrQueryIndexTest {
         FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where name = 'hello')", new QueryEngineSettings());
         filter.restrictProperty("name", Operator.EQUAL, PropertyValues.newString("hello"));
         double cost = solrQueryIndex.getCost(filter, root);
-        assertTrue(10 == cost);
+        assertEquals(10, cost, 0);
     }
 
     @Test
@@ -150,11 +183,11 @@ public class SolrQueryIndexTest {
         FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where jcr:primaryType = 'nt:unstructured')", new QueryEngineSettings());
         filter.restrictProperty("jcr:primaryType", Operator.EQUAL, PropertyValues.newString("nt:unstructured"));
         double cost = solrQueryIndex.getCost(filter, root);
-        assertTrue(Double.POSITIVE_INFINITY == cost);
+        assertEquals(Double.POSITIVE_INFINITY, cost, 0);
     }
 
     @Test
-    public void testCostWithPrimaryTypeRestrictionsEnabled() throws Exception {
+    public void testCostWithOnlyPrimaryTypeRestrictionsEnabled() throws Exception {
         NodeState root = mock(NodeState.class);
         when(root.getNames(any(String.class))).thenReturn(Collections.<String>emptySet());
         SelectorImpl selector = new SelectorImpl(root, "a");
@@ -171,7 +204,34 @@ public class SolrQueryIndexTest {
         FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where jcr:primaryType = 'nt:unstructured')", new QueryEngineSettings());
         filter.restrictProperty("jcr:primaryType", Operator.EQUAL, PropertyValues.newString("nt:unstructured"));
         double cost = solrQueryIndex.getCost(filter, root);
-        assertTrue(10 == cost);
+        assertEquals(Double.POSITIVE_INFINITY, cost, 0);
+    }
+
+    @Test
+    public void testCostWithPropertyAndPrimaryTypeRestrictionsEnabled() throws Exception {
+        NodeState root = mock(NodeState.class);
+        when(root.getNames(any(String.class))).thenReturn(Collections.<String>emptySet());
+        SelectorImpl selector = new SelectorImpl(root, "a");
+
+        SolrServer solrServer = mock(SolrServer.class);
+        OakSolrConfiguration configuration = new DefaultSolrConfiguration() {
+            @Override
+            public boolean useForPrimaryTypes() {
+                return true;
+            }
+
+            @Override
+            public boolean useForPropertyRestrictions() {
+                return true;
+            }
+        };
+        SolrQueryIndex solrQueryIndex = new SolrQueryIndex("solr", solrServer, configuration);
+
+        FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where jcr:primaryType = 'nt:unstructured')", new QueryEngineSettings());
+        filter.restrictProperty("jcr:primaryType", Operator.EQUAL, PropertyValues.newString("nt:unstructured"));
+        filter.restrictProperty("name", Operator.EQUAL, PropertyValues.newString("hello"));
+        double cost = solrQueryIndex.getCost(filter, root);
+        assertEquals(5, cost, 0);
     }
 
     @Test
@@ -198,7 +258,7 @@ public class SolrQueryIndexTest {
         FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where name = 'hello')", new QueryEngineSettings());
         filter.restrictProperty("name", Operator.EQUAL, PropertyValues.newString("hello"));
         double cost = solrQueryIndex.getCost(filter, root);
-        assertTrue(Double.POSITIVE_INFINITY == cost);
+        assertEquals(Double.POSITIVE_INFINITY, cost, 0);
     }
 
     @Test
@@ -225,7 +285,7 @@ public class SolrQueryIndexTest {
         FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where name = 'hello')", new QueryEngineSettings());
         filter.restrictProperty("name", Operator.EQUAL, PropertyValues.newString("hello"));
         double cost = solrQueryIndex.getCost(filter, root);
-        assertTrue(Double.POSITIVE_INFINITY == cost);
+        assertEquals(Double.POSITIVE_INFINITY, cost, 0);
     }
 
     @Test
@@ -252,7 +312,7 @@ public class SolrQueryIndexTest {
         FilterImpl filter = new FilterImpl(selector, "select * from [nt:base] as a where name = 'hello')", new QueryEngineSettings());
         filter.restrictProperty("name", Operator.EQUAL, PropertyValues.newString("hello"));
         double cost = solrQueryIndex.getCost(filter, root);
-        assertTrue(10 == cost);
+        assertEquals(10, cost, 0);
     }
 
     @Test
@@ -428,5 +488,62 @@ public class SolrQueryIndexTest {
         long sizeFastApprox = cursor.getSize(Result.SizePrecision.FAST_APPROXIMATION, 100000);
         assertTrue(Math.abs(sizeExact - sizeApprox) < 10);
         assertTrue(Math.abs(sizeExact - sizeFastApprox) > 10000);
+    }
+
+    @Test
+    public void testNoMoreThanThreeSolrRequests() throws Exception {
+        NodeState root = mock(NodeState.class);
+        when(root.getNames(any(String.class))).thenReturn(Collections.<String>emptySet());
+        SelectorImpl selector = new SelectorImpl(root, "a");
+        String sqlQuery = "select [jcr:path], [jcr:score] from [nt:base] as a where" +
+                " contains([jcr:content/*], 'founded')";
+        SolrServer solrServer = mock(SolrServer.class);
+        OakSolrConfiguration configuration = new DefaultSolrConfiguration() {
+            @Override
+            public boolean useForPropertyRestrictions() {
+                return true;
+            }
+
+            @Override
+            public int getRows() {
+                return 10;
+            }
+        };
+        SolrQueryIndex solrQueryIndex = new SolrQueryIndex("solr", solrServer, configuration);
+        FilterImpl filter = new FilterImpl(selector, sqlQuery, new QueryEngineSettings());
+        CountingResponse response = new CountingResponse(0);
+        when(solrServer.query(any(SolrParams.class))).thenReturn(response);
+
+        Cursor cursor = solrQueryIndex.query(filter, root);
+        assertNotNull(cursor);
+        while (cursor.hasNext()) {
+            IndexRow row = cursor.next();
+            assertNotNull(row);
+        }
+        assertEquals(3, response.getCounter());
+    }
+
+    private class CountingResponse extends QueryResponse {
+
+        private int counter;
+
+        public CountingResponse(int counter) {
+            this.counter = counter;
+        }
+
+        @Override
+        public SolrDocumentList getResults() {
+            SolrDocumentList results = new SolrDocumentList();
+            for (int i = 0; i < 1000; i++) {
+                results.add(new SolrDocument());
+            }
+            results.setNumFound(1000);
+            counter++;
+            return results;
+        }
+
+        public int getCounter() {
+            return counter;
+        }
     }
 }
