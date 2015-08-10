@@ -14,9 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.spi.security.authorization.cug.impl;
+package org.apache.jackrabbit.j2ee;
 
-public class CugImporterTest {
+import javax.jcr.Repository;
 
-    // TODO
+/**
+ * <code>JcrRemotingServlet</code>...
+ */
+public class JcrRemotingServlet extends org.apache.jackrabbit.server.remoting.davex.JcrRemotingServlet {
+
+    /**
+     * Returns the repository available from the servlet context of this
+     * servlet.
+     */
+    protected Repository getRepository() {
+        return RepositoryAccessServlet.getRepository(getServletContext());
+    }
 }

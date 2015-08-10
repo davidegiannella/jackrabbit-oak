@@ -653,44 +653,49 @@ public class FileStore implements SegmentStore {
      * A new generation of a tar file is created (and segments are only
      * discarded) if doing so releases more than 25% of the space in a tar file.
      */
-    public synchronized void cleanup() throws IOException {
+    public void cleanup() throws IOException {
         Stopwatch watch = Stopwatch.createStarted();
         long initialSize = size();
-        gcMonitor.info("TarMK revision cleanup started. Current repository size {}",
-                humanReadableByteCount(initialSize));
-
-        newWriter();
-        tracker.clearCache();
-
-        // Suggest to the JVM that now would be a good time
-        // to clear stale weak references in the SegmentTracker
-        System.gc();
-
-        Set<UUID> ids = newHashSet();
-        for (SegmentId id : tracker.getReferencedSegmentIds()) {
-            ids.add(new UUID(
-                    id.getMostSignificantBits(),
-                    id.getLeastSignificantBits()));
-        }
-        writer.collectReferences(ids);
-
         CompactionMap cm = tracker.getCompactionMap();
-        List<TarReader> list = newArrayListWithCapacity(readers.size());
         Set<UUID> cleanedIds = newHashSet();
-        for (TarReader reader : readers) {
-            TarReader cleaned = reader.cleanup(ids, cm, cleanedIds);
-            if (cleaned == reader) {
-                list.add(reader);
-            } else {
-                if (cleaned != null) {
-                    list.add(cleaned);
-                }
-                File file = reader.close();
-                gcMonitor.info("TarMK revision cleanup reclaiming {}", file.getName());
-                toBeRemoved.addLast(file);
+
+        synchronized (this) {
+            gcMonitor.info("TarMK revision cleanup started. Current repository size {}",
+                    humanReadableByteCount(initialSize));
+
+            newWriter();
+            tracker.clearCache();
+
+            // Suggest to the JVM that now would be a good time
+            // to clear stale weak references in the SegmentTracker
+            System.gc();
+
+            Set<UUID> ids = newHashSet();
+            for (SegmentId id : tracker.getReferencedSegmentIds()) {
+                ids.add(new UUID(
+                        id.getMostSignificantBits(),
+                        id.getLeastSignificantBits()));
             }
+            writer.collectReferences(ids);
+
+            List<TarReader> list = newArrayListWithCapacity(readers.size());
+            for (TarReader reader : readers) {
+                TarReader cleaned = reader.cleanup(ids, cm, cleanedIds);
+                if (cleaned == reader) {
+                    list.add(reader);
+                } else {
+                    if (cleaned != null) {
+                        list.add(cleaned);
+                    }
+                    File file = reader.close();
+                    gcMonitor.info("TarMK revision cleanup reclaiming {}", file.getName());
+                    toBeRemoved.addLast(file);
+                }
+            }
+            readers = list;
         }
-        readers = list;
+
+        // Do this outside sync to avoid deadlock with SegmentId.getSegment(). See OAK-3179
         cm.remove(cleanedIds);
         long finalSize = size();
         gcMonitor.cleaned(initialSize - finalSize, finalSize);
@@ -700,6 +705,13 @@ public class FileStore implements SegmentStore {
                 humanReadableByteCount(initialSize - finalSize),
                 humanReadableByteCount(sum(cm.getEstimatedWeights())),
                 cm.getDepth());
+    }
+
+    /**
+     * @return  a new {@link SegmentWriter} instance for writing to this store.
+     */
+    public SegmentWriter createSegmentWriter() {
+        return new SegmentWriter(this, tracker, getVersion());
     }
 
     /**
@@ -713,11 +725,7 @@ public class FileStore implements SegmentStore {
         gcMonitor.info("TarMK compaction running, strategy={}", compactionStrategy);
 
         long start = System.currentTimeMillis();
-        SegmentWriter writer = new SegmentWriter(this, tracker, getVersion());
-        SegmentWriter mapWriter = compactionStrategy.getPersistCompactionMap()
-            ? new SegmentWriter(this, tracker, getVersion())
-            : null;
-        final Compactor compactor = new Compactor(writer, mapWriter, compactionStrategy.cloneBinaries());
+        Compactor compactor = new Compactor(this, compactionStrategy);
         SegmentNodeState before = getHead();
         long existing = before.getChildNode(SegmentNodeStore.CHECKPOINTS)
                 .getChildNodeCount(Long.MAX_VALUE);
@@ -727,7 +735,7 @@ public class FileStore implements SegmentStore {
                     existing);
         }
 
-        SegmentNodeState after = compactor.compact(EMPTY_NODE, before);
+        SegmentNodeState after = compactor.compact(EMPTY_NODE, before, EMPTY_NODE);
 
         Callable<Boolean> setHead = new SetHead(before, after, compactor);
         try {
@@ -741,7 +749,8 @@ public class FileStore implements SegmentStore {
                 gcMonitor.info("TarMK compaction detected concurrent commits while compacting. " +
                         "Compacting these commits. Cycle {}", cycles);
                 SegmentNodeState head = getHead();
-                after = compactor.compact(after, head);
+                after = compactor.compact(before, head, after);
+                before = head;
                 setHead = new SetHead(head, after, compactor);
             }
             if (!success) {
@@ -749,7 +758,7 @@ public class FileStore implements SegmentStore {
                         "{} cycles.", cycles - 1);
                 if (compactionStrategy.getForceAfterFail()) {
                     gcMonitor.info("TarMK compaction force compacting remaining commits");
-                    if (!forceCompact(after, compactor)) {
+                    if (!forceCompact(before, after, compactor)) {
                         gcMonitor.warn("TarMK compaction failed to force compact remaining commits. " +
                                 "Most likely compaction didn't get exclusive access to the store.");
                     }
@@ -763,11 +772,11 @@ public class FileStore implements SegmentStore {
         }
     }
 
-    private boolean forceCompact(final SegmentNodeState before, final Compactor compactor) throws Exception {
+    private boolean forceCompact(final NodeState before, final SegmentNodeState onto, final Compactor compactor) throws Exception {
         return compactionStrategy.compacted(new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
-                return new SetHead(getHead(), compactor.compact(before, getHead()), compactor).call();
+                return new SetHead(getHead(), compactor.compact(before, getHead(), onto), compactor).call();
             }
         });
     }
@@ -885,7 +894,7 @@ public class FileStore implements SegmentStore {
                 if (reader.isClosed()) {
                     // Cleanup might already have closed the file.
                     // The segment should be available from another file.
-                    log.info("Skipping closed tar file {}", reader);
+                    log.debug("Skipping closed tar file {}", reader);
                     continue;
                 }
 

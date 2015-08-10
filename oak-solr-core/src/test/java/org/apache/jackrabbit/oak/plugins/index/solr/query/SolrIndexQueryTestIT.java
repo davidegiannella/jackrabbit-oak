@@ -16,30 +16,25 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.solr.query;
 
-import java.util.Iterator;
-
 import com.google.common.collect.ImmutableList;
-
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
-import org.apache.jackrabbit.oak.plugins.index.CompositeIndexEditorProvider;
-import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexEditorProvider;
-import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexProvider;
-import org.apache.jackrabbit.oak.plugins.index.solr.TestUtils;
+import org.apache.jackrabbit.oak.plugins.index.solr.configuration.DefaultSolrConfigurationProvider;
 import org.apache.jackrabbit.oak.plugins.index.solr.index.SolrIndexEditorProvider;
+import org.apache.jackrabbit.oak.plugins.index.solr.server.DefaultSolrServerProvider;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.AbstractQueryTest;
-import org.apache.jackrabbit.oak.spi.query.CompositeQueryIndexProvider;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
-import org.apache.solr.client.solrj.SolrServer;
-import org.junit.After;
 import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
 import javax.jcr.query.Query;
+import java.util.Iterator;
 
 import static java.util.Arrays.asList;
 import static junit.framework.Assert.assertEquals;
@@ -51,38 +46,35 @@ import static org.junit.Assume.assumeTrue;
 /**
  * General query extensive testcase for {@link SolrQueryIndex}
  */
-public class SolrIndexQueryTestIT extends AbstractQueryTest {
+    public class SolrIndexQueryTestIT extends AbstractQueryTest {
 
-    private SolrServer solrServer;
-
-    @After
-    public void tearDown() throws Exception {
-        solrServer.deleteByQuery("*:*");
-        solrServer.commit();
-    }
+    @Rule
+    public TestName name = new TestName();
 
     @Override
     protected void createTestIndexNode() throws Exception {
         Tree index = root.getTree("/");
-        createTestIndexNode(index, SolrQueryIndex.TYPE);
+        Tree solrIndexNode = createTestIndexNode(index, SolrQueryIndex.TYPE);
+        solrIndexNode.setProperty("pathRestrictions",true);
+        solrIndexNode.setProperty("propertyRestrictions",true);
+        solrIndexNode.setProperty("primaryTypes",true);
+        solrIndexNode.setProperty("commitPolicy","hard");
+        Tree server = solrIndexNode.addChild("server");
+        server.setProperty("solrServerType", "embedded");
+        server.setProperty("solrHomePath", "target/" + name.getMethodName());
+
         root.commit();
     }
 
     @Override
     protected ContentRepository createRepository() {
-        TestUtils provider = new TestUtils();
-        solrServer = provider.getSolrServer();
         try {
+            DefaultSolrServerProvider solrServerProvider = new DefaultSolrServerProvider();
+            DefaultSolrConfigurationProvider oakSolrConfigurationProvider = new DefaultSolrConfigurationProvider();
             return new Oak().with(new InitialContent())
                     .with(new OpenSecurityProvider())
-                    .with(new CompositeQueryIndexProvider(
-                            new SolrQueryIndexProvider(provider, provider),
-                            new PropertyIndexProvider()
-                    ))
-                    .with(new CompositeIndexEditorProvider(
-                            new SolrIndexEditorProvider(provider, provider),
-                            new PropertyIndexEditorProvider()
-                    ))
+                    .with(new SolrQueryIndexProvider(solrServerProvider, oakSolrConfigurationProvider))
+                    .with(new SolrIndexEditorProvider(solrServerProvider, oakSolrConfigurationProvider))
                     .createContentRepository();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -296,20 +288,27 @@ public class SolrIndexQueryTestIT extends AbstractQueryTest {
     public void testRepSimilarXPathQuery() throws Exception {
         String query = "//element(*, nt:base)[rep:similar(., '/test/a')]";
         Tree test = root.getTree("/").addChild("test");
-        test.addChild("a").setProperty("text", "Hello World Hello World");
-        test.addChild("b").setProperty("text", "Hello World");
-        test.addChild("c").setProperty("text", "World");
-        test.addChild("d").setProperty("text", "Hello");
-        test.addChild("e").setProperty("text", "World");
-        test.addChild("f").setProperty("text", "Hello");
-        test.addChild("g").setProperty("text", "World");
-        test.addChild("h").setProperty("text", "Hello");
+        test.addChild("a").setProperty("text", "the quick brown fox jumped over the lazy white dog");
+        test.addChild("b").setProperty("text", "I am a dog");
+        test.addChild("c").setProperty("text", "dogs don't hurt");
+        test.addChild("d").setProperty("text", "white men can't jump");
+        test.addChild("e").setProperty("text", "the fox is brown");
+        test.addChild("f").setProperty("text", "a quickest dog jumped over the quick white dog");
+        test.addChild("g").setProperty("text", "hello world");
+        test.addChild("h").setProperty("text", "over the lazy top");
         root.commit();
         Iterator<String> result = executeQuery(query, "xpath").iterator();
         assertTrue(result.hasNext());
         assertEquals("/test/b", result.next());
         assertTrue(result.hasNext());
-        assertEquals("/test/c", result.next());
+        assertEquals("/test/d", result.next());
+        assertTrue(result.hasNext());
+        assertEquals("/test/e", result.next());
+        assertTrue(result.hasNext());
+        assertEquals("/test/f", result.next());
+        assertTrue(result.hasNext());
+        assertEquals("/test/h", result.next());
+        assertFalse(result.hasNext());
     }
 
     @Test
@@ -500,7 +499,6 @@ public class SolrIndexQueryTestIT extends AbstractQueryTest {
         Tree index = root.getTree("/oak:index/" + TEST_INDEX_NAME);
         assertTrue(index.exists());
 
-        index.setProperty("pathRestrictions", true);
         index.setProperty("rows", 10000);
         index.setProperty("reindex", true);
         root.commit();
@@ -521,5 +519,35 @@ public class SolrIndexQueryTestIT extends AbstractQueryTest {
         assertTrue(results.hasNext());
         assertEquals("/content/a", results.next());
         assertFalse(results.hasNext());
+    }
+
+    @Test
+    public void testCollapsedJcrContentNodeDescandants() throws Exception {
+
+        Tree index = root.getTree("/oak:index/" + TEST_INDEX_NAME);
+        assertTrue(index.exists());
+
+        index.setProperty("collapseJcrContentNodes", true);
+        index.setProperty("reindex", true);
+        root.commit();
+
+        Tree test = root.getTree("/").addChild("test");
+        Tree content = test.addChild("content");
+        Tree content1 = content.addChild("sample1").addChild("jcr:content");
+        content1.setProperty("foo", "bar");
+        content1.addChild("text").setProperty("text", "bar");
+        Tree content2 = content.addChild("sample2").addChild("jcr:content");
+        content2.setProperty("foo", "bar");
+        content2.addChild("text").setProperty("text", "bar");
+        root.commit();
+
+        String xpath = "/jcr:root/test/content//element(*, nt:base)[jcr:contains(., 'bar')]";
+
+        Iterator<String> result = executeQuery(xpath, XPATH).iterator();
+        assertTrue(result.hasNext());
+        assertEquals("/test/content/sample1/jcr:content", result.next());
+        assertTrue(result.hasNext());
+        assertEquals("/test/content/sample2/jcr:content", result.next());
+        assertFalse(result.hasNext());
     }
 }

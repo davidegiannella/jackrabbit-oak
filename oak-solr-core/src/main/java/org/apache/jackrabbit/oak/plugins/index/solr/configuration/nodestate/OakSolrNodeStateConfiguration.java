@@ -124,7 +124,7 @@ public class OakSolrNodeStateConfiguration implements OakSolrConfiguration {
     @Nonnull
     @Override
     public CommitPolicy getCommitPolicy() {
-        return CommitPolicy.valueOf(getStringValueFor(Properties.COMMIT_POLICY, CommitPolicy.SOFT.toString()));
+        return CommitPolicy.valueOf(getStringValueFor(Properties.COMMIT_POLICY, CommitPolicy.SOFT.toString()).toUpperCase());
     }
 
     @Override
@@ -179,6 +179,23 @@ public class OakSolrNodeStateConfiguration implements OakSolrConfiguration {
         return usedProperties;
     }
 
+    @Override
+    public boolean collapseJcrContentNodes() {
+        return getBooleanValueFor(Properties.COLLAPSE_JCR_CONTENT_NODES, OakSolrConfigurationDefaults.COLLAPSE_JCR_CONTENT_NODES);
+    }
+
+    @Nonnull
+    @Override
+    public String getCollapsedPathField() {
+        return getStringValueFor(Properties.COLLAPSED_PATH_FIELD, OakSolrConfigurationDefaults.COLLAPSED_PATH_FIELD);
+    }
+
+    @Nonnull
+    @Override
+    public String getPathDepthField() {
+        return getStringValueFor(Properties.DEPTH_FIELD, OakSolrConfigurationDefaults.PATH_DEPTH_FIELD);
+    }
+
     private boolean getBooleanValueFor(String propertyName, boolean defaultValue) {
         boolean value = defaultValue;
         PropertyState property = definition.getProperty(propertyName);
@@ -228,6 +245,7 @@ public class OakSolrNodeStateConfiguration implements OakSolrConfiguration {
     public final class Properties {
         // --> oak solr config properties <--
         public static final String PATH_FIELD = "pathField";
+        public static final String COLLAPSED_PATH_FIELD = "pathField";
         public static final String PARENT_FIELD = "parentField";
         public static final String CHILDREN_FIELD = "childrenField";
         public static final String DESCENDANTS_FIELD = "descendantsField";
@@ -241,6 +259,7 @@ public class OakSolrNodeStateConfiguration implements OakSolrConfiguration {
         public static final String TYPE_MAPPINGS = "typeMappings";
         public static final String PROPERTY_MAPPINGS = "propertyMappings";
         public static final String USED_PROPERTIES = "usedProperties";
-
+        public static final String COLLAPSE_JCR_CONTENT_NODES = "collapseJcrContentNodes";
+        public static final String DEPTH_FIELD= "depthField";
     }
 }
