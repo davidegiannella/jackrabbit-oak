@@ -48,6 +48,7 @@ public class AndImpl extends ConstraintImpl {
         this(Arrays.asList(constraint1, constraint2));
     }
 
+    @Override
     public List<ConstraintImpl> getConstraints() {
         return constraints;
     }

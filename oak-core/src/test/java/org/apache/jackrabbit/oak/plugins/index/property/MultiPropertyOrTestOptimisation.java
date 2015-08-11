@@ -36,5 +36,6 @@ public class MultiPropertyOrTestOptimisation extends MultiPropertyOrTest {
     @Test
     public void justARunner() {
         executeQuery("select * from [nt:base] where [x] = 'foo' OR [y] = 'foo'", JCR_SQL2);
+        executeQuery("select * from [nt:base] where [x] = 'foo' OR [y] = 'foo' or [z] = 'foo'", JCR_SQL2);
     }
 }

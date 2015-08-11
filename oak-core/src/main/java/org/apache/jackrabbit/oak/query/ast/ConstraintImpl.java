@@ -16,7 +16,10 @@
  */
 package org.apache.jackrabbit.oak.query.ast;
 
+import java.util.List;
 import java.util.Set;
+
+import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
@@ -134,5 +137,15 @@ public abstract class ConstraintImpl extends AstElement {
      */
     public boolean isUnion() {
         return false;
+    }
+    
+    /**
+     * 
+     * @return the list of {@link ConstraintImpl} that the current constraint could hold. Default
+     *         implementation returns {@code null}.
+     */
+    @Nullable
+    public List<ConstraintImpl> getConstraints() {
+        return null;
     }
 }

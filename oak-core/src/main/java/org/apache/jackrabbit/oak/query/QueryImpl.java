@@ -13,6 +13,9 @@
  */
 package org.apache.jackrabbit.oak.query;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Lists.newArrayList;
+
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +26,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.Lists;
@@ -1128,7 +1134,45 @@ public class QueryImpl implements Query {
 
     @Override
     public Query optimise() {
-        LOG.debug("{}", constraint);
+        List<ConstraintImpl> unionList = addToUnionList(constraint, null);
+        
+        if (!unionList.isEmpty()) {
+            // we have something to do here.
+            LOG.debug("{}", unionList);
+        }
+        
         return this;
+    }
+    
+    /**
+     * parse the provided {@link ConstraintImpl} and will add it to the provided {@code unionList}.
+     * if {@code unionList} is null an empty one will be created.
+     * 
+     * @param constraint the constraint to analyse. Cannot be null.
+     * @param unionList the list to which adding the constraints for the union.
+     * @return a list with all the union constraints. An empty one if no constraint could have been
+     *         converted to union.
+     */
+    @Nonnull
+    private static List<ConstraintImpl> addToUnionList(@Nonnull ConstraintImpl constraint,
+                                                       @Nullable List<ConstraintImpl> unionList) {
+        checkNotNull(constraint);
+        List<ConstraintImpl> u = unionList;
+        
+        if (u == null) {
+            u = newArrayList();
+        }
+        
+        if (constraint.isUnion() && constraint.getConstraints() != null) {
+            for (ConstraintImpl c : constraint.getConstraints()) {
+                if (c.isUnion()) {
+                    u = addToUnionList(c, u);
+                } else {
+                    u.add(c);
+                }
+            }
+        }
+        
+        return u;
     }
 }
