@@ -1134,11 +1134,13 @@ public class QueryImpl implements Query {
 
     @Override
     public Query optimise() {
-        List<ConstraintImpl> unionList = addToUnionList(constraint, null);
-        
-        if (!unionList.isEmpty()) {
-            // we have something to do here.
-            LOG.debug("{}", unionList);
+        // optimising for UNION
+        if (constraint != null) {
+            List<ConstraintImpl> unionList = addToUnionList(constraint, null);
+            if (!unionList.isEmpty()) {
+                // we have something to do here.
+                LOG.debug("{}", unionList);
+            }
         }
         
         return this;
