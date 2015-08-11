@@ -335,4 +335,8 @@ public class OrImpl extends ConstraintImpl {
         return constraints.hashCode();
     }
 
+    @Override
+    public boolean isUnion() {
+        return true;
+    }
 }

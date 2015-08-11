@@ -1128,6 +1128,7 @@ public class QueryImpl implements Query {
 
     @Override
     public Query optimise() {
+        LOG.debug("{}", constraint);
         return this;
     }
 }

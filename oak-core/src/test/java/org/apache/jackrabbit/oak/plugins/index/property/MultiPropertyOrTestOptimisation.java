@@ -16,7 +16,12 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
+import static javax.jcr.query.Query.JCR_SQL2;
+
+import javax.jcr.query.Query;
+
 import org.junit.Before;
+import org.junit.Test;
 
 public class MultiPropertyOrTestOptimisation extends MultiPropertyOrTest {
     
@@ -25,5 +30,11 @@ public class MultiPropertyOrTestOptimisation extends MultiPropertyOrTest {
     public void before() throws Exception {
         super.before();
         setForceOptimised(true);
+        setTraversalEnabled(false);
+    }
+    
+    @Test
+    public void justARunner() {
+        executeQuery("select * from [nt:base] where [x] = 'foo' OR [y] = 'foo'", JCR_SQL2);
     }
 }

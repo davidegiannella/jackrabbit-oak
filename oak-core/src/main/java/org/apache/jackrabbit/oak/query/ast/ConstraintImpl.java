@@ -126,4 +126,13 @@ public abstract class ConstraintImpl extends AstElement {
         return toString().hashCode();
     }
 
+    /**
+     * Tells whether the current constraint can be optimised as union query or not. The base
+     * implementation {@link ConstraintImpl#isUnion()} always return false.
+     * 
+     * @return {@code true} if can be converted to union, {@code false} otherwise.
+     */
+    public boolean isUnion() {
+        return false;
+    }
 }
