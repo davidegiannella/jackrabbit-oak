@@ -153,6 +153,14 @@ public abstract class QueryEngineImpl implements QueryEngine {
             throw new ParseException("Unsupported language: " + language, 0);
         }
         
+        LOG.trace("Attempting optimisation");
+        Query q2 = q.optimise();
+        if (q2 == q) {
+            LOG.trace("No optimisation performed");
+        } else {
+            LOG.trace("Optimised query available");
+        }
+        
         try {
             q.init();
         } catch (Exception e) {
