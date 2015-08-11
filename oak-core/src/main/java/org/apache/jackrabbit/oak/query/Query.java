@@ -123,7 +123,8 @@ public interface Query {
     boolean isSortedByIndex();
     
     /**
-     * Perform optimisation on the object itself.
+     * Perform optimisation on the object itself. To avoid any potential error due to state
+     * variables perfom the optimisation before the {@link #init()}.
      * 
      * @return {@code this} if no optimisations are possible or a new instance of a {@link Query}.
      *         Cannot return null.
