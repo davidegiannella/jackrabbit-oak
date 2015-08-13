@@ -1151,15 +1151,32 @@ public class QueryImpl implements Query {
     @Override
     public Query optimise() {
         // optimising for UNION
+        Query optimised = this;
+        
         if (constraint != null) {
             List<ConstraintImpl> unionList = addToUnionList(constraint, null);
             if (!unionList.isEmpty()) {
+                Query left = null;
+                Query right = null;
                 // we have something to do here.
-                LOG.debug("{}", unionList);
+                for (ConstraintImpl c : unionList) {
+                    if (right != null) {
+                        right = new UnionQueryImpl(this.distinct, left, right, this.settings);
+                    } else {
+                        // pulling left to the right
+                        if (left != null) {
+                            right = left;
+                        }
+                    }
+                    left = new QueryImpl(this.statement, this.source, c, this.columns,
+                        this.namePathMapper, this.settings);
+                }
+                
+                optimised = new UnionQueryImpl(this.distinct, left, right, this.settings);
             }
         }
         
-        return this;
+        return optimised;
     }
     
     /**
