@@ -402,4 +402,9 @@ public class MemoryDocumentStore implements DocumentStore {
         return metadata;
     }
 
+    @Override
+    public long determineServerTimeDifferenceMillis() {
+        // the MemoryDocumentStore has no delays, thus return 0
+        return 0;
+    }
 }

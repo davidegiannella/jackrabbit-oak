@@ -14,14 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.jackrabbit.oak.security.user;
 
 /**
- * Oak repository API
+ * Constants for persisted user management related caches. Currently this only
+ * includes a basic cache for group principals names that is used to populate
+ * the set of {@link java.security.Principal}s as present on the
+ * {@link javax.security.auth.Subject} in the commit phase of the authentication.
  */
-@Version("2.1")
-@Export(optional = "provide:=true")
-package org.apache.jackrabbit.oak.api;
+interface CacheConstants {
 
-import aQute.bnd.annotation.Export;
-import aQute.bnd.annotation.Version;
+    String NT_REP_CACHE = "rep:Cache";
+    String REP_CACHE = "rep:cache";
+    String REP_EXPIRATION = "rep:expiration";
+    String REP_GROUP_PRINCIPAL_NAMES = "rep:groupPrincipalNames";
 
+}

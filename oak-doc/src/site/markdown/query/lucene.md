@@ -554,7 +554,7 @@ Analyzers can also be composed based on `Tokenizers`, `TokenFilters` and
                 + filters (nt:unstructured) //The filters needs to be ordered
                     + LowerCase
                     + Stop
-                        - stopWordFiles = "stop1.txt, stop2.txt"
+                        - words = "stop1.txt, stop2.txt"
                         + stop1.txt (nt:file)
                         + stop2.txt (nt:file)
                     + PorterStem
@@ -1238,7 +1238,6 @@ make use of [aggregation](#aggregation)
   - compatVersion = 2
   - type = "lucene"
   - async = "async"
-  - includePropertyTypes = ["String", "Binary"]
   + aggregates
     + app:Asset
       + include0
@@ -1259,6 +1258,7 @@ make use of [aggregation](#aggregation)
   + indexRules
     - jcr:primaryType = "nt:unstructured"
     + app:Asset
+      - includePropertyTypes = ["String", "Binary"]
       + properties
         - jcr:primaryType = "nt:unstructured"
         + comment
@@ -1286,7 +1286,7 @@ Above index definition
     
 *   Aggregation would include by default all properties which are part of
     **`includePropertyTypes`**. However if any property has a explicit property
-    definition provided like `comment` then `nodeScopeIndex` would neet to be 
+    definition provided like `comment` then `nodeScopeIndex` would need to be 
     set to true
 
 Above definition would allow fulltext query to be performed. But we can do more.

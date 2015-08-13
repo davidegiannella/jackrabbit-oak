@@ -483,7 +483,6 @@ public class DocumentMK {
         private int cacheSegmentCount = DEFAULT_CACHE_SEGMENT_COUNT;
         private int cacheStackMoveDistance = DEFAULT_CACHE_STACK_MOVE_DISTANCE;
         private boolean useSimpleRevision;
-        private long splitDocumentAgeMillis = 5 * 60 * 1000;
         private long offHeapCacheSize = -1;
         private long maxReplicationLagMillis = TimeUnit.HOURS.toMillis(6);
         private boolean disableBranches;
@@ -499,11 +498,9 @@ public class DocumentMK {
          * Use the given MongoDB as backend storage for the DocumentNodeStore.
          *
          * @param db the MongoDB connection
-         * @param changesSizeMB the size in MB of the capped collection backing
-         *                      the MongoDiffCache.
          * @return this
          */
-        public Builder setMongoDB(DB db, int changesSizeMB, int blobCacheSizeMB) {
+        public Builder setMongoDB(DB db, int blobCacheSizeMB) {
             if (db != null) {
                 if (this.documentStore == null) {
                     this.documentStore = new MongoDocumentStore(db, this);
@@ -528,7 +525,7 @@ public class DocumentMK {
          * @return this
          */
         public Builder setMongoDB(DB db) {
-            return setMongoDB(db, 8, 16);
+            return setMongoDB(db, 16);
         }
 
         /**
@@ -769,15 +766,6 @@ public class DocumentMK {
 
         public boolean isUseSimpleRevision() {
             return useSimpleRevision;
-        }
-
-        public Builder setSplitDocumentAgeMillis(long splitDocumentAgeMillis) {
-            this.splitDocumentAgeMillis = splitDocumentAgeMillis;
-            return this;
-        }
-
-        public long getSplitDocumentAgeMillis() {
-            return splitDocumentAgeMillis;
         }
 
         public boolean useOffHeapCache() {

@@ -587,6 +587,16 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
     }
 
     @Test
+    public void testServerTimeDiff() throws Exception {
+        UpdateOp up = new UpdateOp("0:/", true);
+        up.set("_id", "0:/");
+        super.ds.create(Collection.NODES, Collections.singletonList(up));
+        removeMe.add("0:/");
+        long td = super.ds.determineServerTimeDifferenceMillis();
+        LOG.info("Server time difference on " + super.dsname + ": " + td + "ms");
+    }
+
+    @Test
     public void removeWithCondition() throws Exception {
         List<UpdateOp> docs = Lists.newArrayList();
         docs.add(newDocument("/foo", 100));
