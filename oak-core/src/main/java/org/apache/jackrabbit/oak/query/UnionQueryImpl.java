@@ -349,4 +349,14 @@ public class UnionQueryImpl implements Query {
     public Query optimise() {
         return this;
     }
+
+    @Override
+    public Query copyOf() throws IllegalStateException {
+        return null;
+    }
+
+    @Override
+    public boolean isInit() {
+        return left.isInit() || right.isInit();
+    }
 }

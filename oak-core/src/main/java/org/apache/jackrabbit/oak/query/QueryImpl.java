@@ -158,6 +158,11 @@ public class QueryImpl implements Query {
     private long size = -1;
     private boolean prepared;
     private ExecutionContext context;
+    
+    /**
+     * whether the object has been initialised or not
+     */
+    private boolean init;
 
     private boolean isSortedByIndex;
 
@@ -414,6 +419,8 @@ public class QueryImpl implements Query {
             }
             distinctColumns[i] = distinct;
         }
+        
+        init = true;
     }
 
     @Override
@@ -1156,7 +1163,7 @@ public class QueryImpl implements Query {
         if (constraint != null) {
             List<ConstraintImpl> unionList = addToUnionList(constraint, null);
             if (!unionList.isEmpty()) {
-                Query left = null;
+                QueryImpl left = null;
                 Query right = null;
                 // we have something to do here.
                 for (ConstraintImpl c : unionList) {
@@ -1168,8 +1175,9 @@ public class QueryImpl implements Query {
                             right = left;
                         }
                     }
-                    left = new QueryImpl(this.statement, this.source, c, this.columns,
-                        this.namePathMapper, this.settings);
+                    
+                    left = (QueryImpl) this.copyOf();
+                    left.constraint = c;
                 }
                 
                 optimised = new UnionQueryImpl(this.distinct, left, right, this.settings);
@@ -1209,5 +1217,20 @@ public class QueryImpl implements Query {
         }
         
         return u;
+    }
+
+    @Override
+    public Query copyOf() throws IllegalStateException {
+        if (isInit()) {
+            throw new IllegalStateException("QueryImpl cannot be cloned once initialised.");
+        }
+
+        return new QueryImpl(this.statement, this.source, this.constraint, this.columns,
+            this.namePathMapper, this.settings);
+    }
+
+    @Override
+    public boolean isInit() {
+        return init;
     }
 }

@@ -17,6 +17,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import aQute.bnd.annotation.ProviderType;
 
@@ -131,4 +132,25 @@ public interface Query {
      */
     @Nonnull
     Query optimise();
+    
+    /**
+     * <p>
+     * returns a clone of the current object. Will throw an exception in case it's invoked in a non
+     * appropriate moment. For example the default {@link QueryImpl} cannot be cloned once the
+     * {@link #init()} has been executed.
+     * </p>
+     * 
+     * <p>
+     * <strong>May return null if not implemented.</strong>
+     * </p>
+     * @return a clone of self
+     * @throws IllegalStateException
+     */
+    @Nullable
+    Query copyOf() throws IllegalStateException;
+    
+    /**
+     * @return {@code true} if the query has been already initialised. {@code false} otherwise.
+     */
+    boolean isInit();
 }
