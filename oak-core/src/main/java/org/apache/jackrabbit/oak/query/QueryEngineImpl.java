@@ -17,6 +17,7 @@
 package org.apache.jackrabbit.oak.query;
 
 import static com.google.common.collect.ImmutableSet.of;
+import static com.google.common.collect.Sets.newHashSet;
 import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
 
@@ -38,6 +39,8 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+
+import com.google.common.collect.Sets;
 
 /**
  * The query engine implementation.
@@ -130,6 +133,8 @@ public abstract class QueryEngineImpl implements QueryEngine {
             parser.setAllowTextLiterals(false);
         }
         
+        Set<Query> queries = newHashSet();
+        
         Query q;
         
         if (SQL2.equals(language) || JQOM.equals(language)) {
@@ -155,20 +160,24 @@ public abstract class QueryEngineImpl implements QueryEngine {
             throw new ParseException("Unsupported language: " + language, 0);
         }
         
+        queries.add(q);
+        
         LOG.trace("Attempting optimisation");
         Query q2 = q.optimise();
-        if (q2 == q) {
-            LOG.trace("No optimisation performed");
-        } else {
-            LOG.trace("Optimised query available");
+        if (q2 != q) {
+            LOG.debug("Optimised query available. {}", q2);
+            queries.add(q2);
         }
         
-        try {
-            q.init();
-        } catch (Exception e) {
-            ParseException e2 = new ParseException(statement + ": " + e.getMessage(), 0);
-            e2.initCause(e);
-            throw e2;
+        // initialising all the queries.
+        for (Query query : queries) {
+            try {
+                query.init();
+            } catch (Exception e) {
+                ParseException e2 = new ParseException(query.toString() + ": " + e.getMessage(), 0);
+                e2.initCause(e);
+                throw e2;
+            }
         }
 
         return q;
