@@ -154,4 +154,10 @@ public interface Query {
      * @return {@code true} if the query has been already initialised. {@code false} otherwise.
      */
     boolean isInit();
+    
+    /**
+     * @return {@code true} if the query is a result of optimisations. {@code false} if it's the
+     *         originally computed one.
+     */
+    boolean isOptimised();
 }

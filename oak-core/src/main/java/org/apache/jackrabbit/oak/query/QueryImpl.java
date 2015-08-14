@@ -163,6 +163,11 @@ public class QueryImpl implements Query {
      * whether the object has been initialised or not
      */
     private boolean init;
+    
+    /**
+     * whether the query is a result of optimisation or original one.
+     */
+    private boolean optimised;
 
     private boolean isSortedByIndex;
 
@@ -178,12 +183,19 @@ public class QueryImpl implements Query {
 
     QueryImpl(String statement, SourceImpl source, ConstraintImpl constraint,
             ColumnImpl[] columns, NamePathMapper mapper, QueryEngineSettings settings) {
+        this(statement, source, constraint, columns, mapper, settings, false);
+    }
+
+    QueryImpl(String statement, SourceImpl source, ConstraintImpl constraint,
+        ColumnImpl[] columns, NamePathMapper mapper, QueryEngineSettings settings, 
+        final boolean optimised) {
         this.statement = statement;
         this.source = source;
         this.constraint = constraint;
         this.columns = columns;
         this.namePathMapper = mapper;
         this.settings = settings;
+        this.optimised = optimised;
     }
 
     @Override
@@ -1168,7 +1180,7 @@ public class QueryImpl implements Query {
                 // we have something to do here.
                 for (ConstraintImpl c : unionList) {
                     if (right != null) {
-                        right = new UnionQueryImpl(this.distinct, left, right, this.settings);
+                        right = new UnionQueryImpl(this.distinct, left, right, this.settings, true);
                     } else {
                         // pulling left to the right
                         if (left != null) {
@@ -1176,7 +1188,7 @@ public class QueryImpl implements Query {
                         }
                     }
                     
-                    left = (QueryImpl) this.copyOf();
+                    left = (QueryImpl) this.copyOf(true);
                     left.constraint = c;
                 }
                 
@@ -1221,18 +1233,27 @@ public class QueryImpl implements Query {
 
     @Override
     public Query copyOf() throws IllegalStateException {
+        return copyOf(false);
+    }
+    
+    private Query copyOf(final boolean optimised) {
         if (isInit()) {
             throw new IllegalStateException("QueryImpl cannot be cloned once initialised.");
         }
         QueryImpl copy = new QueryImpl(this.statement, this.source.copyOf(), this.constraint,
-            this.columns, this.namePathMapper, this.settings);
+            this.columns, this.namePathMapper, this.settings, optimised);
         copy.context = this.context;
         
-        return copy;
+        return copy;        
     }
 
     @Override
     public boolean isInit() {
         return init;
+    }
+
+    @Override
+    public boolean isOptimised() {
+        return optimised;
     }
 }
