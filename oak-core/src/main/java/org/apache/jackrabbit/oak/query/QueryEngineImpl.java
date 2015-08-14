@@ -16,6 +16,7 @@
  */
 package org.apache.jackrabbit.oak.query;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableSet.of;
 import static com.google.common.collect.Sets.newHashSet;
 import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
@@ -27,6 +28,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.QueryEngine;
@@ -107,7 +110,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
         return q.getBindVariableNames();
     }
 
-    private static Query parseQuery(
+    private static Set<Query> parseQuery(
             String statement, String language, ExecutionContext context,
             Map<String, String> mappings) throws ParseException {
         
@@ -180,7 +183,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
             }
         }
 
-        return q;
+        return queries;
     }
     
     @Override
@@ -212,16 +215,19 @@ public abstract class QueryEngineImpl implements QueryEngine {
         }
 
         ExecutionContext context = getExecutionContext();
-        Query q = parseQuery(statement, language, context, mappings);
-        q.setExecutionContext(context);
-        q.setLimit(limit);
-        q.setOffset(offset);
-        if (bindings != null) {
-            for (Entry<String, ? extends PropertyValue> e : bindings.entrySet()) {
-                q.bindValue(e.getKey(), e.getValue());
+        Set<Query> queries = parseQuery(statement, language, context, mappings);
+        
+        for (Query q : queries) {
+            q.setExecutionContext(context);
+            q.setLimit(limit);
+            q.setOffset(offset);
+            if (bindings != null) {
+                for (Entry<String, ? extends PropertyValue> e : bindings.entrySet()) {
+                    q.bindValue(e.getKey(), e.getValue());
+                }
             }
+            q.setTraversalEnabled(traversalEnabled);            
         }
-        q.setTraversalEnabled(traversalEnabled);
 
         boolean mdc = false;
         try {
@@ -235,6 +241,18 @@ public abstract class QueryEngineImpl implements QueryEngine {
         }
     }
 
+    private static Query prepareAndGetCheapest(@Nonnull final Set<Query> queries) {
+        // returning always the NON-optimised query for now.
+        Query ret = null;
+        for (Query q  : checkNotNull(queries)) {
+            if (!q.isOptimised()) {
+                ret = q;
+                ret.prepare();
+            }
+        }
+        return ret;
+    }
+    
     protected void setTraversalEnabled(boolean traversalEnabled) {
         this.traversalEnabled = traversalEnabled;
     }
