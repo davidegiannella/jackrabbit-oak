@@ -760,5 +760,9 @@ public class SelectorImpl extends SourceImpl {
         }
         return cursor.getSize(precision, max);
     }
-    
+
+    @Override
+    public SourceImpl copyOf() {
+        return new SelectorImpl(nodeType, selectorName);
+    }
 }

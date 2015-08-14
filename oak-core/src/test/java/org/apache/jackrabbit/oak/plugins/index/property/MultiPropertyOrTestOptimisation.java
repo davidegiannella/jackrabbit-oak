@@ -18,8 +18,6 @@ package org.apache.jackrabbit.oak.plugins.index.property;
 
 import static javax.jcr.query.Query.JCR_SQL2;
 
-import javax.jcr.query.Query;
-
 import org.junit.Before;
 import org.junit.Test;
 

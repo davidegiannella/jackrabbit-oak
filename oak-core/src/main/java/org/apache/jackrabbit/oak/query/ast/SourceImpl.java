@@ -162,5 +162,13 @@ public abstract class SourceImpl extends AstElement {
      * @return the size, or -1 if unknown
      */
     public abstract long getSize(SizePrecision precision, long max);
+    
+    /**
+     * 
+     * @return a clone of self. Default implementation in {@link SourceImpl} returns {@code null}.
+     */
+    public SourceImpl copyOf() {
+        return null;
+    }
 
 }

@@ -1224,8 +1224,8 @@ public class QueryImpl implements Query {
         if (isInit()) {
             throw new IllegalStateException("QueryImpl cannot be cloned once initialised.");
         }
-        QueryImpl copy = new QueryImpl(this.statement, this.source, this.constraint, this.columns,
-            this.namePathMapper, this.settings);
+        QueryImpl copy = new QueryImpl(this.statement, this.source.copyOf(), this.constraint,
+            this.columns, this.namePathMapper, this.settings);
         copy.context = this.context;
         
         return copy;
