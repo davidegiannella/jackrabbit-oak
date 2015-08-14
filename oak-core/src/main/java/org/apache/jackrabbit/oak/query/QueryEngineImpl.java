@@ -106,8 +106,9 @@ public abstract class QueryEngineImpl implements QueryEngine {
     public List<String> getBindVariableNames(
             String statement, String language, Map<String, String> mappings)
             throws ParseException {
-        Query q = parseQuery(statement, language, getExecutionContext(), mappings);
-        return q.getBindVariableNames();
+        Set<Query> qs = parseQuery(statement, language, getExecutionContext(), mappings);
+        
+        return qs.iterator().next().getBindVariableNames();
     }
 
     private static Set<Query> parseQuery(
@@ -231,8 +232,9 @@ public abstract class QueryEngineImpl implements QueryEngine {
 
         boolean mdc = false;
         try {
-            mdc = setupMDC(q);
-            q.prepare();
+            MdcAndPrepared map = prepareAndGetCheapest(queries); 
+            mdc = map.mdc;
+            Query q = map.query;
             return q.executeQuery();
         } finally {
             if (mdc) {
@@ -241,16 +243,28 @@ public abstract class QueryEngineImpl implements QueryEngine {
         }
     }
 
-    private static Query prepareAndGetCheapest(@Nonnull final Set<Query> queries) {
+    /**
+     * POJO class used to return the cheapest prepared query from the set and related MDC status
+     */
+    private static class MdcAndPrepared {
+        private final boolean mdc;
+        private final Query query;
+        
+        public MdcAndPrepared(final boolean mdc, @Nonnull final Query q) {
+            this.mdc = mdc;
+            this.query = checkNotNull(q);
+        }
+    }
+    
+    private static MdcAndPrepared prepareAndGetCheapest(@Nonnull final Set<Query> queries) {
         // returning always the NON-optimised query for now.
-        Query ret = null;
+        MdcAndPrepared map = null;
         for (Query q  : checkNotNull(queries)) {
             if (!q.isOptimised()) {
-                ret = q;
-                ret.prepare();
+                map = new MdcAndPrepared(setupMDC(q), q);
             }
         }
-        return ret;
+        return map;
     }
     
     protected void setTraversalEnabled(boolean traversalEnabled) {
