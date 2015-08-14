@@ -1192,7 +1192,7 @@ public class QueryImpl implements Query {
                     left.constraint = c;
                 }
                 
-                optimised = new UnionQueryImpl(this.distinct, left, right, this.settings);
+                optimised = new UnionQueryImpl(this.distinct, left, right, this.settings, true);
             }
         }
         
