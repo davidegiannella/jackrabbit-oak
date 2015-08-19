@@ -160,4 +160,10 @@ public interface Query {
      *         originally computed one.
      */
     boolean isOptimised();
+    
+    /**
+     * @return the original statement as it was used to construct the object. If not provided the
+     *         {@link #toString()} will be used instead.
+     */
+    String getStatement();
 }

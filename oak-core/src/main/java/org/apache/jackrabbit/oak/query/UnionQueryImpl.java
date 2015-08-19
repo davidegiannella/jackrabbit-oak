@@ -375,4 +375,9 @@ public class UnionQueryImpl implements Query {
     public boolean isOptimised() {
         return optimised;
     }
+
+    @Override
+    public String getStatement() {
+        return toString();
+    }
 }

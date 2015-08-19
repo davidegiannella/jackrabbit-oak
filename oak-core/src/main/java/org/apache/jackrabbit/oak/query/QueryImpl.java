@@ -30,6 +30,7 @@ import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -1135,8 +1136,9 @@ public class QueryImpl implements Query {
         return Math.min(limit, source.getSize(precision, max));
     }
 
+    @Override
     public String getStatement() {
-        return statement;
+        return Strings.isNullOrEmpty(statement) ? toString() : statement;
     }
 
     public QueryEngineSettings getSettings() {

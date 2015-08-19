@@ -178,7 +178,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
             try {
                 query.init();
             } catch (Exception e) {
-                ParseException e2 = new ParseException(query.toString() + ": " + e.getMessage(), 0);
+                ParseException e2 = new ParseException(query.getStatement() + ": " + e.getMessage(), 0);
                 e2.initCause(e);
                 throw e2;
             }
