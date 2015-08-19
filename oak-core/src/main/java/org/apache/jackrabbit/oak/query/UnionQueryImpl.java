@@ -71,6 +71,7 @@ public class UnionQueryImpl implements Query {
         this.left = left;
         this.right = right;
         this.settings = settings;
+        this.optimised = optimised;
     }
 
     @Override
