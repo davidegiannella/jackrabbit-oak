@@ -1189,7 +1189,16 @@ public class QueryImpl implements Query {
                     }
                     
                     left = (QueryImpl) this.copyOf(true);
-                    left.constraint = c;
+                    Object clone = c.copyOf();
+                    if (clone == null) {
+                        LOG.debug(
+                            "Failed to clone the constraint. Relaying on the original. It may fail. {}",
+                            c);
+                        left.constraint = c;
+                    } else {
+                        left.constraint = (ConstraintImpl) clone;
+                    }
+                     
                 }
                 
                 optimised = new UnionQueryImpl(this.distinct, left, right, this.settings, true);
@@ -1240,9 +1249,29 @@ public class QueryImpl implements Query {
         if (isInit()) {
             throw new IllegalStateException("QueryImpl cannot be cloned once initialised.");
         }
-        QueryImpl copy = new QueryImpl(this.statement, this.source.copyOf(), this.constraint,
-            this.columns, this.namePathMapper, this.settings, optimised);
-        copy.context = this.context;
+        
+        Object cloned;
+        SourceImpl clonedSource;
+        List<ColumnImpl> cols = newArrayList();
+        
+        cloned = this.source.copyOf();
+        if (cloned == null) {
+            clonedSource = this.source;
+        } else {
+            clonedSource = (SourceImpl) cloned;
+        }
+        
+        for (ColumnImpl c : columns) {
+            cloned = c.copyOf();
+            if (cloned == null) {
+                cols.add(c);
+            } else {
+                cols.add((ColumnImpl) cloned);
+            }
+        }
+        
+        QueryImpl copy = new QueryImpl(this.statement, clonedSource, this.constraint,
+            cols.toArray(new ColumnImpl[0])   , this.namePathMapper, this.settings, optimised);
         
         return copy;        
     }

@@ -18,6 +18,8 @@
  */
 package org.apache.jackrabbit.oak.query.ast;
 
+import javax.annotation.Nullable;
+
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.query.QueryImpl;
@@ -143,5 +145,13 @@ abstract class AstElement {
         return path;
     }
 
+    /**
+     * 
+     * @return a clone of self. Default implementation in {@link AstElement} returns {@code null}.
+     */
+    @Nullable
+    public AstElement copyOf() {
+        return null;
+    }
 }
 
