@@ -474,6 +474,7 @@ public class DocumentMK {
         private int asyncDelay = 1000;
         private boolean timing;
         private boolean logging;
+        private boolean leaseCheck = true; // OAK-2739 is enabled by default also for non-osgi
         private Weigher<CacheValue, CacheValue> weigher = new EmpiricalWeigher();
         private long memoryCacheSize = DEFAULT_MEMORY_CACHE_SIZE;
         private int nodeCachePercentage = DEFAULT_NODE_CACHE_PERCENTAGE;
@@ -600,6 +601,15 @@ public class DocumentMK {
 
         public boolean getLogging() {
             return logging;
+        }
+        
+        public Builder setLeaseCheck(boolean leaseCheck) {
+            this.leaseCheck = leaseCheck;
+            return this;
+        }
+        
+        public boolean getLeaseCheck() {
+            return leaseCheck;
         }
 
         /**
@@ -868,7 +878,7 @@ public class DocumentMK {
                 DocumentNodeStore docNodeStore,
                 DocumentStore docStore
                 ) {
-            Cache<K, V> cache = buildCache(maxWeight);
+            Cache<K, V> cache = buildCache(cacheType.name(), maxWeight);
             PersistentCache p = getPersistentCache();
             if (p != null) {
                 if (docNodeStore != null) {
@@ -895,6 +905,7 @@ public class DocumentMK {
         }
         
         private <K extends CacheValue, V extends CacheValue> Cache<K, V> buildCache(
+                String module,
                 long maxWeight) {
             // by default, use the LIRS cache when using the persistent cache,
             // but don't use it otherwise
@@ -905,6 +916,7 @@ public class DocumentMK {
             }
             if (useLirs) {
                 return CacheLIRS.<K, V>newBuilder().
+                        module(module).
                         weigher(new Weigher<K, V>() {
                             @Override
                             public int weigh(K key, V value) {

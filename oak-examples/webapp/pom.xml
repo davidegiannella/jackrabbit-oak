@@ -39,6 +39,7 @@
     <jackrabbit.version>2.10.1</jackrabbit.version>
     <tomcat.version>7.0.40</tomcat.version>
     <tika.version>1.7</tika.version>
+    <skip.deployment>true</skip.deployment>
   </properties>
 
   <dependencies>
@@ -253,6 +254,8 @@
         <configuration>
           <excludes>
             <exclude>src/main/webapp/WEB-INF/log4j.dtd</exclude>
+            <exclude>src/main/webapp/WEB-INF/templates/repository-config.json</exclude>
+            <exclude>*.sh</exclude>
           </excludes>
         </configuration>
       </plugin>
@@ -262,10 +265,7 @@
         <configuration>
           <filesets>
             <fileset>
-              <directory>${basedir}</directory>
-              <includes>
-                <include>oak</include>
-              </includes>
+              <directory>oak</directory>
             </fileset>
           </filesets>
         </configuration>

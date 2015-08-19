@@ -91,7 +91,7 @@ public class DataStoreBlobStore implements DataStore, SharedDataStore, BlobStore
      * Max size of binary whose content would be cached. We keep it greater than
      * Lucene blob size OakDirectory#BLOB_SIZE such that Lucene index blobs are cached
      */
-    private int maxCachedBinarySize = 17 * 1024;
+    private int maxCachedBinarySize = 1024 * 1024;
 
 
     public DataStoreBlobStore(DataStore delegate) {
@@ -107,6 +107,7 @@ public class DataStoreBlobStore implements DataStore, SharedDataStore, BlobStore
         this.encodeLengthInId = encodeLengthInId;
 
         this.cache = CacheLIRS.<String, byte[]>newBuilder()
+                .module("DataStoreBlobStore")
                 .maximumWeight(cacheSizeInMB * FileUtils.ONE_MB)
                 .weigher(new Weigher<String, byte[]>() {
                     @Override
