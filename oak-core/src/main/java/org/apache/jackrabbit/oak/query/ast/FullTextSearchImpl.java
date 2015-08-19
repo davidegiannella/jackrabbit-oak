@@ -272,4 +272,8 @@ public class FullTextSearchImpl extends ConstraintImpl {
         }
     }
 
+    @Override
+    public AstElement copyOf() {
+        return new FullTextSearchImpl(selectorName, propertyName, fullTextSearchExpression);
+    }
 }

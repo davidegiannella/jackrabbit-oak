@@ -1190,7 +1190,10 @@ public class QueryImpl implements Query {
                         }
                     }
                     
+                    // cloning original query
                     left = (QueryImpl) this.copyOf(true);
+                    
+                    // cloning the constraints and assigni to new query
                     Object clone = c.copyOf();
                     if (clone == null) {
                         LOG.debug(
