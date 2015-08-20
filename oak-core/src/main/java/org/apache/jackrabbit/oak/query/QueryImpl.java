@@ -1273,4 +1273,9 @@ public class QueryImpl implements Query {
     public boolean isOptimised() {
         return optimised;
     }
+
+    @Override
+    public boolean isInternal() {
+        return isInternal;
+    }
 }

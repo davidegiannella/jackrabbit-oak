@@ -380,4 +380,9 @@ public class UnionQueryImpl implements Query {
     public String getStatement() {
         return toString();
     }
+
+    @Override
+    public boolean isInternal() {
+        return left.isInternal() || right.isInternal();
+    }
 }

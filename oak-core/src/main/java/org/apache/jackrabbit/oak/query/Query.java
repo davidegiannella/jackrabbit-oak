@@ -166,4 +166,10 @@ public interface Query {
      *         {@link #toString()} will be used instead.
      */
     String getStatement();
+    
+    /**
+     * 
+     * @return {@code true} if the current query is internal. {@code false} otherwise.
+     */
+    boolean isInternal();
 }
