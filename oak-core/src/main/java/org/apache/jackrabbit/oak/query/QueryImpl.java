@@ -15,6 +15,7 @@ package org.apache.jackrabbit.oak.query;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Lists.newArrayList;
+import static org.apache.jackrabbit.oak.query.ast.AstElementFactory.copyElementAndCheckReference;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -1193,17 +1194,8 @@ public class QueryImpl implements Query {
                     // cloning original query
                     left = (QueryImpl) this.copyOf(true);
                     
-                    // cloning the constraints and assigni to new query
-                    Object clone = c.copyOf();
-                    if (clone == null) {
-                        LOG.debug(
-                            "Failed to clone the constraint. Relaying on the original. It may fail. {}",
-                            c);
-                        left.constraint = c;
-                    } else {
-                        left.constraint = (ConstraintImpl) clone;
-                    }
-                     
+                    // cloning the constraints and assigning to new query
+                    left.constraint = (ConstraintImpl) copyElementAndCheckReference(c);                     
                 }
                 
                 optimised = new UnionQueryImpl(this.distinct, left, right, this.settings, true);
@@ -1255,30 +1247,19 @@ public class QueryImpl implements Query {
             throw new IllegalStateException("QueryImpl cannot be cloned once initialised.");
         }
         
-        Object cloned;
-        SourceImpl clonedSource;
         List<ColumnImpl> cols = newArrayList();
-        
-        cloned = this.source.copyOf();
-        if (cloned == null) {
-            LOG.debug("Failing in cloning the `source`. Reusing same reference and may fail. {}",
-                this.source);
-            clonedSource = this.source;
-        } else {
-            clonedSource = (SourceImpl) cloned;
-        }
-        
         for (ColumnImpl c : columns) {
-            cloned = c.copyOf();
-            if (cloned == null) {
-                cols.add(c);
-            } else {
-                cols.add((ColumnImpl) cloned);
-            }
+            cols.add((ColumnImpl) copyElementAndCheckReference(c));
         }
-        
-        QueryImpl copy = new QueryImpl(this.statement, clonedSource, this.constraint,
-            cols.toArray(new ColumnImpl[0])   , this.namePathMapper, this.settings, optimised);
+                
+        Query copy = new QueryImpl(
+            this.statement, 
+            (SourceImpl) copyElementAndCheckReference(this.source),
+            this.constraint,
+            cols.toArray(new ColumnImpl[0]),
+            this.namePathMapper,
+            this.settings,
+            optimised);
         
         return copy;        
     }
