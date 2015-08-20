@@ -1261,6 +1261,8 @@ public class QueryImpl implements Query {
         
         cloned = this.source.copyOf();
         if (cloned == null) {
+            LOG.debug("Failing in cloning the `source`. Reusing same reference and may fail. {}",
+                this.source);
             clonedSource = this.source;
         } else {
             clonedSource = (SourceImpl) cloned;

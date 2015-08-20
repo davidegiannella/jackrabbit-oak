@@ -13,21 +13,29 @@
  */
 package org.apache.jackrabbit.oak.query.ast;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.annotation.Nonnull;
+import javax.jcr.query.qom.JoinCondition;
 
 import org.apache.jackrabbit.oak.api.Result.SizePrecision;
 import org.apache.jackrabbit.oak.query.plan.ExecutionPlan;
 import org.apache.jackrabbit.oak.query.plan.JoinExecutionPlan;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A join. This object contains the left hand side source, the right hand side
  * source, the join type, and the join condition.
  */
 public class JoinImpl extends SourceImpl {
-
+    private static final Logger LOG = LoggerFactory.getLogger(JoinImpl.class);
+    
     private final JoinConditionImpl joinCondition;
     private JoinType joinType;
     private SourceImpl left;
@@ -273,4 +281,29 @@ public class JoinImpl extends SourceImpl {
         return -1;
     }
 
+    @Override
+    public AstElement copyOf() {
+        return new JoinImpl(cloneSource(left), cloneSource(right), joinType,
+            cloneJoinCondition(joinCondition));
+    }
+
+    private SourceImpl cloneSource(@Nonnull final SourceImpl s) {
+        AstElement cloned = checkNotNull(s).copyOf();
+        if (cloned == null) {
+            LOG.debug("Failed to clone the source. Reusing same reference and may fail. {}", s);
+            return s;
+        } else {
+            return (SourceImpl) cloned;
+        }
+    }
+    
+    private JoinConditionImpl cloneJoinCondition(@Nonnull final JoinConditionImpl j) {
+        Object cloned = j.copyOf();
+        if (cloned == null) {
+            LOG.debug("Failed to clone Join condition. Reusing same reference and may fail. {}", j);
+            return j;
+        } else {
+            return (JoinConditionImpl) cloned;
+        }
+    }
 }
