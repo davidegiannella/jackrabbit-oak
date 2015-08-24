@@ -22,7 +22,9 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.collect.Sets.newLinkedHashSet;
+import static org.apache.jackrabbit.oak.query.ast.AstElementFactory.copyElementAndCheckReference;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -194,6 +196,15 @@ public class AndImpl extends ConstraintImpl {
     @Override
     public int hashCode() {
         return constraints.hashCode();
+    }
+
+    @Override
+    public AstElement copyOf() {
+        List<ConstraintImpl> clone = new ArrayList<ConstraintImpl>(constraints.size());
+        for (ConstraintImpl c : constraints) {
+            clone.add((ConstraintImpl) copyElementAndCheckReference(c));
+        }
+        return new AndImpl(clone);
     }
 
 }
