@@ -306,6 +306,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
         for (Query q  : checkNotNull(queries)) {
             if (!q.isOptimised()) {
                 map = new MdcAndPrepared(setupMDC(q), q);
+                map.query.prepare();
             }
         }
         return map;
