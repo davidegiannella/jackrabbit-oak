@@ -23,6 +23,7 @@ import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Maps.newLinkedHashMap;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.google.common.collect.Sets.newLinkedHashSet;
+import static org.apache.jackrabbit.oak.query.ast.AstElementFactory.copyElementAndCheckReference;
 import static org.apache.jackrabbit.oak.query.ast.Operator.EQUAL;
 
 import java.util.Arrays;
@@ -36,6 +37,8 @@ import java.util.Set;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextOr;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
+
+import com.google.common.collect.Lists;
 
 /**
  * An "or" condition.
@@ -339,5 +342,14 @@ public class OrImpl extends ConstraintImpl {
     @Override
     public boolean isUnion() {
         return true;
+    }
+
+    @Override
+    public AstElement copyOf() {
+        List<ConstraintImpl> clone = newArrayList();
+        for (ConstraintImpl c : constraints) {
+            clone.add((ConstraintImpl) copyElementAndCheckReference(c));
+        }
+        return new OrImpl(clone);
     }
 }
