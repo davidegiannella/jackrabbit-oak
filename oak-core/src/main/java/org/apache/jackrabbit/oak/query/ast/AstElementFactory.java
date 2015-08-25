@@ -13,6 +13,8 @@
  */
 package org.apache.jackrabbit.oak.query.ast;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import java.util.ArrayList;
 
 import javax.annotation.Nonnull;
@@ -182,11 +184,12 @@ public class AstElementFactory {
      */
     @Nonnull
     public static AstElement copyElementAndCheckReference(@Nonnull final AstElement e) {
-        AstElement clone = e.copyOf();
+        AstElement clone = checkNotNull(e).copyOf();
         
-        if (clone == e) {
+        if (clone == e && LOG.isDebugEnabled()) {
             LOG.debug(
-                "Failed to clone the AstElement. Returning same reference; the client may fail. {}", e);
+                "Failed to clone the AstElement. Returning same reference; the client may fail. {} - {}",
+                e.getClass().getName(), e);
         }
         
         return clone;
