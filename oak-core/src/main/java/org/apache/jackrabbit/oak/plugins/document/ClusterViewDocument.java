@@ -133,7 +133,7 @@ class ClusterViewDocument {
     private static final DateFormat standardDateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 
     /** number of elements kept in the CLUSTERVIEW_HISTORY_KEY field **/
-    private static final int HISTORY_LIMIT = 10;
+    static final int HISTORY_LIMIT = 10;
 
     /** the monotonically incrementing sequence number of this cluster view **/
     private final long viewSeqNum;
@@ -162,7 +162,7 @@ class ClusterViewDocument {
     private final String createdAt;
 
     /** the id of the instance that created this view, for debugging only **/
-    private final Integer createdBy;
+    private final Long createdBy;
 
     /**
      * Main method by which the ClusterViewDocument is updated in the settings
@@ -199,18 +199,25 @@ class ClusterViewDocument {
         updateOp.set(RECOVERING_KEY, setToCsv(recoveringIds));
         updateOp.set(INACTIVE_KEY, setToCsv(inactiveIds));
         updateOp.set(CREATED_KEY, standardDateFormat.format(now));
-        updateOp.set(CREATOR_KEY, localClusterId);
-        Map<Object, String> historyMap = new HashMap<Object, String>();
+        updateOp.set(CREATOR_KEY, (long)localClusterId);
         if (previousView != null) {
             Map<Object, String> previousHistory = previousView.getHistory();
-            if (previousHistory != null) {
-                historyMap.putAll(previousHistory);
+            if (previousHistory!=null) {
+                Map<Object, String> mapClone = new HashMap<Object, String>(previousHistory);
+                while(mapClone.size()>=HISTORY_LIMIT) {
+                    Revision oldestRevision = oldestRevision(mapClone);
+                    if (oldestRevision==null) {
+                        break;
+                    }
+                    updateOp.removeMapEntry(CLUSTER_VIEW_HISTORY_KEY, oldestRevision);
+                    if (mapClone.remove(oldestRevision)==null) {
+                        // prevent an endless loop
+                        break;
+                    }
+                }
             }
-
-            historyMap.put(Revision.newRevision(localClusterId).toString(), asHistoryEntry(previousView, localClusterId, now));
+            updateOp.setMapEntry(CLUSTER_VIEW_HISTORY_KEY, Revision.newRevision(localClusterId), asHistoryEntry(previousView, localClusterId, now));
         }
-        applyHistoryLimit(historyMap);
-        updateOp.set(CLUSTER_VIEW_HISTORY_KEY, historyMap);
 
         final Long newViewSeqNum;
         if (previousView == null) {
@@ -274,42 +281,37 @@ class ClusterViewDocument {
     }
 
     /**
-     * Pruning method that makes sure the history never gets larger than
-     * HISTORY_LIMIT
+     * Determine the oldest history entry (to be removed to keep history
+     * limited to HISTORY_LIMIT)
      * 
      * @param historyMap
-     *            the pruning is done directly on this map
      */
-    private static void applyHistoryLimit(Map<Object, String> historyMap) {
-        while (historyMap.size() > HISTORY_LIMIT) {
-            // remove the oldest
-            String oldestRevision = null;
-            for (Iterator<Object> it = historyMap.keySet().iterator(); it.hasNext();) {
-                Object obj = it.next();
-                // obj can be a String or a Revision
-                // in case of it being a Revision the toString() will
-                // be appropriate, hence:
-                String r = obj.toString();
-                if (oldestRevision == null) {
-                    oldestRevision = r;
-                } else if (Revision.getTimestampDifference(Revision.fromString(r), Revision.fromString(oldestRevision)) < 0) {
-                    oldestRevision = r;
-                }
-            }
+    private static Revision oldestRevision(Map<Object, String> historyMap) {
+        String oldestRevision = null;
+        for (Iterator<Object> it = historyMap.keySet().iterator(); it.hasNext();) {
+            Object obj = it.next();
+            // obj can be a String or a Revision
+            // in case of it being a Revision the toString() will
+            // be appropriate, hence:
+            String r = obj.toString();
             if (oldestRevision == null) {
-                break;
-            } else {
-                if (historyMap.remove(oldestRevision) == null) {
-                    if (historyMap.remove(Revision.fromString(oldestRevision)) == null) {
-                        break;
-                    }
-                }
+                oldestRevision = r;
+            } else if (Revision.getTimestampDifference(Revision.fromString(r), Revision.fromString(oldestRevision)) < 0) {
+                oldestRevision = r;
             }
+        }
+        if (oldestRevision==null) {
+            return null;
+        } else {
+            return Revision.fromString(oldestRevision);
         }
     }
 
     /** Converts a previous clusterView document into a history 'string' **/
     private static String asHistoryEntry(final ClusterViewDocument previousView, int retiringClusterNodeId, Date retireTime) {
+        if (previousView==null) {
+            throw new IllegalArgumentException("previousView must not be null");
+        }
         String h;
         JsopBuilder b = new JsopBuilder();
         b.object();
@@ -447,7 +449,16 @@ class ClusterViewDocument {
         this.clusterViewId = (String) doc.get(CLUSTER_VIEW_ID_KEY);
         this.viewSeqNum = (Long) doc.get(VIEW_SEQ_NUM_KEY);
         this.createdAt = (String) doc.get(CREATED_KEY);
-        this.createdBy = (Integer) doc.get(CREATOR_KEY);
+        Object creatorId = doc.get(CREATOR_KEY);
+        if (creatorId instanceof Long) {
+            this.createdBy = (Long) creatorId;
+        } else if (creatorId instanceof Integer) {
+            this.createdBy = (long)((Integer) creatorId);
+        } else if (creatorId == null) {
+            this.createdBy = -1L;
+        } else {
+            throw new IllegalStateException("Unsupported type of creator: "+creatorId);
+        }
 
         Object obj = doc.get(ACTIVE_KEY);
         if (obj == null || !(obj instanceof String)) {
@@ -498,7 +509,7 @@ class ClusterViewDocument {
     }
 
     /** Returns the history map **/
-    private Map<Object, String> getHistory() {
+    Map<Object, String> getHistory() {
         return viewHistory;
     }
 
@@ -525,7 +536,7 @@ class ClusterViewDocument {
      * Returns the id of the instance that created this view, for debugging
      * purpose only
      **/
-    int getCreatedBy() {
+    long getCreatedBy() {
         return createdBy;
     }
 

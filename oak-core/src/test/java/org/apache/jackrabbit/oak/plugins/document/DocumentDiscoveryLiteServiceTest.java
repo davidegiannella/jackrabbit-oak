@@ -54,6 +54,8 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.Descriptors;
 import org.apache.jackrabbit.oak.commons.json.JsonObject;
 import org.apache.jackrabbit.oak.commons.json.JsopTokenizer;
+import org.apache.jackrabbit.oak.commons.junit.LogDumper;
+import org.apache.jackrabbit.oak.commons.junit.LogLevelModifier;
 import org.apache.jackrabbit.oak.plugins.document.memory.MemoryDocumentStore;
 import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
 import org.apache.jackrabbit.oak.spi.blob.BlobStore;
@@ -63,8 +65,9 @@ import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -310,7 +313,7 @@ public class DocumentDiscoveryLiteServiceTest {
          */
         private boolean setLeaseTime(final int leaseTime) throws NoSuchFieldException {
             ns.getClusterInfo().setLeaseTime(leaseTime);
-            PrivateAccessor.setField(ns.getClusterInfo(), "leaseEndTime", System.currentTimeMillis() + (leaseTime / 2));
+            PrivateAccessor.setField(ns.getClusterInfo(), "leaseEndTime", System.currentTimeMillis() + (leaseTime / 3) - 10 /* 10ms safety margin */);
             boolean renewed = ns.renewClusterIdLease();
             return renewed;
         }
@@ -444,6 +447,16 @@ public class DocumentDiscoveryLiteServiceTest {
             }
         }
 
+        /** OAK-3292 : when on a machine without a mac address, the 'random:' prefix is used and instances
+         * that have timed out are automagially removed by ClusterNodeInfo.createInstance - that poses
+         * a problem to testing - so this method exposes whether the instance has such a 'random:' prefix
+         * and thus allows to take appropriate action
+         */
+        public boolean hasRandomMachineId() {
+            //TODO: this might not be the most stable way - but avoids having to change ClusterNodeInfo
+            return ns.getClusterInfo().toString().contains("random:");
+        }
+
     }
 
     interface Expectation {
@@ -547,6 +560,9 @@ public class DocumentDiscoveryLiteServiceTest {
 //    private static final boolean MONGO_DB = true;
      private static final boolean MONGO_DB = false;
 
+    private static final int SEED = Integer.getInteger(DocumentDiscoveryLiteServiceTest.class.getSimpleName() + "-seed",
+            new Random().nextInt());
+
     private List<DocumentMK> mks = Lists.newArrayList();
     private MemoryDocumentStore ds;
     private MemoryBlobStore bs;
@@ -554,6 +570,16 @@ public class DocumentDiscoveryLiteServiceTest {
     final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     private List<SimplifiedInstance> allInstances = new LinkedList<SimplifiedInstance>();
+
+    @Rule
+    public TestRule logDumper = new LogDumper(50000);
+
+    @Rule
+    public TestRule logLevelModifier = new LogLevelModifier()
+                                            .newConsoleAppender("console")
+                                            .addAppenderFilter("console", "info")
+                                            .addAppenderFilter("file", "info")
+                                            .setLoggerLevel("org.apache.jackrabbit.oak", "debug");
 
     @Test
     public void testActivateDeactivate() throws Exception {
@@ -875,9 +901,10 @@ public class DocumentDiscoveryLiteServiceTest {
      */
     @Test
     public void testLargeStartStopFiesta() throws Throwable {
+        logger.info("testLargeStartStopFiesta: start, seed="+SEED);
         final List<SimplifiedInstance> instances = new LinkedList<SimplifiedInstance>();
         final Map<Integer, String> inactiveIds = new HashMap<Integer, String>();
-        final Random random = new Random();
+        final Random random = new Random(SEED);
         final int LOOP_CNT = 50; // with too many loops have also seen mongo
                                  // connections becoming starved thus test
                                  // failed
@@ -908,6 +935,19 @@ public class DocumentDiscoveryLiteServiceTest {
                         workingDir = reactivatedWorkingDir;
                         logger.info("Case 0: creating instance");
                         final SimplifiedInstance newInstance = createInstance(workingDir);
+                        if (newInstance.hasRandomMachineId()) {
+                            // OAK-3292 : on an instance which has no networkInterface with a mac address,
+                            // the machineId chosen by ClusterNodeInfo will be 'random:'.. and
+                            // ClusterNodeInfo.createInstance will feel free to remove it when the lease
+                            // has timed out
+                            // that really renders it very difficult to continue testing here,
+                            // since this test is all about keeping track who became inactive etc 
+                            // and ClusterNodeInfo.createInstance removing it 'at a certain point' is difficult
+                            // and not very useful to test..
+                            //
+                            // so: stop testing at this point:
+                            return;
+                        }
                         newInstance.setLeastTimeout(5000);
                         newInstance.startSimulatingWrites(500);
                         logger.info("Case 0: created instance: " + newInstance.ns.getClusterId());
@@ -929,10 +969,26 @@ public class DocumentDiscoveryLiteServiceTest {
                     if (instances.size() < MAX_NUM_INSTANCES) {
                         logger.info("Case 1: creating instance");
                         final SimplifiedInstance newInstance = createInstance(workingDir);
+                        if (newInstance.hasRandomMachineId()) {
+                            // OAK-3292 : on an instance which has no networkInterface with a mac address,
+                            // the machineId chosen by ClusterNodeInfo will be 'random:'.. and
+                            // ClusterNodeInfo.createInstance will feel free to remove it when the lease
+                            // has timed out
+                            // that really renders it very difficult to continue testing here,
+                            // since this test is all about keeping track who became inactive etc 
+                            // and ClusterNodeInfo.createInstance removing it 'at a certain point' is difficult
+                            // and not very useful to test..
+                            //
+                            // so: stop testing at this point:
+                            return;
+                        }
                         newInstance.setLeastTimeout(5000);
                         newInstance.startSimulatingWrites(500);
                         logger.info("Case 1: created instance: " + newInstance.ns.getClusterId());
                         instances.add(newInstance);
+                        // OAK-3292 : in case a previously crashed or shut-down instance is created again here
+                        //            make sure to remove it from inactive (if it in the inactive list at all)
+                        inactiveIds.remove(newInstance.ns.getClusterId());
                     }
                     break;
                 }
@@ -988,6 +1044,7 @@ public class DocumentDiscoveryLiteServiceTest {
             SimplifiedInstance anInstance = it.next();
             activeIds.add(anInstance.ns.getClusterId());
         }
+        logger.info("checkFiestaState: checking state. expected active: "+activeIds+", inactive: "+inactiveIds);
         for (Iterator<SimplifiedInstance> it = instances.iterator(); it.hasNext();) {
             SimplifiedInstance anInstance = it.next();
 
@@ -1002,6 +1059,7 @@ public class DocumentDiscoveryLiteServiceTest {
     @Before
     @After
     public void clear() {
+        logger.info("clear: seed="+SEED);
         for (SimplifiedInstance i : allInstances) {
             i.dispose();
         }
