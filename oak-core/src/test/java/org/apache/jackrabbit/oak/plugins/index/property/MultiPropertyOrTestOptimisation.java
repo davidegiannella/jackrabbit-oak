@@ -17,6 +17,7 @@
 package org.apache.jackrabbit.oak.plugins.index.property;
 
 import static javax.jcr.query.Query.JCR_SQL2;
+import static org.apache.jackrabbit.oak.query.QueryEngineImpl.ForceOptimised.OPTIMISED;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -27,7 +28,7 @@ public class MultiPropertyOrTestOptimisation extends MultiPropertyOrTest {
     @Before
     public void before() throws Exception {
         super.before();
-        setForceOptimised(true);
+        setForceOptimised(OPTIMISED);
         setTraversalEnabled(false);
     }
     

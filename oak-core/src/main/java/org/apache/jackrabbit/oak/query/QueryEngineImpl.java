@@ -51,6 +51,27 @@ import com.google.common.collect.Sets;
  * The query engine implementation.
  */
 public abstract class QueryEngineImpl implements QueryEngine {
+    
+    /**
+     * used to instruct the {@link QueryEngineImpl} on how to act with respect of the SQL2
+     * optimisation.
+     */
+    public static enum ForceOptimised {
+        /**
+         * will force the original SQL2 query to be executed
+         */
+        ORIGINAL, 
+        
+        /**
+         * will force the computed optimised query to be executed. If available.
+         */
+        OPTIMISED, 
+        
+        /**
+         * will execute the cheapest.
+         */
+        DEFAULT
+    }
 
     private static final AtomicInteger ID_COUNTER = new AtomicInteger();
     private static final String MDC_QUERY_ID = "oak.query.id";
@@ -81,7 +102,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
      * Whether the query engine should be forced to use the optimised version of the query if
      * available.
      */
-    private boolean forceOptimised;
+    private ForceOptimised forceOptimised = ForceOptimised.DEFAULT;
 
     /**
      * Get the execution context for a single query execution.
@@ -335,7 +356,13 @@ public abstract class QueryEngineImpl implements QueryEngine {
         MDC.remove(OAK_QUERY_ANALYZE);
     }
 
-    protected void setForceOptimised(boolean forceOptimised) {
+    /**
+     * Instruct the query engine on how to behave with regards to the SQL2 optimised query if
+     * available.
+     * 
+     * @param forceOptimised cannot be null
+     */
+    protected void setForceOptimised(@Nonnull ForceOptimised forceOptimised) {
         this.forceOptimised = forceOptimised;
     }
 }

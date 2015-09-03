@@ -32,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nonnull;
 import javax.jcr.PropertyType;
 
 import com.google.common.collect.Lists;
@@ -55,9 +56,11 @@ import org.apache.jackrabbit.oak.json.TypeCodes;
 import org.apache.jackrabbit.oak.plugins.memory.BooleanPropertyState;
 import org.apache.jackrabbit.oak.plugins.memory.StringPropertyState;
 import org.apache.jackrabbit.oak.plugins.value.Conversions;
+import org.apache.jackrabbit.oak.query.QueryEngineImpl.ForceOptimised;
 import org.apache.jackrabbit.oak.query.xpath.XPathToSQL2Converter;
 import org.junit.Before;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.api.QueryEngine.NO_BINDINGS;
 import static org.apache.jackrabbit.oak.api.QueryEngine.NO_MAPPINGS;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
@@ -321,8 +324,8 @@ public abstract class AbstractQueryTest {
         ((QueryEngineImpl) qe).setTraversalEnabled(traversalEnabled);
     }
     
-    protected void setForceOptimised(final boolean forceOptimised) {
-        ((QueryEngineImpl) qe).setForceOptimised(forceOptimised);
+    protected void setForceOptimised(@Nonnull ForceOptimised forceOptimised) {
+        ((QueryEngineImpl) qe).setForceOptimised(checkNotNull(forceOptimised));
     }
 
     protected static String readRow(ResultRow row, boolean pathOnly) {
