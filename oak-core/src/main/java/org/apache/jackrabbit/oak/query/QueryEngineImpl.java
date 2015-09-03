@@ -70,7 +70,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
         /**
          * will execute the cheapest.
          */
-        DEFAULT
+        CHEAPEST
     }
 
     private static final AtomicInteger ID_COUNTER = new AtomicInteger();
@@ -102,7 +102,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
      * Whether the query engine should be forced to use the optimised version of the query if
      * available.
      */
-    private ForceOptimised forceOptimised = ForceOptimised.DEFAULT;
+    private ForceOptimised forceOptimised = ForceOptimised.CHEAPEST;
 
     /**
      * Get the execution context for a single query execution.
@@ -321,15 +321,66 @@ public abstract class QueryEngineImpl implements QueryEngine {
         }
     }
     
-    private static MdcAndPrepared prepareAndGetCheapest(@Nonnull final Set<Query> queries) {
-        // returning always the NON-optimised query for now.
+    /**
+     * will prepare all the available queries and by based on the {@link ForceOptimised} flag return
+     * the appropriate.
+     * 
+     * @param queries the list of queries to be executed. cannot be null
+     * @return
+     */
+    @Nonnull
+    private MdcAndPrepared prepareAndGetCheapest(@Nonnull final Set<Query> queries) {
         MdcAndPrepared map = null;
-        for (Query q  : checkNotNull(queries)) {
-            if (!q.isOptimised()) {
-                map = new MdcAndPrepared(setupMDC(q), q);
-                map.query.prepare();
+        double bestCost = Double.POSITIVE_INFINITY;
+        Query cheapest = null;
+        
+        // always prepare all of the queries and compute the cheapest as it's the default behaviour.
+        // It should trigger more errors during unit and integration testing. Changing
+        // `forceOptimised` flag should be in case used only during testing.
+        for (Query q : checkNotNull(queries)) {
+            q.prepare();
+            if (q.getEstimatedCost() < bestCost) {
+                bestCost = q.getEstimatedCost();
+                cheapest = q;
             }
         }
+        
+        switch (forceOptimised) {
+        case ORIGINAL:
+            LOG.debug("Forcing the original SQL2 query to be executed by flag");
+            for (Query q  : checkNotNull(queries)) {
+                if (!q.isOptimised()) {
+                    map = new MdcAndPrepared(setupMDC(q), q);
+                }
+            }
+            break;
+
+        case OPTIMISED:
+            LOG.debug("Forcing the optimised SQL2 query to be executed by flag");
+            for (Query q  : checkNotNull(queries)) {
+                if (q.isOptimised()) {
+                    map = new MdcAndPrepared(setupMDC(q), q);
+                }
+            }
+            break;
+
+        // CHEAPEST is the default behaviour
+        case CHEAPEST:
+        default:
+            if (cheapest == null) {
+                // this should not really happen. Defensive coding.
+                LOG.debug("Cheapest is null. Returning the original SQL2 query.");
+                for (Query q  : checkNotNull(queries)) {
+                    if (!q.isOptimised()) {
+                        map = new MdcAndPrepared(setupMDC(q), q);
+                    }
+                }
+            } else {
+                LOG.debug("Cheapest cost: {} - query: {}", bestCost, cheapest);
+                map = new MdcAndPrepared(setupMDC(cheapest), cheapest);                
+            }
+        }
+        
         return map;
     }
     
