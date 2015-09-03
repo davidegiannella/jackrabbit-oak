@@ -333,6 +333,8 @@ public abstract class QueryEngineImpl implements QueryEngine {
         MdcAndPrepared map = null;
         double bestCost = Double.POSITIVE_INFINITY;
         Query cheapest = null;
+        Query original = null;
+        
         
         // always prepare all of the queries and compute the cheapest as it's the default behaviour.
         // It should trigger more errors during unit and integration testing. Changing
@@ -343,6 +345,17 @@ public abstract class QueryEngineImpl implements QueryEngine {
                 bestCost = q.getEstimatedCost();
                 cheapest = q;
             }
+            if (!q.isOptimised()) {
+                original = q;
+            }
+        }
+        
+        // if the optimised cost is the same as the original SQL2 query we prefer the original. As
+        // we deal with references the `cheapest!=original` should work.
+        if (original != null && bestCost == original.getEstimatedCost()
+            && cheapest != original) {
+            LOG.trace("Same cost for original and optimised. Forcing original");
+            cheapest = original;
         }
         
         switch (forceOptimised) {

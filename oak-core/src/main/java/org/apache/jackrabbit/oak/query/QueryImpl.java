@@ -1183,7 +1183,10 @@ public class QueryImpl implements Query {
                 // we have something to do here.
                 for (ConstraintImpl c : unionList) {
                     if (right != null) {
-                        right = new UnionQueryImpl(this.distinct, left, right, this.settings, true);
+                        UnionQueryImpl u = new UnionQueryImpl(this.distinct, left, right,
+                            this.settings, true);
+                        u.setExplain(explain);
+                        right = u;
                     } else {
                         // pulling left to the right
                         if (left != null) {
@@ -1252,7 +1255,7 @@ public class QueryImpl implements Query {
             cols.add((ColumnImpl) copyElementAndCheckReference(c));
         }
                 
-        Query copy = new QueryImpl(
+        QueryImpl copy = new QueryImpl(
             this.statement, 
             (SourceImpl) copyElementAndCheckReference(this.source),
             this.constraint,
@@ -1260,6 +1263,7 @@ public class QueryImpl implements Query {
             this.namePathMapper,
             this.settings,
             optimised);
+        copy.explain = this.explain;
         
         return copy;        
     }
