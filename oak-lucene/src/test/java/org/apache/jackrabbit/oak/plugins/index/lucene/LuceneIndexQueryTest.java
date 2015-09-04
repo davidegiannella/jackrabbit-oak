@@ -67,10 +67,25 @@ public class LuceneIndexQueryTest extends AbstractQueryTest {
         props.getParent().setProperty(LuceneIndexConstants.INDEX_NODE_NAME, true);
         TestUtil.enablePropertyIndex(props, "c1/p", false);
         TestUtil.enableForFullText(props, LuceneIndexConstants.REGEX_ALL_PROPS, true);
-
+        TestUtil.enablePropertyIndex(props, "a/name", false);
+        TestUtil.enablePropertyIndex(props, "b/name", false);
+        
         root.commit();
+                
+        dumpTree(root.getTree(indexDefn.getPath()));
     }
 
+    private static void dumpTree(Tree t) {
+        System.out.print("---");
+        System.out.println(t.getPath());
+        for (PropertyState p : t.getProperties()) {
+            System.out.println(p);
+        }
+        for (Tree t1 : t.getChildren()) {
+            dumpTree(t1);
+        }
+    }
+    
     @Override
     protected ContentRepository createRepository() {
         LowCostLuceneIndexProvider provider = new LowCostLuceneIndexProvider();
