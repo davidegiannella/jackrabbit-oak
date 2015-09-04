@@ -74,8 +74,8 @@ import org.slf4j.LoggerFactory;
  * Tests for SegmentNodeStore DataStore GC
  */
 @RunWith(Parameterized.class)
-public class SegmentDataStoreBlobGCTest {
-    private static final Logger log = LoggerFactory.getLogger(SegmentDataStoreBlobGCTest.class);
+public class SegmentDataStoreBlobGCIT {
+    private static final Logger log = LoggerFactory.getLogger(SegmentDataStoreBlobGCIT.class);
 
     private final boolean usePersistedMap;
 
@@ -94,7 +94,7 @@ public class SegmentDataStoreBlobGCTest {
         return ImmutableList.of(new Boolean[] {true}, new Boolean[] {false});
     }
 
-    public SegmentDataStoreBlobGCTest(boolean usePersistedMap) {
+    public SegmentDataStoreBlobGCIT(boolean usePersistedMap) {
         this.usePersistedMap = usePersistedMap;
     }
 
