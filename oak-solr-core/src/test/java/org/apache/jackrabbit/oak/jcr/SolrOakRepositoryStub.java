@@ -89,6 +89,16 @@ public class SolrOakRepositoryStub extends OakTarMKRepositoryStub {
             public CommitPolicy getCommitPolicy() {
                 return CommitPolicy.HARD;
             }
+
+            @Override
+            public boolean useForPrimaryTypes() {
+                return true;
+            }
+
+            @Override
+            public boolean useForPropertyRestrictions() {
+                return true;
+            }
         };
         OakSolrConfigurationProvider oakSolrConfigurationProvider = new DefaultSolrConfigurationProvider(configuration);
         jcr.with(new SolrIndexInitializer(false))
