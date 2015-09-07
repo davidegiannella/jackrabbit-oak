@@ -340,6 +340,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
         // It should trigger more errors during unit and integration testing. Changing
         // `forceOptimised` flag should be in case used only during testing.
         for (Query q : checkNotNull(queries)) {
+            LOG.debug("Preparing: {}", q);
             q.prepare();
             if (q.getEstimatedCost() < bestCost) {
                 bestCost = q.getEstimatedCost();
