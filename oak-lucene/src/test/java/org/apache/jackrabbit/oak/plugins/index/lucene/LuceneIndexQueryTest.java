@@ -70,20 +70,7 @@ public class LuceneIndexQueryTest extends AbstractQueryTest {
         TestUtil.enablePropertyIndex(props, "a/name", false);
         TestUtil.enablePropertyIndex(props, "b/name", false);
         
-        root.commit();
-                
-        dumpTree(root.getTree(indexDefn.getPath()));
-    }
-
-    private static void dumpTree(Tree t) {
-        System.out.print("---");
-        System.out.println(t.getPath());
-        for (PropertyState p : t.getProperties()) {
-            System.out.println(p);
-        }
-        for (Tree t1 : t.getChildren()) {
-            dumpTree(t1);
-        }
+        root.commit();                
     }
     
     @Override
