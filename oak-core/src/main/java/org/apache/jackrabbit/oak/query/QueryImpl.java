@@ -1183,10 +1183,7 @@ public class QueryImpl implements Query {
                 // we have something to do here.
                 for (ConstraintImpl c : unionList) {
                     if (right != null) {
-                        UnionQueryImpl u = new UnionQueryImpl(this.distinct, left, right,
-                            this.settings, true);
-                        u.setExplain(explain);
-                        right = u;
+                        right = newOptimisedUnionQuery(left, right);
                     } else {
                         // pulling left to the right
                         if (left != null) {
@@ -1201,11 +1198,25 @@ public class QueryImpl implements Query {
                     left.constraint = (ConstraintImpl) copyElementAndCheckReference(c);                     
                 }
                 
-                optimised = new UnionQueryImpl(this.distinct, left, right, this.settings, true);
+                optimised = newOptimisedUnionQuery(left, right);
             }
         }
         
         return optimised;
+    }
+    
+    /**
+     * convenience method for creating a UnionQueryImpl with proper settings.
+     * 
+     * @param left
+     * @param right
+     * @return
+     */
+    private UnionQueryImpl newOptimisedUnionQuery(@Nonnull Query left, @Nonnull Query right) {
+        UnionQueryImpl u = new UnionQueryImpl(this.distinct, checkNotNull(left),
+            checkNotNull(right), this.settings, true);
+        u.setExplain(explain);
+        return u;
     }
     
     /**
@@ -1264,6 +1275,7 @@ public class QueryImpl implements Query {
             this.settings,
             optimised);
         copy.explain = this.explain;
+        copy.distinct = this.distinct;
         
         return copy;        
     }
