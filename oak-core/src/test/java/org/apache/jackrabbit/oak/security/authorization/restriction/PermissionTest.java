@@ -23,17 +23,15 @@ import java.util.Map;
 import javax.jcr.Value;
 import javax.jcr.security.AccessControlManager;
 
-import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.api.security.JackrabbitAccessControlList;
 import org.apache.jackrabbit.commons.jackrabbit.authorization.AccessControlUtils;
 import org.apache.jackrabbit.oak.AbstractSecurityTest;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentSession;
 import org.apache.jackrabbit.oak.api.Root;
-import org.apache.jackrabbit.oak.api.Tree;
-import org.apache.jackrabbit.oak.api.Type;
-import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
-import org.apache.jackrabbit.oak.spi.security.authorization.accesscontrol.AccessControlConstants;
+import org.apache.jackrabbit.oak.spi.security.authorization.AuthorizationConfiguration;
+import org.apache.jackrabbit.oak.spi.security.authorization.permission.PermissionProvider;
+import org.apache.jackrabbit.oak.spi.security.authorization.permission.Permissions;
 import org.apache.jackrabbit.oak.spi.security.privilege.PrivilegeConstants;
 import org.apache.jackrabbit.oak.util.NodeUtil;
 import org.apache.jackrabbit.value.StringValue;
@@ -42,13 +40,8 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.google.common.collect.ImmutableList;
-
-import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class PermissionTest extends AbstractSecurityTest {
@@ -58,8 +51,8 @@ public class PermissionTest extends AbstractSecurityTest {
     private static final String TEST_B_PATH = "/testRoot/a/b";
     private static final String TEST_C_PATH = "/testRoot/a/b/c";
     private static final String TEST_D_PATH = "/testRoot/a/b/c/d";
+    private static final String TEST_E_PATH = "/testRoot/a/b/c/d/e";
 
-    private NodeUtil testRootNode;
     private Principal testPrincipal;
 
     @Before
@@ -68,11 +61,12 @@ public class PermissionTest extends AbstractSecurityTest {
         super.before();
 
         NodeUtil rootNode = new NodeUtil(root.getTree("/"));
-        testRootNode = rootNode.addChild("testRoot", NT_UNSTRUCTURED);
+        NodeUtil testRootNode = rootNode.addChild("testRoot", NT_UNSTRUCTURED);
         NodeUtil a = testRootNode.addChild("a", NT_UNSTRUCTURED);
         NodeUtil b = a.addChild("b", NT_UNSTRUCTURED);
         NodeUtil c = b.addChild("c", NT_UNSTRUCTURED);
-        c.addChild("d", NT_UNSTRUCTURED);
+        NodeUtil d = c.addChild("d", NT_UNSTRUCTURED);
+        d.addChild("e", NT_UNSTRUCTURED);
         root.commit();
 
         testPrincipal = getTestUser().getPrincipal();
@@ -107,6 +101,18 @@ public class PermissionTest extends AbstractSecurityTest {
         root.commit();
     }
 
+    private void assertIsGranted(PermissionProvider pp, Root root, boolean allow, String path, long permissions) {
+        assertEquals("user should " + (allow ? "" : "not ") + "have " + permissions + " on " + path,
+                allow, pp.isGranted(root.getTree(path), null, permissions));
+    }
+
+    private PermissionProvider getPermissionProvider(ContentSession session) {
+        return getSecurityProvider()
+                .getConfiguration(AuthorizationConfiguration.class)
+                .getPermissionProvider(root, session.getWorkspaceName(), session.getAuthInfo().getPrincipals());
+    }
+
+
     @Test
     public void testHasPermission() throws Exception {
         // create permissions
@@ -121,12 +127,11 @@ public class PermissionTest extends AbstractSecurityTest {
         ContentSession testSession = createTestSession();
         try {
             Root testRoot = testSession.getLatestRoot();
-            AccessControlManager acMgr = getAccessControlManager(testRoot);
+            PermissionProvider pp = getPermissionProvider(testSession);
 
-            assertFalse("user should not have remove node on /a/b/c",
-                    acMgr.hasPrivileges(TEST_C_PATH, AccessControlUtils.privilegesFromNames(acMgr, PrivilegeConstants.JCR_REMOVE_NODE)));
-            assertTrue("user should have remove node on /a/b",
-                    acMgr.hasPrivileges(TEST_B_PATH, AccessControlUtils.privilegesFromNames(acMgr, PrivilegeConstants.JCR_REMOVE_NODE)));
+            assertIsGranted(pp, testRoot, true, TEST_A_PATH, Permissions.REMOVE_NODE);
+            assertIsGranted(pp, testRoot, true, TEST_B_PATH, Permissions.REMOVE_NODE);
+            assertIsGranted(pp, testRoot, false, TEST_C_PATH, Permissions.REMOVE_NODE);
 
             try {
                 testRoot.getTree(TEST_C_PATH).remove();
@@ -140,45 +145,127 @@ public class PermissionTest extends AbstractSecurityTest {
         }
     }
 
+    /**
+     * Tests if the restrictions are properly inherited.
+     * the restriction enable/disable the ACE where it is defined.
+     * since the 'allow' on /a/b is after the 'deny' on a/b/c, the allow wins.
+     *
+     * The test currently fails on evaluation of /a/b/c/d. Probably because the evaluation
+     * of /a/b/c yields a deny, which terminates the iteration.
+     */
     @Test
-    @Ignore("OAK-3324")
     public void testHasPermissionWithRestrictions() throws Exception {
         // create permissions
         // allow rep:write      /testroot
         // deny  jcr:removeNode /testroot/a  glob=*/c
         // allow jcr:removeNode /testroot/a  glob=*/b
-        // allow jcr:removeNode /testroot/a  glob=*/c/*
 
         addEntry(TEST_ROOT_PATH, true, "", PrivilegeConstants.JCR_READ, PrivilegeConstants.REP_WRITE);
         addEntry(TEST_A_PATH, false, "*/c", PrivilegeConstants.JCR_REMOVE_NODE);
         addEntry(TEST_A_PATH, true, "*/b", PrivilegeConstants.JCR_REMOVE_NODE);
-        addEntry(TEST_A_PATH, true, "*/c/*", PrivilegeConstants.JCR_REMOVE_NODE);
 
         ContentSession testSession = createTestSession();
         try {
             Root testRoot = testSession.getLatestRoot();
-            AccessControlManager acMgr = getAccessControlManager(testRoot);
+            PermissionProvider pp = getPermissionProvider(testSession);
 
-            assertFalse("user should not have remove node on /a/b/c",
-                    acMgr.hasPrivileges(TEST_C_PATH, AccessControlUtils.privilegesFromNames(acMgr, PrivilegeConstants.JCR_REMOVE_NODE)));
-            assertTrue("user should have remove node on /a/b",
-                    acMgr.hasPrivileges(TEST_B_PATH, AccessControlUtils.privilegesFromNames(acMgr, PrivilegeConstants.JCR_REMOVE_NODE)));
-            assertTrue("user should have remove node on /a/b/c/d",
-                    acMgr.hasPrivileges(TEST_D_PATH, AccessControlUtils.privilegesFromNames(acMgr, PrivilegeConstants.JCR_REMOVE_NODE)));
+            assertIsGranted(pp, testRoot, true, TEST_A_PATH, Permissions.REMOVE_NODE);
+            assertIsGranted(pp, testRoot, true, TEST_B_PATH, Permissions.REMOVE_NODE);
+            assertIsGranted(pp, testRoot, false, TEST_C_PATH, Permissions.REMOVE_NODE);
+            assertIsGranted(pp, testRoot, true, TEST_D_PATH, Permissions.REMOVE_NODE);
+            assertIsGranted(pp, testRoot, true, TEST_E_PATH, Permissions.REMOVE_NODE);
 
             // should be able to remove /a/b/c/d
             testRoot.getTree(TEST_D_PATH).remove();
             testRoot.commit();
 
+            // should be able to remove /a/b/c
             try {
                 testRoot.getTree(TEST_C_PATH).remove();
                 testRoot.commit();
-                fail("removing node on /a/b/c should fail");
+                fail("user should not be able to remove c");
             } catch (CommitFailedException e) {
-                // all ok
+                // ok
             }
+
         } finally {
             testSession.close();
         }
     }
+
+    /**
+     * Tests if the restrictions are properly inherited.
+     * the restriction enable/disable the ACE where it is defined.
+     * since the 'deny' on /a/b is after the 'allow' on a/b/c, the deny wins.
+     */
+    @Test
+    public void testHasPermissionWithRestrictions2() throws Exception {
+        // create permissions
+        // allow rep:write      /testroot
+        // allow jcr:removeNode /testroot/a  glob=*/b
+        // deny  jcr:removeNode /testroot/a  glob=*/c
+
+        addEntry(TEST_ROOT_PATH, true, "", PrivilegeConstants.JCR_READ, PrivilegeConstants.REP_WRITE);
+        addEntry(TEST_A_PATH, true, "*/b", PrivilegeConstants.JCR_REMOVE_NODE);
+        addEntry(TEST_A_PATH, false, "*/c", PrivilegeConstants.JCR_REMOVE_NODE);
+
+        ContentSession testSession = createTestSession();
+        try {
+            Root testRoot = testSession.getLatestRoot();
+
+            PermissionProvider pp = getPermissionProvider(testSession);
+
+            assertIsGranted(pp, testRoot, true, TEST_A_PATH, Permissions.REMOVE_NODE);
+            assertIsGranted(pp, testRoot, true, TEST_B_PATH, Permissions.REMOVE_NODE);
+            assertIsGranted(pp, testRoot, false, TEST_C_PATH, Permissions.REMOVE_NODE);
+            assertIsGranted(pp, testRoot, true, TEST_D_PATH, Permissions.REMOVE_NODE);
+
+            testRoot.getTree(TEST_D_PATH).remove();
+            testRoot.commit();
+
+            try {
+                // should not be able to remove /a/b/c
+                testRoot.getTree(TEST_C_PATH).remove();
+                testRoot.commit();
+                fail("should not be able to delete " + TEST_C_PATH);
+            } catch (CommitFailedException e) {
+                // ok
+                testRoot.refresh();
+            }
+
+        } finally {
+            testSession.close();
+        }
+    }
+
+    /**
+     * Tests the custom restriction provider that checks on the existence of a property.
+     * @throws Exception
+     */
+    @Test
+    public void testProtectPropertiesByRestriction() throws Exception {
+        // create permissions
+        // allow rep:write          /testroot
+        // deny  jcr:modifyProperties /testroot/a  glob = */c
+
+        addEntry(TEST_ROOT_PATH, true, "", PrivilegeConstants.JCR_READ, PrivilegeConstants.REP_WRITE);
+        addEntry(TEST_A_PATH, false, "*/c", PrivilegeConstants.JCR_MODIFY_PROPERTIES);
+
+        ContentSession testSession = createTestSession();
+        try {
+            Root testRoot = testSession.getLatestRoot();
+
+            PermissionProvider pp = getPermissionProvider(testSession);
+            assertIsGranted(pp, testRoot, true , TEST_A_PATH, Permissions.MODIFY_PROPERTY);
+            assertIsGranted(pp, testRoot, true, TEST_B_PATH, Permissions.MODIFY_PROPERTY);
+            assertIsGranted(pp, testRoot, false, TEST_C_PATH, Permissions.MODIFY_PROPERTY);
+            assertIsGranted(pp, testRoot, true, TEST_D_PATH, Permissions.MODIFY_PROPERTY);
+            assertIsGranted(pp, testRoot, true, TEST_E_PATH, Permissions.MODIFY_PROPERTY);
+
+        } finally {
+            testSession.close();
+        }
+    }
+
+
 }
