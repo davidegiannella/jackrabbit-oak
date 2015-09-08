@@ -19,11 +19,13 @@
 package org.apache.jackrabbit.oak.query.ast;
 
 import static com.google.common.collect.Lists.newArrayList;
+import static org.easymock.EasyMock.contains;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
 
 /**
@@ -34,7 +36,11 @@ public class NotImpl extends ConstraintImpl {
     private ConstraintImpl constraint;
 
     public NotImpl(ConstraintImpl constraint) {
-        this.constraint = constraint;
+        if (constraint instanceof FullTextSearchImpl) {
+            this.constraint = new NotFullTextSearchImpl((FullTextSearchImpl) constraint);
+        } else {
+            this.constraint = constraint;
+        }
     }
 
     public ConstraintImpl getConstraint() {
@@ -114,14 +120,16 @@ public class NotImpl extends ConstraintImpl {
             // result
             return;
         }
-        // ignore
-        // TODO convert NOT conditions
+        constraint.restrict(f);
     }
 
     @Override
     public void restrictPushDown(SelectorImpl s) {
-        // ignore
-        // TODO convert NOT conditions
+        constraint.restrictPushDown(s);
     }
 
+    @Override
+    public FullTextExpression getFullTextConstraint(SelectorImpl s) {
+        return constraint.getFullTextConstraint(s);
+    }
 }

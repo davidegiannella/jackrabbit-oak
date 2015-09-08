@@ -50,10 +50,10 @@ public class FullTextSearchImpl extends ConstraintImpl {
      */
     public static final boolean JACKRABBIT_2_SINGLE_QUOTED_PHRASE = true;
 
-    private final String selectorName;
+    final String selectorName;
     private final String relativePath;
-    private final String propertyName;
-    private final StaticOperandImpl fullTextSearchExpression;
+    final String propertyName;
+    final StaticOperandImpl fullTextSearchExpression;
     private SelectorImpl selector;
 
     public FullTextSearchImpl(
@@ -139,12 +139,16 @@ public class FullTextSearchImpl extends ConstraintImpl {
                 p = PathUtils.concat(relativePath, p);
             }
             String p2 = normalizePropertyName(p);
-            String rawText = v.getValue(Type.STRING);
+            String rawText = getRawText(v);
             FullTextExpression e = FullTextParser.parse(p2, rawText);
             return new FullTextContains(p2, rawText, e);
         } catch (ParseException e) {
             throw new IllegalArgumentException("Invalid expression: " + fullTextSearchExpression, e);
         }
+    }
+    
+    String getRawText(PropertyValue v) {
+        return v.getValue(Type.STRING);
     }
     
     @Override

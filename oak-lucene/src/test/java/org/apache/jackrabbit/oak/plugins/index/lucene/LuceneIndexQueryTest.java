@@ -34,6 +34,7 @@ import org.apache.jackrabbit.oak.query.AbstractQueryTest;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
+import org.apache.jackrabbit.oak.util.NodeUtil;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -45,6 +46,7 @@ import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 import static org.apache.jackrabbit.oak.api.Type.NAME;
 import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.api.Type.STRINGS;
+import static org.apache.jackrabbit.oak.plugins.index.IndexUtils.createIndexDefinition;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.TestUtil.useV2;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -514,4 +516,32 @@ public class LuceneIndexQueryTest extends AbstractQueryTest {
             walktree(t1);
         }
     }
+    
+    private static Tree child(Tree t, String n, String type) {
+        Tree t1 = t.addChild(n);
+        t1.setProperty(JCR_PRIMARYTYPE, type, Type.NAME);
+        return t1;
+    }
+
+    @Test
+    public void oak3371() throws Exception {
+        setTraversalEnabled(false);
+        Tree t, t1;
+        
+        t = root.getTree("/");
+        t = child(t, "test", NT_UNSTRUCTURED);
+        t1 = child(t, "a", NT_UNSTRUCTURED);
+        t1.setProperty("foo", "bar");
+        child(t, "b", NT_UNSTRUCTURED);
+        
+        root.commit();
+        
+        assertQuery(
+            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE([/test]) AND NOT CONTAINS(foo, 'bar')",
+//            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE([/test]) AND CONTAINS(foo, 'bar')",
+            of("/test/b"));
+        
+        setTraversalEnabled(true);
+    }
+
 }
