@@ -20,6 +20,7 @@ import static com.google.common.collect.ImmutableList.of;
 import static org.apache.jackrabbit.JcrConstants.JCR_MIXINTYPES;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.oak.plugins.index.IndexUtils.createIndexDefinition;
+import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.NT_UNSTRUCTURED;
 
 import java.util.ArrayList;
 
@@ -48,8 +49,10 @@ public class NodeTypeIndexQueryTest extends AbstractQueryTest {
                 .createContentRepository();
     }
 
-    private static void child(Tree t, String n, String type) {
-        t.addChild(n).setProperty(JCR_PRIMARYTYPE, type, Type.NAME);
+    private static Tree child(Tree t, String n, String type) {
+        Tree t1 = t.addChild(n);
+        t1.setProperty(JCR_PRIMARYTYPE, type, Type.NAME);
+        return t1;
     }
 
     private static void mixLanguage(Tree t, String n) {
@@ -82,6 +85,32 @@ public class NodeTypeIndexQueryTest extends AbstractQueryTest {
         assertQuery("select [jcr:path] from [nt:folder] ", of("/c", "/d"));
         assertQuery("select [jcr:path] from [mix:language] ", of("/e", "/f"));
 
+        setTraversalEnabled(true);
+    }
+    
+    @Test
+    public void oak3371() throws Exception {
+        setTraversalEnabled(false);
+        Tree t, t1;
+
+        NodeUtil n = new NodeUtil(root.getTree("/oak:index"));
+        createIndexDefinition(n, "nodeType", false, new String[] {
+                JCR_PRIMARYTYPE }, new String[] { NT_UNSTRUCTURED });
+
+        root.commit();
+        
+        t = root.getTree("/");
+        t = child(t, "test", NT_UNSTRUCTURED);
+        t1 = child(t, "a", NT_UNSTRUCTURED);
+        t1.setProperty("foo", "bar");
+        child(t, "b", NT_UNSTRUCTURED);
+        
+        root.commit();
+        
+        assertQuery(
+            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE([/test]) AND NOT CONTAINS(foo, 'bar')",
+            of("/test/b"));
+        
         setTraversalEnabled(true);
     }
 }
