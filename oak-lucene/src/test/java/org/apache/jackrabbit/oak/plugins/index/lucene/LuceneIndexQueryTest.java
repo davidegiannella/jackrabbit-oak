@@ -537,13 +537,15 @@ public class LuceneIndexQueryTest extends AbstractQueryTest {
         t1 = child(t, "c", NT_UNSTRUCTURED);
 
         root.commit();
-        
+
+        assertQuery(
+            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND CONTAINS(foo, 'bar')",
+            of("/test/a"));
+
         assertQuery(
             "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND NOT CONTAINS(foo, 'bar')",
-//            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE([/test]) AND CONTAINS(foo, 'bar')",
             of("/test/b", "/test/c"));
         
         setTraversalEnabled(true);
     }
-
 }
