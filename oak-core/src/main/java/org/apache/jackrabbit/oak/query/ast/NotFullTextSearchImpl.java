@@ -45,4 +45,11 @@ public class NotFullTextSearchImpl extends FullTextSearchImpl {
     public String toString() {
         return "not " + super.toString();
     }
+
+    @Override
+    boolean enforcePropertyExistence(String propertyName, SelectorImpl selector) {
+        // in case of NOT CONTAINS we want to match nodes without the property as well. In this way
+        // we don't care whether the property is there or not.
+        return true;
+    }
 }

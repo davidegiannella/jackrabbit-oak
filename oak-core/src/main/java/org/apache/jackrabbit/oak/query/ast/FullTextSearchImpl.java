@@ -156,6 +156,21 @@ public class FullTextSearchImpl extends ConstraintImpl {
         return Collections.singleton(selector);
     }
 
+    /**
+     * verify that a property exists in the node. {@code property IS NOT NULL}
+     * 
+     * @param propertyName the property to check
+     * @param selector the selector to work with
+     * @return true if the property is there, false otherwise.
+     */
+    boolean enforcePropertyExistence(String propertyName, SelectorImpl selector) {
+        PropertyValue p = selector.currentProperty(propertyName);
+        if (p == null) {
+            return false;
+        }
+        return true;
+    }
+    
     @Override
     public boolean evaluate() {
         // disable evaluation if a fulltext index is used,
@@ -167,10 +182,7 @@ public class FullTextSearchImpl extends ConstraintImpl {
             // condition checks out, this takes out some extra rows from the index
             // aggregation bits
             if (relativePath == null && propertyName != null) {
-                PropertyValue p = selector.currentProperty(propertyName);
-                if (p == null) {
-                    return false;
-                }
+                return enforcePropertyExistence(propertyName, selector);
             }
             return true;
         }
