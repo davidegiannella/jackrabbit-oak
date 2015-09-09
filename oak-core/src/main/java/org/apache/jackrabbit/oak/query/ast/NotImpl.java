@@ -19,7 +19,6 @@
 package org.apache.jackrabbit.oak.query.ast;
 
 import static com.google.common.collect.Lists.newArrayList;
-import static org.easymock.EasyMock.contains;
 
 import java.util.Collections;
 import java.util.List;
