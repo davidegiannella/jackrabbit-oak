@@ -35,11 +35,7 @@ public class NotImpl extends ConstraintImpl {
     private ConstraintImpl constraint;
 
     public NotImpl(ConstraintImpl constraint) {
-        if (constraint instanceof FullTextSearchImpl) {
-            this.constraint = new NotFullTextSearchImpl((FullTextSearchImpl) constraint);
-        } else {
-            this.constraint = constraint;
-        }
+        this.constraint = constraint;
     }
 
     public ConstraintImpl getConstraint() {
