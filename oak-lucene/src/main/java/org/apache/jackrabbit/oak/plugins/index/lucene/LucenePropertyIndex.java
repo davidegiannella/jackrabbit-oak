@@ -655,10 +655,29 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
             throw new IllegalStateException("No query created for filter " + filter);
         }
         if (qs.size() == 1) {
+            Query q = qs.get(0);
+            if (q instanceof BooleanQuery) {
+                BooleanQuery ibq = (BooleanQuery) q;
+                if ((ibq.getClauses().length == 1) &&
+                        (ibq.getClauses()[0].getOccur() == BooleanClause.Occur.MUST_NOT)) {
+                    ibq.add(new MatchAllDocsQuery(), BooleanClause.Occur.SHOULD);
+                }
+            }
             return new LuceneRequestFacade<Query>(qs.get(0));
         }
         BooleanQuery bq = new BooleanQuery();
         for (Query q : qs) {
+             /* Only unwrap the clause if MUST_NOT(x) i.e. if there is boolean query
+             * with single MUST_NOT clause then extract it and pace it in outer clause*/
+            if (q instanceof BooleanQuery) {
+                BooleanQuery ibq = (BooleanQuery) q;
+                if ((ibq.getClauses().length == 1) &&
+                        (ibq.getClauses()[0].getOccur() == BooleanClause.Occur.MUST_NOT)) {
+                    bq.add(ibq.getClauses()[0]);
+                    continue;
+                }
+            }
+
             bq.add(q, MUST);
         }
         return new LuceneRequestFacade<Query>(bq);

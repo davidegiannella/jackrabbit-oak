@@ -526,18 +526,19 @@ public class LuceneIndexQueryTest extends AbstractQueryTest {
     @Test
     public void oak3371() throws Exception {
         setTraversalEnabled(false);
-        Tree t, t1;
+        Tree t, t1, t2;
         
         t = root.getTree("/");
         t = child(t, "test", NT_UNSTRUCTURED);
         t1 = child(t, "a", NT_UNSTRUCTURED);
         t1.setProperty("foo", "bar");
-        child(t, "b", NT_UNSTRUCTURED);
-        
+        t2 = child(t, "b", NT_UNSTRUCTURED);
+        t2.setProperty("foo", "cat");
+
         root.commit();
         
         assertQuery(
-            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE([/test]) AND NOT CONTAINS(foo, 'bar')",
+            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND NOT CONTAINS(foo, 'bar')",
 //            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE([/test]) AND CONTAINS(foo, 'bar')",
             of("/test/b"));
         
