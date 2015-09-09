@@ -1028,7 +1028,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
 
             @Override
             public boolean visit(FullTextContains contains) {
-                visitTerm(contains.getPropertyName(), contains.getRawText(), null, false);
+                visitTerm(contains.getPropertyName(), contains.getRawText(), null, contains.isNot());
                 return true;
             }
 
