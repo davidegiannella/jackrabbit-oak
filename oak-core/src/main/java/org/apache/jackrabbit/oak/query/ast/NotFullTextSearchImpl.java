@@ -40,4 +40,9 @@ public class NotFullTextSearchImpl extends FullTextSearchImpl {
         // Intentionally left empty. A NOT CONTAINS() can be valid if the property is actually not
         // there.
     }
+
+    @Override
+    public String toString() {
+        return "not " + super.toString();
+    }
 }
