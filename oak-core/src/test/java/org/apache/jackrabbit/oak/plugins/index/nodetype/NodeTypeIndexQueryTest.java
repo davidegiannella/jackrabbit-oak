@@ -21,8 +21,13 @@ import static org.apache.jackrabbit.JcrConstants.JCR_MIXINTYPES;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.oak.plugins.index.IndexUtils.createIndexDefinition;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.NT_UNSTRUCTURED;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
+import java.util.List;
+
+import javax.jcr.query.Query;
 
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.ContentRepository;
@@ -107,10 +112,12 @@ public class NodeTypeIndexQueryTest extends AbstractQueryTest {
         
         root.commit();
         
-        assertQuery(
-//            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE([/test]) AND NOT CONTAINS(foo, 'bar')",
-            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE([/test]) AND CONTAINS(foo, 'bar')",
-            of("/test/b"));
+        List<String> plan = executeQuery(
+            "explain SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE([/test]) AND NOT CONTAINS(foo, 'bar')",
+            Query.JCR_SQL2, false);
+        
+        assertEquals(1, plan.size());
+        assertTrue(plan.get(0).contains("no-index"));
         
         setTraversalEnabled(true);
     }
