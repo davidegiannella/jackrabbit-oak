@@ -263,7 +263,7 @@ public class FullTextSearchImpl extends ConstraintImpl {
                     p = PathUtils.concat(p, relativePath);
                 }                
                 p = normalizePropertyName(p);
-                f.restrictProperty(p, Operator.NOT_EQUAL, null);
+                restrictPropertyOnFilter(p, f);
             }
         }
         f.restrictFulltextCondition(fullTextSearchExpression.currentValue().getValue(Type.STRING));
@@ -276,4 +276,14 @@ public class FullTextSearchImpl extends ConstraintImpl {
         }
     }
 
+    /**
+     * restrict the provided property to the property to the provided filter achieving so
+     * {@code property IS NOT NULL}
+     * 
+     * @param propertyName
+     * @param f
+     */
+    void restrictPropertyOnFilter(String propertyName, FilterImpl f) {
+        f.restrictProperty(propertyName, Operator.NOT_EQUAL, null);
+    }
 }

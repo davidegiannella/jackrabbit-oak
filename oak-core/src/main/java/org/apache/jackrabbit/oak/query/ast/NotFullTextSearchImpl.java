@@ -17,6 +17,7 @@
 package org.apache.jackrabbit.oak.query.ast;
 
 import org.apache.jackrabbit.oak.api.PropertyValue;
+import org.apache.jackrabbit.oak.query.index.FilterImpl;
 
 public class NotFullTextSearchImpl extends FullTextSearchImpl {
 
@@ -32,5 +33,11 @@ public class NotFullTextSearchImpl extends FullTextSearchImpl {
     @Override
     String getRawText(PropertyValue v) {
         return "-" + super.getRawText(v);
+    }
+
+    @Override
+    void restrictPropertyOnFilter(String propertyName, FilterImpl f) {
+        // Intentionally left empty. A NOT CONTAINS() can be valid if the property is actually not
+        // there.
     }
 }
