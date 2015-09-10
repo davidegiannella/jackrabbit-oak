@@ -29,6 +29,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.CheckForNull;
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.jcr.PropertyType;
 
@@ -37,6 +38,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Queues;
 import com.google.common.collect.Sets;
+
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Result.SizePrecision;
 import org.apache.jackrabbit.oak.api.Type;
@@ -102,6 +104,7 @@ import org.apache.lucene.util.Version;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Lists.newArrayListWithCapacity;
 import static org.apache.jackrabbit.JcrConstants.JCR_MIXINTYPES;
@@ -654,6 +657,19 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
 
             throw new IllegalStateException("No query created for filter " + filter);
         }
+        return performAdditionalWraps(qs);
+    }
+
+    /**
+     * Perform additional wraps on the list of queries to allow, for example, the NOT CONTAINS to
+     * play properly when sent to lucene.
+     * 
+     * @param qs the list of queries. Cannot be null.
+     * @return
+     */
+    @Nonnull
+    public static LuceneRequestFacade<Query> performAdditionalWraps(@Nonnull List<Query> qs) {
+        checkNotNull(qs);
         if (qs.size() == 1) {
             Query q = qs.get(0);
             if (q instanceof BooleanQuery) {
@@ -682,7 +698,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
         }
         return new LuceneRequestFacade<Query>(bq);
     }
-
+    
     private CustomScoreQuery getCustomScoreQuery(IndexPlan plan, Query subQuery) {
         PlanResult planResult = getPlanResult(plan);
         IndexDefinition idxDef = planResult.indexDefinition;
