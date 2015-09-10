@@ -24,7 +24,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
 
 /**
@@ -115,16 +114,14 @@ public class NotImpl extends ConstraintImpl {
             // result
             return;
         }
-        constraint.restrict(f);
+        // ignore
+        // TODO convert NOT conditions
     }
 
     @Override
     public void restrictPushDown(SelectorImpl s) {
-        constraint.restrictPushDown(s);
+        // ignore
+        // TODO convert NOT conditions
     }
 
-    @Override
-    public FullTextExpression getFullTextConstraint(SelectorImpl s) {
-        return constraint.getFullTextConstraint(s);
-    }
 }

@@ -20,10 +20,12 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import javax.annotation.Nonnull;
 
+import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
+import org.apache.jackrabbit.oak.query.index.FilterImpl;
+
 /**
- * class used to "wrap" a {@code NOT CONTAINS} clause. The difference with a {@link NotImpl} reside
- * in the {@link NotImpl#evaluate()} where it's not negating the clause as it already arrives in an
- * already "negated boolean" form.
+ * class used to "wrap" a {@code NOT CONTAINS} clause. The main differences with a {@link NotImpl}
+ * reside in the {@link NotImpl#evaluate()} and restricts.
  */
 public class NotFullTextImpl extends NotImpl {
     public NotFullTextImpl(@Nonnull FullTextSearchImpl constraint) {
@@ -33,5 +35,22 @@ public class NotFullTextImpl extends NotImpl {
     @Override
     public boolean evaluate() {
         return getConstraint().evaluate();
+    }
+
+    @Override
+    public void restrict(FilterImpl f) {
+        if (!f.getSelector().isOuterJoinRightHandSide()) {
+            getConstraint().restrict(f);
+        }
+    }
+
+    @Override
+    public void restrictPushDown(SelectorImpl s) {
+        getConstraint().restrictPushDown(s);    
+    }
+    
+    @Override
+    public FullTextExpression getFullTextConstraint(SelectorImpl s) {
+        return getConstraint().getFullTextConstraint(s);
     }
 }
