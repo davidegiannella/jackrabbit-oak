@@ -311,13 +311,18 @@ public abstract class AbstractQueryTest {
     protected List<String> assertQuery(String sql, String language,
                                        List<String> expected, boolean skipSort) {
         List<String> paths = executeQuery(sql, language, true, skipSort);
-        for (String p : expected) {
-            assertTrue("Expected path " + p + " not found, got " + paths, paths.contains(p));
-        }
-        assertEquals("Result set size is different", expected.size(),
-                paths.size());
+        assertResult(expected, paths);
         return paths;
 
+    }
+    
+    protected static void assertResult(@Nonnull List<String> expected, @Nonnull List<String> actual) {
+        for (String p : checkNotNull(expected)) {
+            assertTrue("Expected path " + p + " not found, got " + actual, checkNotNull(actual)
+                .contains(p));
+        }
+        assertEquals("Result set size is different", expected.size(),
+                actual.size());
     }
 
     protected void setTraversalEnabled(boolean traversalEnabled) {
