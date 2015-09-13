@@ -16,12 +16,13 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.property;
 
-import static javax.jcr.query.Query.JCR_SQL2;
 import static org.apache.jackrabbit.oak.query.QueryEngineImpl.ForceOptimised.OPTIMISED;
 
 import org.junit.Before;
-import org.junit.Test;
 
+/**
+ * should be executing the {@link MultiPropertyOrTest} by forcing the optimisation in place.
+ */
 public class MultiPropertyOrTestOptimisation extends MultiPropertyOrTest {
     
     @Override
@@ -30,11 +31,5 @@ public class MultiPropertyOrTestOptimisation extends MultiPropertyOrTest {
         super.before();
         setForceOptimised(OPTIMISED);
         setTraversalEnabled(false);
-    }
-    
-    @Test
-    public void justARunner() {
-        executeQuery("select * from [nt:base] where [x] = 'foo' OR [y] = 'foo'", JCR_SQL2);
-        executeQuery("select * from [nt:base] where [x] = 'foo' OR [y] = 'foo' or [z] = 'foo'", JCR_SQL2);
-    }
+    }    
 }
