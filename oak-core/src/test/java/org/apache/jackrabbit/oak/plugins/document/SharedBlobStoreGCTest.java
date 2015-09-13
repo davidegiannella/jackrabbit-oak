@@ -155,6 +155,7 @@ public class SharedBlobStoreGCTest {
         for (GarbageCollectionRepoStats stat : statsList) {
             observedNumBlobs.add(stat.getNumLines());
             observedRepoIds.add(stat.getRepositoryId());
+            Assert.assertTrue(stat.getStartTime() <= stat.getEndTime());
         }
     
         Assert.assertTrue(Sets.difference(actualNumBlobs, observedNumBlobs).isEmpty());
@@ -201,6 +202,8 @@ public class SharedBlobStoreGCTest {
         DataStoreUtils.cleanup(cluster1.getDataStore(), cluster1.getDate());
         FileUtils.cleanDirectory((new File(DataStoreUtils.getHomeDir())).getParentFile());
         DataStoreUtils.time = -1;
+        cluster1.getDocumentNodeStore().dispose();
+        cluster2.getDocumentNodeStore().dispose();
     }
 
     class Cluster {
@@ -295,6 +298,10 @@ public class SharedBlobStoreGCTest {
 
         public Date getDate() {
             return startDate;
+        }
+        
+        public DocumentNodeStore getDocumentNodeStore() {
+            return ds;
         }
     }
 }
