@@ -142,7 +142,6 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         .with(new QueryEngineSettings() {
             @Override
             public boolean isSql2Optimisation() {
-                // TODO Auto-generated method stub
                 return true;
             }
         })
