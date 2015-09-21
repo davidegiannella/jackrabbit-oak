@@ -189,14 +189,16 @@ public abstract class QueryEngineImpl implements QueryEngine {
         
         queries.add(q);
         
-        if (q.isInternal()) {
-            LOG.trace("Skipping optimisation as internal query.");
-        } else {
-            LOG.trace("Attempting optimisation");
-            Query q2 = q.optimise();
-            if (q2 != q) {
-                LOG.debug("Optimised query available. {}", q2);
-                queries.add(q2);
+        if (settings.isSql2Optimisation()) {
+            if (q.isInternal()) {
+                LOG.trace("Skipping optimisation as internal query.");
+            } else {
+                LOG.trace("Attempting optimisation");
+                Query q2 = q.optimise();
+                if (q2 != q) {
+                    LOG.debug("Optimised query available. {}", q2);
+                    queries.add(q2);
+                }
             }
         }
         

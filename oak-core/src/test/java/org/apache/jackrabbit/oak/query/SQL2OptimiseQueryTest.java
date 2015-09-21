@@ -139,6 +139,13 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         return new Oak()
         .with(new OpenSecurityProvider())
         .with(new InitialContent())
+        .with(new QueryEngineSettings() {
+            @Override
+            public boolean isSql2Optimisation() {
+                // TODO Auto-generated method stub
+                return true;
+            }
+        })
         .createContentRepository();
     }
 }
