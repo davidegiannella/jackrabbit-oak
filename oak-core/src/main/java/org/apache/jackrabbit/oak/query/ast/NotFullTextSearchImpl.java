@@ -16,10 +16,21 @@
  */
 package org.apache.jackrabbit.oak.query.ast;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import java.util.Set;
+
+import javax.annotation.Nonnull;
+
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
 
+import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableSet;
+
 public class NotFullTextSearchImpl extends FullTextSearchImpl {
+    private static final Set<String> KEYWORDS = ImmutableSet.of("or");
+    private static final Splitter SPACE_SPLITTER = Splitter.on(' ').omitEmptyStrings().trimResults();
 
     public NotFullTextSearchImpl(String selectorName, String propertyName,
                                  StaticOperandImpl fullTextSearchExpression) {
@@ -32,9 +43,22 @@ public class NotFullTextSearchImpl extends FullTextSearchImpl {
     
     @Override
     String getRawText(PropertyValue v) {
-        return "-" + super.getRawText(v);
+        Iterable<String> terms = SPACE_SPLITTER.split(super.getRawText(v));
+        StringBuffer raw = new StringBuffer();
+        for (String term : terms) {
+            if (isKeyword(term)) {
+                raw.append(String.format("%s ", term));
+            } else {
+                raw.append(String.format("-%s ", term));
+            }
+        }
+        return raw.toString().trim();
     }
 
+    private boolean isKeyword(@Nonnull String term) {
+        return KEYWORDS.contains(checkNotNull(term).toLowerCase());
+    }
+    
     @Override
     void restrictPropertyOnFilter(String propertyName, FilterImpl f) {
         // Intentionally left empty. A NOT CONTAINS() can be valid if the property is actually not
