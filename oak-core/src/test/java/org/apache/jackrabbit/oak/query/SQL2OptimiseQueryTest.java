@@ -48,20 +48,49 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
 
     @Test
     public void orToUnions() throws RepositoryException, CommitFailedException {
-        Tree test;
+        Tree test, t;
         List<String> original, optimised, cheapest, expected;
+        String statement;
         
         test = root.getTree("/").addChild("test");
         test.setProperty(JCR_PRIMARYTYPE, NT_OAK_UNSTRUCTURED, NAME);
-        addChildWithProperty(test, "a", "p", "a");
-        addChildWithProperty(test, "b", "p", "b");
+        t = addChildWithProperty(test, "a", "p", "a");
+        t.setProperty("p1", "a1");
+        t = addChildWithProperty(test, "b", "p", "b");
+        t.setProperty("p1", "b1");
+        addChildWithProperty(test, "c", "p", "c");
+        addChildWithProperty(test, "d", "p", "d");
+        addChildWithProperty(test, "e", "p", "e");
         root.commit();
         
-        String statement = String.format("SELECT * FROM [%s] WHERE p = 'a' OR p = 'b'",
+        statement = String.format("SELECT * FROM [%s] WHERE p = 'a' OR p = 'b'",
             NT_OAK_UNSTRUCTURED);
-
-        setForceOptimised(ORIGINAL);
         expected = of("/test/a", "/test/b");
+        setForceOptimised(ORIGINAL);
+        original = executeQuery(statement, JCR_SQL2, true);
+        setForceOptimised(OPTIMISED);
+        optimised = executeQuery(statement, JCR_SQL2, true);
+        setForceOptimised(CHEAPEST);
+        cheapest = executeQuery(statement, JCR_SQL2, true);
+        assertOrToUnionResults(expected, original, optimised, cheapest);
+        
+        statement = String.format(
+            "SELECT * FROM [%s] WHERE p = 'a' OR p = 'b' OR p = 'c' OR p = 'd' OR p = 'e' ",
+            NT_OAK_UNSTRUCTURED);
+        expected = of("/test/a", "/test/b", "/test/c", "/test/d", "/test/e");
+        setForceOptimised(ORIGINAL);
+        original = executeQuery(statement, JCR_SQL2, true);
+        setForceOptimised(OPTIMISED);
+        optimised = executeQuery(statement, JCR_SQL2, true);
+        setForceOptimised(CHEAPEST);
+        cheapest = executeQuery(statement, JCR_SQL2, true);
+        assertOrToUnionResults(expected, original, optimised, cheapest);
+
+        statement = String.format(
+            "SELECT * FROM [%s] WHERE (p = 'a' OR p = 'b') AND (p1 = 'a1' OR p1 = 'b1')",
+            NT_OAK_UNSTRUCTURED);
+        expected = of("/test/a", "/test/b");
+        setForceOptimised(ORIGINAL);
         original = executeQuery(statement, JCR_SQL2, true);
         setForceOptimised(OPTIMISED);
         optimised = executeQuery(statement, JCR_SQL2, true);

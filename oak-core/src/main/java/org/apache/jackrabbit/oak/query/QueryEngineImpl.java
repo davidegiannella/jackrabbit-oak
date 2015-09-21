@@ -395,6 +395,16 @@ public abstract class QueryEngineImpl implements QueryEngine {
             }
         }
         
+        if (map == null) {
+            // we should only get here in case of testing forcing weird conditions
+            LOG.trace("`MdcAndPrepared` is null. Falling back to the original query");
+            for (Query q  : checkNotNull(queries)) {
+                if (!q.isOptimised()) {
+                    map = new MdcAndPrepared(setupMDC(q), q);
+                }
+            }
+        }
+        
         return map;
     }
     
