@@ -84,8 +84,6 @@ import org.apache.jackrabbit.oak.plugins.blob.MarkSweepGarbageCollector;
 import org.apache.jackrabbit.oak.plugins.blob.ReferencedBlob;
 import org.apache.jackrabbit.oak.plugins.document.Checkpoints.Info;
 import org.apache.jackrabbit.oak.plugins.document.cache.CacheInvalidationStats;
-import org.apache.jackrabbit.oak.plugins.document.mongo.MongoBlobReferenceIterator;
-import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
 import org.apache.jackrabbit.oak.plugins.document.persistentCache.PersistentCache;
 import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.commons.json.JsopStream;
@@ -400,6 +398,8 @@ public final class DocumentNodeStore
     private final VersionGarbageCollector versionGarbageCollector;
 
     private final JournalGarbageCollector journalGarbageCollector;
+
+    private final Iterable<ReferencedBlob> referencedBlobs;
     
     private final Executor executor;
 
@@ -439,6 +439,9 @@ public final class DocumentNodeStore
         }
         if (builder.getLeaseCheck()) {
             s = new LeaseCheckDocumentStoreWrapper(s, clusterNodeInfo);
+            if (clusterNodeInfo!=null) {
+                clusterNodeInfo.setLeaseFailureHandler(builder.getLeaseFailureHandler());
+            }
         }
         this.store = s;
         this.clusterId = cid;
@@ -448,6 +451,7 @@ public final class DocumentNodeStore
         this.versionGarbageCollector = new VersionGarbageCollector(
                 this, builder.createVersionGCSupport());
         this.journalGarbageCollector = new JournalGarbageCollector(this);
+        this.referencedBlobs = builder.createReferencedBlobs(this);
         this.lastRevRecoveryAgent = new LastRevRecoveryAgent(this);
         this.disableBranches = builder.isDisableBranches();
         this.missing = new DocumentNodeState(this, "MISSING", new Revision(0, 0, 0)) {
@@ -530,6 +534,10 @@ public final class DocumentNodeStore
                     new BackgroundLeaseUpdate(this, isDisposed),
                     "DocumentNodeStore lease update thread " + threadNamePostfix);
             leaseUpdateThread.setDaemon(true);
+            // OAK-3398 : make lease updating more robust by ensuring it
+            // has higher likelihood of succeeding than other threads
+            // on a very busy machine - so as to prevent lease timeout.
+            leaseUpdateThread.setPriority(Thread.MAX_PRIORITY);
             leaseUpdateThread.start();
         }
 
@@ -566,7 +574,17 @@ public final class DocumentNodeStore
 
         // do a final round of background operations after
         // the background thread stopped
-        internalRunBackgroundUpdateOperations();
+        try{
+            internalRunBackgroundUpdateOperations();
+        } catch(AssertionError ae) {
+            // OAK-3250 : when a lease check fails, subsequent modifying requests
+            // to the DocumentStore will throw an AssertionError. Since as a result
+            // of a failing lease check a bundle.stop is done and thus a dispose of the
+            // DocumentNodeStore happens, it is very likely that in that case 
+            // you run into an AssertionError. We should still continue with disposing
+            // though - thus catching and logging..
+            LOG.error("dispose: an AssertionError happened during dispose's last background ops: "+ae, ae);
+        }
 
         if (leaseUpdateThread != null) {
             try {
@@ -2688,10 +2706,7 @@ public final class DocumentNodeStore
      * @return an iterator for all the blobs
      */
     public Iterator<ReferencedBlob> getReferencedBlobsIterator() {
-        if(store instanceof MongoDocumentStore){
-            return new MongoBlobReferenceIterator(this, (MongoDocumentStore) store);
-        }
-        return new BlobReferenceIterator(this);
+        return referencedBlobs.iterator();
     }
 
     public DiffCache getDiffCache() {
