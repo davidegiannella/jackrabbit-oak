@@ -97,6 +97,18 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         setForceOptimised(CHEAPEST);
         cheapest = executeQuery(statement, JCR_SQL2, true);
         assertOrToUnionResults(expected, original, optimised, cheapest);
+
+        statement = String.format(
+            "SELECT * FROM [%s] WHERE (p = 'a' AND p1 = 'a1') OR (p = 'b' AND p1 = 'b1')",
+            NT_OAK_UNSTRUCTURED);
+        expected = of("/test/a", "/test/b");
+        setForceOptimised(ORIGINAL);
+        original = executeQuery(statement, JCR_SQL2, true);
+        setForceOptimised(OPTIMISED);
+        optimised = executeQuery(statement, JCR_SQL2, true);
+        setForceOptimised(CHEAPEST);
+        cheapest = executeQuery(statement, JCR_SQL2, true);
+        assertOrToUnionResults(expected, original, optimised, cheapest);
     }
     
     private static void assertOrToUnionResults(@Nonnull List<String> expected, 
