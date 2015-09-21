@@ -538,17 +538,17 @@ public class LuceneIndexQueryTest extends AbstractQueryTest {
 
         root.commit();
 
-//        assertQuery(
-//            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND CONTAINS(foo, 'bar')",
-//            of("/test/a", "/test/d"));
-//
-//        assertQuery(
-//            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND NOT CONTAINS(foo, 'bar')",
-//            of("/test/b", "/test/c"));
+        assertQuery(
+            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND CONTAINS(foo, 'bar')",
+            of("/test/a", "/test/d"));
 
-//        assertQuery(
-//            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND CONTAINS(foo, 'bar OR cat')",
-//            of("/test/d"));
+        assertQuery(
+            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND NOT CONTAINS(foo, 'bar')",
+            of("/test/b", "/test/c"));
+
+        assertQuery(
+            "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND CONTAINS(foo, 'bar OR cat')",
+            of("/test/d"));
 
         assertQuery(
             "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND NOT CONTAINS(foo, 'bar cat')",
