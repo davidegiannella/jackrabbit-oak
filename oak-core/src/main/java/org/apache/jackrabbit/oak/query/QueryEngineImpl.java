@@ -202,54 +202,16 @@ public abstract class QueryEngineImpl implements QueryEngine {
             }
         }
         
-//        // initialising all the queries.
-//        for (Query query : queries) {
-//            try {
-//                query.init();
-//            } catch (Exception e) {
-//                ParseException e2 = new ParseException(query.getStatement() + ": " + e.getMessage(), 0);
-//                e2.initCause(e);
-//                throw e2;
-//            }
-//        }
-        
-        // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-        //                              HACK - REMOVE ME! (OAK-1617)        
-        // as of the statefulness of the QueryEngine, there are more errors if we initialise first
-        // the original query and then the optimised one.
-        // Forcing therefore to initialise first the original and then the optimised to catch as much
-        // errors as possible
-        
-        // working on a copy of the Set for not messing up with the original.
-        // initialising the non-optimised first.
+        // initialising all the queries.
         for (Query query : queries) {
-            if (!query.isOptimised()) {
-                try {
-                    query.init();
-                } catch (Exception e) {
-                    ParseException e2 = new ParseException(query.getStatement() + ": "
-                                                           + e.getMessage(), 0);
-                    e2.initCause(e);
-                    throw e2;
-                }
+            try {
+                query.init();
+            } catch (Exception e) {
+                ParseException e2 = new ParseException(query.getStatement() + ": " + e.getMessage(), 0);
+                e2.initCause(e);
+                throw e2;
             }
         }
-        
-        // initialising the rest
-        for (Query query : queries) {
-            if (!query.isInit()) {
-                try {
-                    query.init();
-                } catch (Exception e) {
-                    ParseException e2 = new ParseException(
-                        query.getStatement() + ": " + e.getMessage(), 0);
-                    e2.initCause(e);
-                    throw e2;
-                }
-            }
-        }
-        //                              HACK - REMOVE ME! (OAK-1617)
-        // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
         return queries;
     }
