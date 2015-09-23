@@ -674,8 +674,16 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
             Query q = qs.get(0);
             if (q instanceof BooleanQuery) {
                 BooleanQuery ibq = (BooleanQuery) q;
-                if ((ibq.getClauses().length == 1) &&
-                        (ibq.getClauses()[0].getOccur() == BooleanClause.Occur.MUST_NOT)) {
+                boolean onlyNotClauses = true;
+                for (BooleanClause c : ibq.getClauses()) {
+                    if (c.getOccur() != BooleanClause.Occur.MUST_NOT) {
+                        onlyNotClauses = false;
+                        break;
+                    }
+                }
+                if (onlyNotClauses) {
+                    // if we have only NOT CLAUSES we have to add a match all docs (*.*) for the
+                    // query to work
                     ibq.add(new MatchAllDocsQuery(), BooleanClause.Occur.SHOULD);
                 }
             }
@@ -683,24 +691,37 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
         }
         BooleanQuery bq = new BooleanQuery();
         for (Query q : qs) {
-             /* Only unwrap the clause if MUST_NOT(x) i.e. if there is boolean query
-             * with single MUST_NOT clause then extract it and pace it in outer clause*/
-            boolean wasMustNot = false;
+            boolean unwrapped = false;
             if (q instanceof BooleanQuery) {
-                BooleanQuery ibq = (BooleanQuery) q;
-                for (BooleanClause bc : ibq.getClauses()) {
-                    if (bc.getOccur() == BooleanClause.Occur.MUST_NOT) {
-                        bq.add(bc);
-                        wasMustNot = true;
-                    }
-                }
+                unwrapped = unwrapMustNot((BooleanQuery) q, bq);
             }
 
-            if (!wasMustNot) {
+            if (!unwrapped) {
                 bq.add(q, MUST);                
             }
         }
         return new LuceneRequestFacade<Query>(bq);
+    }
+
+    /**
+     * unwraps any NOT clauses from the provided boolean query into another boolean query.
+     * 
+     * @param input the query to be analysed for the existence of NOT clauses. Cannot be null.
+     * @param output the query where the unwrapped NOTs will be saved into. Cannot be null.
+     * @return true if there where at least one unwrapped NOT. false otherwise.
+     */
+    private static boolean unwrapMustNot(@Nonnull BooleanQuery input, @Nonnull BooleanQuery output) {
+        checkNotNull(input);
+        checkNotNull(output);
+        boolean unwrapped = false;
+        for (BooleanClause bc : input.getClauses()) {
+            if (bc.getOccur() == BooleanClause.Occur.MUST_NOT) {
+                output.add(bc);
+                unwrapped = true;
+            }
+        }
+        
+        return unwrapped;
     }
     
     private CustomScoreQuery getCustomScoreQuery(IndexPlan plan, Query subQuery) {

@@ -16,6 +16,7 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.lucene;
 
+import static com.google.common.collect.ImmutableList.of;
 import static com.google.common.collect.Lists.newArrayList;
 import static org.apache.jackrabbit.JcrConstants.JCR_CONTENT;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
@@ -25,7 +26,6 @@ import static org.apache.jackrabbit.JcrConstants.JCR_DATA;
 
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.List;
 
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
@@ -51,7 +51,6 @@ import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 
 public class LuceneIndexAggregationTest extends AbstractQueryTest {
 
@@ -438,30 +437,34 @@ public class LuceneIndexAggregationTest extends AbstractQueryTest {
 
     private void oak3371() throws CommitFailedException {
         setTraversalEnabled(false);
-        List<String> contains = newArrayList(), notContains = newArrayList();
         Tree test, t;
         
         test = root.getTree("/").addChild("test");
         t = test.addChild("a");
         t.setProperty(JCR_PRIMARYTYPE, NT_FOLDER, Type.NAME);
         t.setProperty("foo", "bar");
-        contains.add(t.getPath());
         t = test.addChild("b");
         t.setProperty(JCR_PRIMARYTYPE, NT_FOLDER, Type.NAME);
         t.setProperty("foo", "cat");
-        notContains.add(t.getPath());
         t = test.addChild("c");
         t.setProperty(JCR_PRIMARYTYPE, NT_FOLDER, Type.NAME);
-        notContains.add(t.getPath());
+        t = test.addChild("d");
+        t.setProperty(JCR_PRIMARYTYPE, NT_FOLDER, Type.NAME);
+        t.setProperty("foo", "bar cat");
         root.commit();
         
         assertQuery(
             "SELECT * FROM [nt:folder] WHERE ISDESCENDANTNODE('/test') AND CONTAINS(foo, 'bar')",
-            contains);
-
+            of("/test/a", "/test/d"));
         assertQuery(
             "SELECT * FROM [nt:folder] WHERE ISDESCENDANTNODE('/test') AND NOT CONTAINS(foo, 'bar')",
-            notContains);
+            of("/test/b", "/test/c"));
+        assertQuery(
+            "SELECT * FROM [nt:folder] WHERE ISDESCENDANTNODE('/test') AND CONTAINS(foo, 'bar cat')",
+            of("/test/d"));
+        assertQuery(
+            "SELECT * FROM [nt:folder] WHERE ISDESCENDANTNODE('/test') AND NOT CONTAINS(foo, 'bar cat')",
+            of("/test/c"));
 
         setTraversalEnabled(true);
     }
