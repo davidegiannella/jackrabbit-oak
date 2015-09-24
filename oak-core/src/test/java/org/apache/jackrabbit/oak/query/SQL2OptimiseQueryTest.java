@@ -20,14 +20,19 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableList.of;
 import static javax.jcr.query.Query.JCR_SQL2;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
+import static org.apache.jackrabbit.JcrConstants.JCR_SYSTEM;
 import static org.apache.jackrabbit.oak.api.Type.NAME;
+import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.NT_OAK_UNSTRUCTURED;
 import static org.apache.jackrabbit.oak.query.QueryEngineImpl.ForceOptimised.CHEAPEST;
 import static org.apache.jackrabbit.oak.query.QueryEngineImpl.ForceOptimised.OPTIMISED;
 import static org.apache.jackrabbit.oak.query.QueryEngineImpl.ForceOptimised.ORIGINAL;
 import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertThat;
 
+import java.text.ParseException;
 import java.util.List;
 
 import javax.annotation.Nonnull;
@@ -36,16 +41,37 @@ import javax.jcr.RepositoryException;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
+import org.apache.jackrabbit.oak.api.QueryEngine;
 import org.apache.jackrabbit.oak.api.Tree;
+import org.apache.jackrabbit.oak.namepath.LocalNameMapper;
+import org.apache.jackrabbit.oak.namepath.NamePathMapper;
+import org.apache.jackrabbit.oak.namepath.NamePathMapperImpl;
+import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.junit.Test;
 
 /**
  * aim to cover the various aspects of Query.optimise()
  */
 public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
-
+    private NodeStore store;
+    private QueryEngineSettings qeSettings = new QueryEngineSettings() {
+        @Override
+        public boolean isSql2Optimisation() {
+            return true;
+        }
+    };
+    
+    /**
+     * checks the {@code Query#optimise()} calls for the conversion from OR to UNION from a query
+     * POV; ensuring that it returns always the same, expected resultset.
+     * 
+     * @throws RepositoryException
+     * @throws CommitFailedException
+     */
     @Test
     public void orToUnions() throws RepositoryException, CommitFailedException {
         Tree test, t;
@@ -134,17 +160,45 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         return t;
     }
     
+    /**
+     * checks directly what is expected off an {@link Query#optimise()} call.
+     * 
+     * @throws ParseException
+     */
+    @Test
+    public void optimise() throws ParseException {
+        SQL2Parser parser = new SQL2Parser(getMappings(), getTypes(), qeSettings);
+        String statement = 
+            "SELECT * FROM [nt:unstructured] AS c "
+             + "WHERE "
+             + "(c.[p1]='a' OR c.[p2]='b' OR c.[p3]='c') "
+             + "AND "
+             + "ISDESCENDANTNODE(c, '/test') ";
+        Query original, optimised;
+        
+        original = parser.parse(statement, false);
+        assertNotNull(original);
+        optimised = original.optimise();
+        assertNotNull(optimised);
+        assertNotSame(original, optimised);
+    }
+    
+    private NamePathMapper getMappings() {
+        return new NamePathMapperImpl(
+            new LocalNameMapper(root, QueryEngine.NO_MAPPINGS));
+    }
+    
+    private NodeState getTypes() {
+        return store.getRoot().getChildNode(JCR_SYSTEM).getChildNode(JCR_NODE_TYPES);
+    }
+    
     @Override
     protected ContentRepository createRepository() {
-        return new Oak()
+        store = new MemoryNodeStore();
+        return new Oak(store)
         .with(new OpenSecurityProvider())
         .with(new InitialContent())
-        .with(new QueryEngineSettings() {
-            @Override
-            public boolean isSql2Optimisation() {
-                return true;
-            }
-        })
+        .with(qeSettings)
         .createContentRepository();
     }
 }
