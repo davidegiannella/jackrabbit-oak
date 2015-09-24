@@ -34,6 +34,8 @@ import org.apache.jackrabbit.oak.query.fulltext.FullTextAnd;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
 
+import com.google.common.collect.Sets;
+
 /**
  * An AND condition.
  */
@@ -205,6 +207,15 @@ public class AndImpl extends ConstraintImpl {
             clone.add((ConstraintImpl) copyElementAndCheckReference(c));
         }
         return new AndImpl(clone);
+    }
+
+    @Override
+    public Set<ConstraintImpl> simplifyForUnion() {
+        Set<ConstraintImpl> cc = Sets.newHashSet();
+        for (ConstraintImpl c : getConstraints()) {
+            cc.addAll(c.simplifyForUnion());
+        }
+        return cc;
     }
 
 }

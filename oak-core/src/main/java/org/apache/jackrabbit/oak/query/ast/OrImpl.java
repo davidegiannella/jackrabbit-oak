@@ -39,6 +39,7 @@ import org.apache.jackrabbit.oak.query.fulltext.FullTextOr;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 
 /**
  * An "or" condition.
@@ -351,5 +352,15 @@ public class OrImpl extends ConstraintImpl {
             clone.add((ConstraintImpl) copyElementAndCheckReference(c));
         }
         return new OrImpl(clone);
+    }
+
+    @Override
+    public Set<ConstraintImpl> simplifyForUnion() {
+        Set<ConstraintImpl> cc = Sets.newHashSet();
+        for (ConstraintImpl c : getConstraints()) {
+            Set<ConstraintImpl> ccc = c.simplifyForUnion();
+            if (ccc.isEmpty())
+        }
+        return cc;
     }
 }

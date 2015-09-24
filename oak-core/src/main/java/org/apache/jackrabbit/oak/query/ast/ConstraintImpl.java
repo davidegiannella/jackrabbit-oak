@@ -16,13 +16,19 @@
  */
 package org.apache.jackrabbit.oak.query.ast;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
+
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 
 /**
  * The base class for constraints.
@@ -147,5 +153,10 @@ public abstract class ConstraintImpl extends AstElement {
     @Nullable
     public List<ConstraintImpl> getConstraints() {
         return null;
+    }
+    
+    @Nonnull
+    public Set<ConstraintImpl> simplifyForUnion() {
+        return Collections.emptySet();
     }
 }
