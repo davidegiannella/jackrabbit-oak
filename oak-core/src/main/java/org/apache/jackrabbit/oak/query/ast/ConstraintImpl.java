@@ -16,7 +16,6 @@
  */
 package org.apache.jackrabbit.oak.query.ast;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -26,9 +25,6 @@ import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
-
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 
 /**
  * The base class for constraints.
@@ -133,16 +129,6 @@ public abstract class ConstraintImpl extends AstElement {
     @Override
     public int hashCode() {
         return toString().hashCode();
-    }
-
-    /**
-     * Tells whether the current constraint can be optimised as union query or not. The base
-     * implementation {@link ConstraintImpl#isUnion()} always return false.
-     * 
-     * @return {@code true} if can be converted to union, {@code false} otherwise.
-     */
-    public boolean isUnion() {
-        return false;
     }
     
     /**

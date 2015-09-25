@@ -38,7 +38,6 @@ import org.apache.jackrabbit.oak.query.fulltext.FullTextExpression;
 import org.apache.jackrabbit.oak.query.fulltext.FullTextOr;
 import org.apache.jackrabbit.oak.query.index.FilterImpl;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 
 /**
@@ -338,11 +337,6 @@ public class OrImpl extends ConstraintImpl {
     @Override
     public int hashCode() {
         return constraints.hashCode();
-    }
-
-    @Override
-    public boolean isUnion() {
-        return true;
     }
 
     @Override
