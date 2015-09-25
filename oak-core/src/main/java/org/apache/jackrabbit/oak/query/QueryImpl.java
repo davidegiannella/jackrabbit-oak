@@ -138,7 +138,7 @@ public class QueryImpl implements Query {
     };
 
     SourceImpl source;
-    final String statement;
+    private String statement;
     final HashMap<String, PropertyValue> bindVariableMap = new HashMap<String, PropertyValue>();
     final HashMap<String, Integer> selectorIndexes = new HashMap<String, Integer>();
     final ArrayList<SelectorImpl> selectors = new ArrayList<SelectorImpl>();
@@ -1223,7 +1223,9 @@ public class QueryImpl implements Query {
                     left = (QueryImpl) this.copyOf(true);
                     
                     // cloning the constraints and assigning to new query
-                    left.constraint = (ConstraintImpl) copyElementAndCheckReference(c);                     
+                    left.constraint = (ConstraintImpl) copyElementAndCheckReference(c);
+                    // re-composing the statement for better debug messages
+                    left.statement = recomposeStatement(left);
                 }
                 
                 optimised = newOptimisedUnionQuery(left, right);
@@ -1231,6 +1233,27 @@ public class QueryImpl implements Query {
         }
         
         return optimised;
+    }
+    
+    private static String recomposeStatement(@Nonnull QueryImpl query) {
+        checkNotNull(query);
+        String original = query.getStatement();
+        String origUpper = original.toUpperCase();
+        StringBuilder recomputed = new StringBuilder();
+        final String where = " WHERE ";
+        final String orderBy = " ORDER BY ";
+        int whereOffset = where.length();
+        
+        if (query.getConstraint() == null) {
+            recomputed.append(original);
+        } else {
+            recomputed.append(original.substring(0, origUpper.indexOf(where) + whereOffset));
+            recomputed.append(query.getConstraint());
+            if (origUpper.indexOf(orderBy) > -1) {
+                recomputed.append(original.substring(origUpper.indexOf(orderBy)));
+            }
+        }
+        return recomputed.toString();
     }
     
     /**
