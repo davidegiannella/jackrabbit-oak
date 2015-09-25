@@ -31,6 +31,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 import java.text.ParseException;
 import java.util.List;
@@ -84,14 +85,18 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         t.setProperty("p1", "a1");
         t = addChildWithProperty(test, "b", "p", "b");
         t.setProperty("p1", "b1");
-        addChildWithProperty(test, "c", "p", "c");
+        t.setProperty("p2", "a");
+        t = addChildWithProperty(test, "c", "p", "c");
+        t.setProperty("p3", "a");
         addChildWithProperty(test, "d", "p", "d");
         addChildWithProperty(test, "e", "p", "e");
+        test = root.getTree("/").addChild("test2");
+        addChildWithProperty(test, "a", "p", "a");
         root.commit();
         
         statement = String.format("SELECT * FROM [%s] WHERE p = 'a' OR p = 'b'",
             NT_OAK_UNSTRUCTURED);
-        expected = of("/test/a", "/test/b");
+        expected = of("/test/a", "/test/b", "/test2/a");
         setForceOptimised(ORIGINAL);
         original = executeQuery(statement, JCR_SQL2, true);
         setForceOptimised(OPTIMISED);
@@ -103,7 +108,7 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         statement = String.format(
             "SELECT * FROM [%s] WHERE p = 'a' OR p = 'b' OR p = 'c' OR p = 'd' OR p = 'e' ",
             NT_OAK_UNSTRUCTURED);
-        expected = of("/test/a", "/test/b", "/test/c", "/test/d", "/test/e");
+        expected = of("/test/a", "/test/b", "/test/c", "/test/d", "/test/e", "/test2/a");
         setForceOptimised(ORIGINAL);
         original = executeQuery(statement, JCR_SQL2, true);
         setForceOptimised(OPTIMISED);
@@ -135,6 +140,21 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         setForceOptimised(CHEAPEST);
         cheapest = executeQuery(statement, JCR_SQL2, true);
         assertOrToUnionResults(expected, original, optimised, cheapest);
+        
+//        statement = "SELECT * FROM [nt:unstructured] AS c "
+//            + "WHERE ( c.[p] = 'a' "
+//            + "OR c.[p2] = 'a' " 
+//            + "OR c.[p3] = 'a') " 
+//            + "AND ISDESCENDANTNODE(c, '/test') "
+//            + "ORDER BY added DESC";
+//        expected = of("/test/a", "/test/b", "/test/c");
+//        setForceOptimised(ORIGINAL);
+//        original = executeQuery(statement, JCR_SQL2, true);
+//        setForceOptimised(OPTIMISED);
+//        optimised = executeQuery(statement, JCR_SQL2, true);
+//        setForceOptimised(CHEAPEST);
+//        cheapest = executeQuery(statement, JCR_SQL2, true);
+//        assertOrToUnionResults(expected, original, optimised, cheapest);
     }
     
     private static void assertOrToUnionResults(@Nonnull List<String> expected, 
@@ -161,7 +181,7 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
     }
     
     /**
-     * checks directly what is expected off an {@link Query#optimise()} call.
+     * ensure that an optimisation is available for the provided queries.
      * 
      * @throws ParseException
      */
@@ -171,7 +191,6 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         String statement;
         Query original, optimised;
 
-        
         statement = 
             "SELECT * FROM [nt:unstructured] AS c "
                 + "WHERE "
@@ -181,31 +200,31 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         optimised = original.optimise();
         assertNotNull(optimised);
         assertNotSame(original, optimised);
+        assertTrue(optimised instanceof UnionQueryImpl);
 
+        statement = 
+            "SELECT * FROM [nt:unstructured] AS c "
+                + "WHERE "
+                + "(c.[p1]='a' OR c.[p2]='b') "
+                + "AND "
+                + "ISDESCENDANTNODE(c, '/test') ";
+        original = parser.parse(statement, false);
+        assertNotNull(original);
+        optimised = original.optimise();
+        assertNotNull(optimised);
+        assertNotSame(original, optimised);
         
-//        statement = 
-//            "SELECT * FROM [nt:unstructured] AS c "
-//                + "WHERE "
-//                + "(c.[p1]='a' OR c.[p2]='b') "
-//                + "AND "
-//                + "ISDESCENDANTNODE(c, '/test') ";
-//        original = parser.parse(statement, false);
-//        assertNotNull(original);
-//        optimised = original.optimise();
-//        assertNotNull(optimised);
-//        assertNotSame(original, optimised);
-        
-//        statement = 
-//            "SELECT * FROM [nt:unstructured] AS c "
-//                + "WHERE "
-//                + "(c.[p1]='a' OR c.[p2]='b' OR c.[p3]='c') "
-//                + "AND "
-//                + "ISDESCENDANTNODE(c, '/test') ";
-//        original = parser.parse(statement, false);
-//        assertNotNull(original);
-//        optimised = original.optimise();
-//        assertNotNull(optimised);
-//        assertNotSame(original, optimised);
+        statement = 
+            "SELECT * FROM [nt:unstructured] AS c "
+                + "WHERE "
+                + "(c.[p1]='a' OR c.[p2]='b' OR c.[p3]='c') "
+                + "AND "
+                + "ISDESCENDANTNODE(c, '/test') ";
+        original = parser.parse(statement, false);
+        assertNotNull(original);
+        optimised = original.optimise();
+        assertNotNull(optimised);
+        assertNotSame(original, optimised);
     }
     
     private NamePathMapper getMappings() {
