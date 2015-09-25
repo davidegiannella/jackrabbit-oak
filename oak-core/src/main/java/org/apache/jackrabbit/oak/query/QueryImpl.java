@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.AbstractIterator;
@@ -1205,7 +1204,6 @@ public class QueryImpl implements Query {
         Query optimised = this;
         
         if (constraint != null) {
-//            List<ConstraintImpl> unionList = addToUnionList(constraint, null);
             Set<ConstraintImpl> unionList = constraint.simplifyForUnion();
             if (!unionList.isEmpty()) {
                 QueryImpl left = null;
@@ -1249,38 +1247,6 @@ public class QueryImpl implements Query {
         return u;
     }
     
-    /**
-     * parse the provided {@link ConstraintImpl} and will add it to the provided {@code unionList}.
-     * if {@code unionList} is null an empty one will be created.
-     * 
-     * @param constraint the constraint to analyse. Cannot be null.
-     * @param unionList the list to which adding the constraints for the union.
-     * @return a list with all the union constraints. An empty one if no constraint could have been
-     *         converted to union.
-     */
-    @Nonnull
-    private static List<ConstraintImpl> addToUnionList(@Nonnull ConstraintImpl constraint,
-                                                       @Nullable List<ConstraintImpl> unionList) {
-        checkNotNull(constraint);
-        List<ConstraintImpl> u = unionList;
-        
-        if (u == null) {
-            u = newArrayList();
-        }
-        
-        if (constraint.isUnion() && constraint.getConstraints() != null) {
-            for (ConstraintImpl c : constraint.getConstraints()) {
-                if (c.isUnion()) {
-                    u = addToUnionList(c, u);
-                } else {
-                    u.add(c);
-                }
-            }
-        }
-        
-        return u;
-    }
-
     @Override
     public Query copyOf() throws IllegalStateException {
         return copyOf(false);
