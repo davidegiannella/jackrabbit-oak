@@ -1205,7 +1205,8 @@ public class QueryImpl implements Query {
         Query optimised = this;
         
         if (constraint != null) {
-            List<ConstraintImpl> unionList = addToUnionList(constraint, null);
+//            List<ConstraintImpl> unionList = addToUnionList(constraint, null);
+            Set<ConstraintImpl> unionList = constraint.simplifyForUnion();
             if (!unionList.isEmpty()) {
                 QueryImpl left = null;
                 Query right = null;

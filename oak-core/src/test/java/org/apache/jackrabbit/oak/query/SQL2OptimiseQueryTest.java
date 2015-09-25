@@ -170,18 +170,30 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         SQL2Parser parser = new SQL2Parser(getMappings(), getTypes(), qeSettings);
         String statement;
         Query original, optimised;
+
         
         statement = 
             "SELECT * FROM [nt:unstructured] AS c "
                 + "WHERE "
-                + "(c.[p1]='a' OR c.[p2]='b') "
-                + "AND "
-                + "ISDESCENDANTNODE(c, '/test') ";
+                + "(c.[p1]='a' OR c.[p2]='b') ";
         original = parser.parse(statement, false);
         assertNotNull(original);
         optimised = original.optimise();
         assertNotNull(optimised);
         assertNotSame(original, optimised);
+
+        
+//        statement = 
+//            "SELECT * FROM [nt:unstructured] AS c "
+//                + "WHERE "
+//                + "(c.[p1]='a' OR c.[p2]='b') "
+//                + "AND "
+//                + "ISDESCENDANTNODE(c, '/test') ";
+//        original = parser.parse(statement, false);
+//        assertNotNull(original);
+//        optimised = original.optimise();
+//        assertNotNull(optimised);
+//        assertNotSame(original, optimised);
         
 //        statement = 
 //            "SELECT * FROM [nt:unstructured] AS c "
