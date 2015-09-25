@@ -141,20 +141,20 @@ public class SQL2OptimiseQueryTest extends  AbstractQueryTest {
         cheapest = executeQuery(statement, JCR_SQL2, true);
         assertOrToUnionResults(expected, original, optimised, cheapest);
         
-//        statement = "SELECT * FROM [nt:unstructured] AS c "
-//            + "WHERE ( c.[p] = 'a' "
-//            + "OR c.[p2] = 'a' " 
-//            + "OR c.[p3] = 'a') " 
-//            + "AND ISDESCENDANTNODE(c, '/test') "
-//            + "ORDER BY added DESC";
-//        expected = of("/test/a", "/test/b", "/test/c");
-//        setForceOptimised(ORIGINAL);
-//        original = executeQuery(statement, JCR_SQL2, true);
-//        setForceOptimised(OPTIMISED);
-//        optimised = executeQuery(statement, JCR_SQL2, true);
-//        setForceOptimised(CHEAPEST);
-//        cheapest = executeQuery(statement, JCR_SQL2, true);
-//        assertOrToUnionResults(expected, original, optimised, cheapest);
+        statement = "SELECT * FROM [oak:Unstructured] AS c "
+            + "WHERE ( c.[p] = 'a' "
+            + "OR c.[p2] = 'a' " 
+            + "OR c.[p3] = 'a') " 
+            + "AND ISDESCENDANTNODE(c, '/test') "
+            + "ORDER BY added DESC";
+        expected = of("/test/a", "/test/b", "/test/c");
+        setForceOptimised(ORIGINAL);
+        original = executeQuery(statement, JCR_SQL2, true);
+        setForceOptimised(OPTIMISED);
+        optimised = executeQuery(statement, JCR_SQL2, true);
+        setForceOptimised(CHEAPEST);
+        cheapest = executeQuery(statement, JCR_SQL2, true);
+        assertOrToUnionResults(expected, original, optimised, cheapest);
     }
     
     private static void assertOrToUnionResults(@Nonnull List<String> expected, 
