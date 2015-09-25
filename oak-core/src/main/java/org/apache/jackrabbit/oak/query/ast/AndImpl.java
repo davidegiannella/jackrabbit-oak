@@ -211,11 +211,32 @@ public class AndImpl extends ConstraintImpl {
 
     @Override
     public Set<ConstraintImpl> simplifyForUnion() {
-        Set<ConstraintImpl> cc = Sets.newHashSet();
+        Set<ConstraintImpl> union = Sets.newHashSet();
+        Set<ConstraintImpl> result = Sets.newHashSet();
+        Set<ConstraintImpl> nonUnion = Sets.newHashSet();
+        
         for (ConstraintImpl c : getConstraints()) {
-            cc.addAll(c.simplifyForUnion());
+            Set<ConstraintImpl> ccc = c.simplifyForUnion();
+            if (ccc.isEmpty()) {
+                nonUnion.add(c);
+            } else {
+                union.addAll(ccc);
+            }
         }
-        return cc;
+        if (!union.isEmpty() && nonUnion.size() == 1) {
+            // this is the simplest case where, for example, out of the two AND operands at least
+            // one is a non-union. For example WHERE (a OR b OR c) AND d
+            ConstraintImpl right = nonUnion.iterator().next();
+            for (ConstraintImpl c : union) {
+                result.add(new AndImpl(c, right));
+            }
+        } else {
+            // in this case prefer to be conservative and don't optimise. This could happen when for
+            // example: WHERE (a OR b) AND (c OR d).
+            // This should be translated into a AND c, a AND d, b AND c, b AND d.
+        }
+        
+        return result;
     }
 
 }
