@@ -41,6 +41,7 @@ import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -203,6 +204,7 @@ public final class DocumentNodeStore
     /**
      * The cluster instance info.
      */
+    @Nonnull
     private final ClusterNodeInfo clusterNodeInfo;
 
     /**
@@ -286,8 +288,8 @@ public final class DocumentNodeStore
 
     /**
      * Background thread performing the clusterId lease renew.
-     * Will be {@code null} if {@link #clusterNodeInfo} is {@code null}.
      */
+    @Nonnull
     private Thread leaseUpdateThread;
 
     /**
@@ -426,22 +428,18 @@ public final class DocumentNodeStore
         this.changes = Collection.JOURNAL.newDocument(s);
         this.executor = builder.getExecutor();
         this.clock = builder.getClock();
+
         int cid = builder.getClusterId();
         cid = Integer.getInteger("oak.documentMK.clusterId", cid);
-        if (cid == 0) {
-            clusterNodeInfo = ClusterNodeInfo.getInstance(s);
-            // TODO we should ensure revisions generated from now on
-            // are never "older" than revisions already in the repository for
-            // this cluster id
-            cid = clusterNodeInfo.getId();
-        } else {
-            clusterNodeInfo = null;
-        }
+        clusterNodeInfo = ClusterNodeInfo.getInstance(s, cid);
+        // TODO we should ensure revisions generated from now on
+        // are never "older" than revisions already in the repository for
+        // this cluster id
+        cid = clusterNodeInfo.getId();
+
         if (builder.getLeaseCheck()) {
             s = new LeaseCheckDocumentStoreWrapper(s, clusterNodeInfo);
-            if (clusterNodeInfo!=null) {
-                clusterNodeInfo.setLeaseFailureHandler(builder.getLeaseFailureHandler());
-            }
+            clusterNodeInfo.setLeaseFailureHandler(builder.getLeaseFailureHandler());
         }
         this.store = s;
         this.clusterId = cid;
@@ -529,17 +527,14 @@ public final class DocumentNodeStore
         backgroundReadThread.start();
         backgroundUpdateThread.start();
 
-        if (clusterNodeInfo != null) {
-            leaseUpdateThread = new Thread(
-                    new BackgroundLeaseUpdate(this, isDisposed),
-                    "DocumentNodeStore lease update thread " + threadNamePostfix);
-            leaseUpdateThread.setDaemon(true);
-            // OAK-3398 : make lease updating more robust by ensuring it
-            // has higher likelihood of succeeding than other threads
-            // on a very busy machine - so as to prevent lease timeout.
-            leaseUpdateThread.setPriority(Thread.MAX_PRIORITY);
-            leaseUpdateThread.start();
-        }
+        leaseUpdateThread = new Thread(new BackgroundLeaseUpdate(this, isDisposed),
+                "DocumentNodeStore lease update thread " + threadNamePostfix);
+        leaseUpdateThread.setDaemon(true);
+        // OAK-3398 : make lease updating more robust by ensuring it
+        // has higher likelihood of succeeding than other threads
+        // on a very busy machine - so as to prevent lease timeout.
+        leaseUpdateThread.setPriority(Thread.MAX_PRIORITY);
+        leaseUpdateThread.start();
 
         this.mbean = createMBean();
         LOG.info("Initialized DocumentNodeStore with clusterNodeId: {} ({})", clusterId,
@@ -590,19 +585,15 @@ public final class DocumentNodeStore
             LOG.error("dispose: an AssertionError happened during dispose's last background ops: "+ae, ae);
         }
 
-        if (leaseUpdateThread != null) {
-            try {
-                leaseUpdateThread.join();
-            } catch (InterruptedException e) {
-                // ignore
-            }
+        try {
+            leaseUpdateThread.join();
+        } catch (InterruptedException e) {
+            // ignore
         }
 
         // now mark this cluster node as inactive by
         // disposing the clusterNodeInfo
-        if (clusterNodeInfo != null) {
-            clusterNodeInfo.dispose();
-        }
+        clusterNodeInfo.dispose();
         store.dispose();
 
         if (blobStore instanceof Closeable) {
@@ -619,7 +610,7 @@ public final class DocumentNodeStore
     }
 
     private String getClusterNodeInfoDisplayString() {
-        return clusterNodeInfo == null ? "no cluster node info" : clusterNodeInfo.toString().replaceAll("[\r\n\t]", " ").trim();
+        return clusterNodeInfo.toString().replaceAll("[\r\n\t]", " ").trim();
     }
 
     Revision setHeadRevision(@Nonnull Revision newHead) {
@@ -755,7 +746,7 @@ public final class DocumentNodeStore
         return enableConcurrentAddRemove;
     }
 
-    @CheckForNull
+    @Nonnull
     public ClusterNodeInfo getClusterInfo() {
         return clusterNodeInfo;
     }
@@ -1775,7 +1766,7 @@ public final class DocumentNodeStore
      * @return {@code true} if the lease was renewed; {@code false} otherwise.
      */
     boolean renewClusterIdLease() {
-        return clusterNodeInfo != null && clusterNodeInfo.renewLease();
+        return clusterNodeInfo.renewLease();
     }
 
     /**
@@ -1839,6 +1830,29 @@ public final class DocumentNodeStore
             return stats;
         }
         Map<Integer, Revision> lastRevMap = doc.getLastRev();
+        try {
+            long externalTime = Utils.getMaxExternalTimestamp(lastRevMap.values(), clusterId);
+            long localTime = clock.getTime();
+            if (localTime < externalTime) {
+                LOG.warn("Detected clock differences. Local time is '{}', " +
+                                "while most recent external time is '{}'. " +
+                                "Current _lastRev entries: {}",
+                        new Date(localTime), new Date(externalTime), lastRevMap.values());
+                double delay = ((double) externalTime - localTime) / 1000d;
+                String msg = String.format("Background read will be delayed by %.1f seconds. " +
+                        "Please check system time on cluster nodes.", delay);
+                LOG.warn(msg);
+                clock.waitUntil(externalTime + 1);
+            } else if (localTime == externalTime) {
+                // make sure local time is past external time
+                // but only log at debug
+                LOG.debug("Local and external time are equal. Waiting until local" +
+                        "time is more recent than external reported time.");
+                clock.waitUntil(externalTime + 1);
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Background read interrupted", e);
+        }
 
         Revision.RevisionComparator revisionComparator = getRevisionComparator();
         // the (old) head occurred first

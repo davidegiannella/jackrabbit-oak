@@ -166,6 +166,8 @@ import static org.apache.lucene.search.BooleanClause.Occur.SHOULD;
  */
 public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, NativeQueryIndex,
         AdvanceFulltextQueryIndex {
+    
+    private static double MIN_COST = 2.1;
 
     private static final Logger LOG = LoggerFactory
             .getLogger(LucenePropertyIndex.class);
@@ -194,6 +196,11 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
     }
 
     @Override
+    public double getMinimumCost() {
+        return MIN_COST;
+    }
+
+    @Override
     public String getIndexName() {
         return "lucene-property";
     }
@@ -202,8 +209,8 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
     public List<IndexPlan> getPlans(Filter filter, List<OrderEntry> sortOrder, NodeState rootState) {
         Collection<String> indexPaths = new LuceneIndexLookup(rootState).collectIndexNodePaths(filter);
         List<IndexPlan> plans = Lists.newArrayListWithCapacity(indexPaths.size());
-        IndexNode indexNode = null;
         for (String path : indexPaths) {
+            IndexNode indexNode = null;
             try {
                 indexNode = tracker.acquireIndexNode(path);
 

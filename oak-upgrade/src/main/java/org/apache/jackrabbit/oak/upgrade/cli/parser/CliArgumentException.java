@@ -14,25 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.plugins.document;
+package org.apache.jackrabbit.oak.upgrade.cli.parser;
 
-/**
- * <code>CollisionHandler</code>...
- */
-abstract class CollisionHandler {
+public class CliArgumentException extends Exception {
 
-    static final CollisionHandler DEFAULT = new CollisionHandler() {
-        @Override
-        void concurrentModification(Revision other) {
-            // do nothing
-        }
-    };
+    private static final long serialVersionUID = -7579563789244874904L;
 
-    /**
-     * Callback for an concurrent modification in {@link Revision}
-     * <code>other</code>.
-     *
-     * @param other the revision of the concurrent change.
-     */
-    abstract void concurrentModification(Revision other);
+    private final int exitCode;
+
+    public CliArgumentException(int exitCode) {
+        super();
+        this.exitCode = exitCode;
+    }
+
+    public CliArgumentException(String message, int exitCode) {
+        super(message);
+        this.exitCode = exitCode;
+    }
+
+    public int getExitCode() {
+        return exitCode;
+    }
 }
