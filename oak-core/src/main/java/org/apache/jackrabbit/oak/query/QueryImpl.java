@@ -1264,8 +1264,12 @@ public class QueryImpl implements Query {
      * @return
      */
     private UnionQueryImpl newOptimisedUnionQuery(@Nonnull Query left, @Nonnull Query right) {
-        UnionQueryImpl u = new UnionQueryImpl(false, checkNotNull(left), checkNotNull(right),
-            this.settings, true);
+        UnionQueryImpl u = new UnionQueryImpl(
+            false, 
+            checkNotNull(left, "`left` cannot be null"), 
+            checkNotNull(right, "`right` cannot be null"),
+            this.settings, 
+            true);
         u.setExplain(explain);
         return u;
     }
