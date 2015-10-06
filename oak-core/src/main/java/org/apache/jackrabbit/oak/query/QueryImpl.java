@@ -1205,7 +1205,9 @@ public class QueryImpl implements Query {
         
         if (constraint != null) {
             Set<ConstraintImpl> unionList = constraint.simplifyForUnion();
-            if (!unionList.isEmpty()) {
+            if (unionList.size() > 1) {
+                // there are some cases where multiple ORs simplify into a single one. If we get a
+                // union list of just one we don't really have to UNION anything.
                 QueryImpl left = null;
                 Query right = null;
                 // we have something to do here.
