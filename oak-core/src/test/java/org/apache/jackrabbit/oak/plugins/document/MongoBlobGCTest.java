@@ -56,6 +56,7 @@ import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.stats.Clock;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -355,8 +356,8 @@ public class MongoBlobGCTest extends AbstractMongoConnectionTest {
                 LOG.info("Starting Test Blob garbage collection");
                 
                 // Sleep a little more than the max interval to get over the interval for valid blobs
-                Thread.sleep(maxLastModifiedInterval + 100);
-                LOG.info("Slept {} to make blobs old", maxLastModifiedInterval + 100);
+                Thread.sleep(maxLastModifiedInterval + 1000);
+                LOG.info("Slept {} to make blobs old", maxLastModifiedInterval + 1000);
                 
                 long markStart = System.currentTimeMillis();
                 mark(fs);

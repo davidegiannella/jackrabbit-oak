@@ -47,6 +47,7 @@ import static org.apache.jackrabbit.oak.plugins.document.Collection.JOURNAL;
 import static org.apache.jackrabbit.oak.plugins.document.Collection.NODES;
 import static org.apache.jackrabbit.oak.plugins.document.NodeDocument.COLLISIONS;
 import static org.apache.jackrabbit.oak.plugins.document.NodeDocument.SPLIT_CANDIDATE_THRESHOLD;
+import static org.apache.jackrabbit.oak.plugins.document.util.Utils.isRevisionNewer;
 
 /**
  * A higher level object representing a commit.
@@ -59,9 +60,10 @@ public class Commit {
     private final DocumentNodeStoreBranch branch;
     private final Revision baseRevision;
     private final Revision revision;
-    private HashMap<String, UpdateOp> operations = new LinkedHashMap<String, UpdateOp>();
-    private JsopWriter diff = new JsopStream();
-    private Set<Revision> collisions = new LinkedHashSet<Revision>();
+    private final HashMap<String, UpdateOp> operations = new LinkedHashMap<String, UpdateOp>();
+    private final JsopWriter diff = new JsopStream();
+    private final Set<Revision> collisions = new LinkedHashSet<Revision>();
+    private Branch b;
 
     /**
      * List of all node paths which have been modified in this commit. In addition to the nodes
@@ -511,13 +513,12 @@ public class Commit {
         if (baseRevision != null) {
             Revision newestRev = null;
             if (before != null) {
-                newestRev = before.getNewestRevision(nodeStore, revision,
-                        new CollisionHandler() {
-                            @Override
-                            void concurrentModification(Revision other) {
-                                collisions.add(other);
-                            }
-                        });
+                Revision base = baseRevision;
+                if (nodeStore.isDisableBranches()) {
+                    base = base.asTrunkRevision();
+                }
+                newestRev = before.getNewestRevision(
+                        nodeStore, base, revision, getBranch(), collisions);
             }
             String conflictMessage = null;
             Revision conflictRevision = newestRev;
@@ -533,11 +534,12 @@ public class Commit {
                 if (op.isNew() && isConflicting(before, op)) {
                     conflictMessage = "The node " +
                             op.getId() + " was already added in revision\n" +
-                            newestRev;
+                            formatConflictRevision(newestRev);
                 } else if (nodeStore.isRevisionNewer(newestRev, baseRevision)
                         && (op.isDelete() || isConflicting(before, op))) {
                     conflictMessage = "The node " +
-                            op.getId() + " was changed in revision\n" + newestRev +
+                            op.getId() + " was changed in revision\n" +
+                            formatConflictRevision(newestRev) +
                             ", which was applied after the base revision\n" +
                             baseRevision;
                 }
@@ -559,7 +561,8 @@ public class Commit {
                             } else {
                                 // fail immediately
                                 conflictMessage = "The node " +
-                                        op.getId() + " was changed in revision\n" + r +
+                                        op.getId() + " was changed in revision\n" +
+                                        formatConflictRevision(r) +
                                         ", which was applied after the base revision\n" +
                                         baseRevision;
                                 conflictRevision = r;
@@ -578,6 +581,14 @@ public class Commit {
                 }
                 throw new ConflictException(conflictMessage, conflictRevision);
             }
+        }
+    }
+
+    private String formatConflictRevision(Revision r) {
+        if (isRevisionNewer(nodeStore, r, nodeStore.getHeadRevision())) {
+            return r + " (not yet visible)";
+        } else {
+            return r.toString();
         }
     }
 
@@ -602,6 +613,20 @@ public class Commit {
         }
         return doc.isConflicting(op, baseRevision, revision, nodeStore,
                 nodeStore.getEnableConcurrentAddRemove());
+    }
+
+    /**
+     * @return the branch if this is a branch commit, otherwise {@code null}.
+     */
+    @CheckForNull
+    private Branch getBranch() {
+        if (baseRevision == null || !baseRevision.isBranch()) {
+            return null;
+        }
+        if (b == null) {
+            b = nodeStore.getBranches().getBranch(revision);
+        }
+        return b;
     }
 
     /**

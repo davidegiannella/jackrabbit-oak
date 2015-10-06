@@ -42,7 +42,7 @@
     <project.reporting.outputEncoding>
       ${project.build.sourceEncoding}
     </project.reporting.outputEncoding>
-    <jackrabbit.version>2.11.0</jackrabbit.version>
+    <jackrabbit.version>2.11.1</jackrabbit.version>
     <mongo.host>127.0.0.1</mongo.host>
     <mongo.port>27017</mongo.port>
     <mongo.db>MongoMKDB</mongo.db>
@@ -136,6 +136,7 @@
               <goals>
                 <goal>baseline</goal>
               </goals>
+              <phase>pre-integration-test</phase>
               <configuration>
                 <!--<comparisonVersion>1.2.0</comparisonVersion>-->
                 <logResults>false</logResults>
@@ -703,6 +704,114 @@
       <properties>
         <findbugs.version>2.5.5</findbugs.version>
       </properties>
+    </profile>
+
+    <profile>
+      <id>fast</id>
+      <build>
+        <pluginManagement>
+          <plugins>
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-compiler-plugin</artifactId>
+              <executions>
+                <execution>
+                  <id>default</id>
+                  <goals>
+                    <goal>testCompile</goal>
+                  </goals>
+                  <configuration>
+                    <skip>true</skip>
+                  </configuration>
+                </execution>
+              </executions>
+            </plugin>
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-resources-plugin</artifactId>
+              <executions>
+                <execution>
+                  <id>default</id>
+                  <goals>
+                    <goal>testResources</goal>
+                  </goals>
+                  <configuration>
+                    <skip>true</skip>
+                  </configuration>
+                </execution>
+              </executions>
+            </plugin>
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-jar-plugin</artifactId>
+              <executions>
+                <execution>
+                  <id>default</id>
+                  <goals>
+                    <goal>test-jar</goal>
+                  </goals>
+                  <configuration>
+                    <skip>true</skip>
+                  </configuration>
+                </execution>
+              </executions>
+            </plugin>
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-surefire-plugin</artifactId>
+              <configuration>
+                <skip>true</skip>
+              </configuration>
+            </plugin>
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-failsafe-plugin</artifactId>
+              <configuration>
+                <skip>true</skip>
+              </configuration>
+            </plugin>
+            <plugin>
+              <groupId>org.apache.felix</groupId>
+              <artifactId>maven-bundle-plugin</artifactId>
+              <executions>
+                <execution>
+                  <id>baseline</id>
+                  <goals>
+                    <goal>baseline</goal>
+                  </goals>
+                  <configuration>
+                    <skip>true</skip>
+                  </configuration>
+                </execution>
+              </executions>
+            </plugin>
+            <plugin>
+              <groupId>org.jacoco</groupId>
+              <artifactId>jacoco-maven-plugin</artifactId>
+              <executions>
+                <execution>
+                  <id>pre-unit-test</id>
+                  <goals>
+                    <goal>prepare-agent</goal>
+                  </goals>
+                  <configuration>
+                    <skip>true</skip>
+                  </configuration>
+                </execution>
+                <execution>
+                  <id>post-unit-test</id>
+                  <goals>
+                    <goal>report</goal>
+                  </goals>
+                  <configuration>
+                    <skip>true</skip>
+                  </configuration>
+                </execution>
+              </executions>
+            </plugin>
+          </plugins>
+        </pluginManagement>
+      </build>
     </profile>
   </profiles>
 

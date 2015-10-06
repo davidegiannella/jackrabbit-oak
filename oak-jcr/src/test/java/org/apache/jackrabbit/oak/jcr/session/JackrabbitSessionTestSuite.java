@@ -14,25 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.jackrabbit.oak.plugins.document;
+package org.apache.jackrabbit.oak.jcr.session;
+
+import junit.framework.Test;
+import junit.framework.TestCase;
+import junit.framework.TestSuite;
+import org.apache.jackrabbit.core.integration.GetOrNullTest;
 
 /**
- * <code>CollisionHandler</code>...
+ * Reuse JackrabbitSession tests
  */
-abstract class CollisionHandler {
+public class JackrabbitSessionTestSuite extends TestCase {
 
-    static final CollisionHandler DEFAULT = new CollisionHandler() {
-        @Override
-        void concurrentModification(Revision other) {
-            // do nothing
-        }
-    };
+    public static Test suite() {
+        TestSuite testSuite = new TestSuite();
+        testSuite.addTestSuite(GetOrNullTest.class);
+        return testSuite;
+    }
 
-    /**
-     * Callback for an concurrent modification in {@link Revision}
-     * <code>other</code>.
-     *
-     * @param other the revision of the concurrent change.
-     */
-    abstract void concurrentModification(Revision other);
 }

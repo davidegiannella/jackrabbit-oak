@@ -92,7 +92,6 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.stats.Clock;
 import org.junit.After;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -1097,7 +1096,6 @@ public class DocumentNodeStoreTest {
     }
 
     // OAK-2929
-    @Ignore
     @Test
     public void conflictDetectionWithClockDifference() throws Exception {
         MemoryDocumentStore store = new MemoryDocumentStore();
@@ -1155,7 +1153,6 @@ public class DocumentNodeStoreTest {
     }
 
     // OAK-2929
-    @Ignore
     @Test
     public void parentWithUnseenChildrenMustNotBeDeleted() throws Exception {
         final MemoryDocumentStore docStore = new MemoryDocumentStore();
@@ -1318,12 +1315,7 @@ public class DocumentNodeStoreTest {
         //root would hold reference to store2 root state after initial repo initialization
         root = store2.getRoot();
 
-        //The hidden node itself should be creatable across cluster concurrently
-        builder = root.builder();
-        builder.child(":dynHidden");
-        merge(store2, builder);
-
-        //Children of hidden node should be creatable across cluster concurrently
+        //The hidden node and children should be creatable across cluster concurrently
         builder = root.builder();
         builder.child(":hidden").child("b");
         builder.child(":dynHidden").child("c");
@@ -1499,7 +1491,6 @@ public class DocumentNodeStoreTest {
     }
 
     // OAK-3388
-    @Ignore
     @Test
     public void clusterWithClockDifferences() throws Exception {
         MemoryDocumentStore store = new MemoryDocumentStore();
@@ -1551,7 +1542,6 @@ public class DocumentNodeStoreTest {
     }
 
     // OAK-3388
-    @Ignore
     @Test
     public void clusterWithClockDifferences2() throws Exception {
         MemoryDocumentStore store = new MemoryDocumentStore();
@@ -1601,6 +1591,32 @@ public class DocumentNodeStoreTest {
         ns2.runBackgroundOperations();
         b2 = ns2.getRoot().builder();
         assertEquals(3, b2.getChildNode("node").getProperty("p").getValue(Type.LONG).longValue());
+    }
+
+    // OAK-3455
+    @Test
+    public void notYetVisibleExceptionMessage() throws Exception {
+        MemoryDocumentStore store = new MemoryDocumentStore();
+        DocumentNodeStore ns1 = builderProvider.newBuilder()
+                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+        DocumentNodeStore ns2 = builderProvider.newBuilder()
+                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+        ns2.setMaxBackOffMillis(0);
+
+        NodeBuilder b1 = ns1.getRoot().builder();
+        b1.child("test").setProperty("p", "v");
+        merge(ns1, b1);
+
+        NodeBuilder b2 = ns2.getRoot().builder();
+        b2.child("test").setProperty("q", "v");
+        try {
+            merge(ns2, b2);
+            fail("Must throw CommitFailedException");
+        } catch (CommitFailedException e) {
+            assertNotNull(e.getCause());
+            assertTrue(e.getCause().getMessage().contains("not yet visible"));
+        }
+
     }
 
     /**
