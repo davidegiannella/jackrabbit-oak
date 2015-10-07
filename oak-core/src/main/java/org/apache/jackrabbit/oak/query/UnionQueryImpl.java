@@ -396,4 +396,9 @@ public class UnionQueryImpl implements Query {
     public boolean isInternal() {
         return left.isInternal() || right.isInternal();
     }
+
+    @Override
+    public boolean isFullText() {
+        return left.isFullText() || right.isFullText();
+    }
 }

@@ -34,8 +34,8 @@ import com.google.common.base.Strings;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-
 import com.google.common.collect.Ordering;
+
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
@@ -86,6 +86,7 @@ import org.apache.jackrabbit.oak.query.plan.ExecutionPlan;
 import org.apache.jackrabbit.oak.query.plan.SelectorExecutionPlan;
 import org.apache.jackrabbit.oak.spi.query.Filter;
 import org.apache.jackrabbit.oak.spi.query.PropertyValues;
+import org.apache.jackrabbit.oak.spi.query.QueryConstants;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.AdvancedQueryIndex;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.IndexPlan;
@@ -1318,5 +1319,17 @@ public class QueryImpl implements Query {
     @Override
     public boolean isInternal() {
         return isInternal;
+    }
+
+    @Override
+    public boolean isFullText() {
+        boolean ft = false;
+        for (SelectorImpl s : selectors) {
+            if (getConstraint().getFullTextConstraint(s) != null) {
+                ft = true;
+                break;
+            }
+        }
+        return ft;
     }
 }

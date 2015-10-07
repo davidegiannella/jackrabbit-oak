@@ -179,4 +179,11 @@ public interface Query {
      * @return {@code true} if the current query is internal. {@code false} otherwise.
      */
     boolean isInternal();
+    
+    /**
+     * 
+     * @return {@code true} if the current constraints have any FullText conditions. {@code false}
+     *         otherwise.
+     */
+    boolean isFullText();
 }
