@@ -33,7 +33,6 @@ import static org.apache.jackrabbit.oak.plugins.document.UpdateOp.Operation;
 import static org.apache.jackrabbit.oak.plugins.document.util.Utils.asStringValueIterable;
 import static org.apache.jackrabbit.oak.plugins.document.util.Utils.getIdFromPath;
 import static org.apache.jackrabbit.oak.plugins.document.util.Utils.pathToId;
-import static org.apache.jackrabbit.oak.plugins.document.util.Utils.unshareString;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -75,11 +74,8 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 
-import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.commons.IOUtils;
 import org.apache.jackrabbit.oak.commons.jmx.AnnotatedStandardMBean;
-import org.apache.jackrabbit.oak.commons.json.JsopReader;
-import org.apache.jackrabbit.oak.commons.json.JsopTokenizer;
 import org.apache.jackrabbit.oak.plugins.blob.BlobStoreBlob;
 import org.apache.jackrabbit.oak.plugins.blob.MarkSweepGarbageCollector;
 import org.apache.jackrabbit.oak.plugins.blob.ReferencedBlob;
@@ -1432,58 +1428,6 @@ public final class DocumentNodeStore
                 }), node, base, diff);
     }
 
-    String diff(@Nonnull final String fromRevisionId,
-                @Nonnull final String toRevisionId,
-                @Nonnull final String path) throws DocumentStoreException {
-        if (fromRevisionId.equals(toRevisionId)) {
-            return "";
-        }
-        Revision fromRev = Revision.fromString(fromRevisionId);
-        Revision toRev = Revision.fromString(toRevisionId);
-        final DocumentNodeState from = getNode(path, fromRev);
-        final DocumentNodeState to = getNode(path, toRev);
-        if (from == null || to == null) {
-            // TODO implement correct behavior if the node doesn't/didn't exist
-            String msg = String.format("Diff is only supported if the node exists in both cases. " +
-                    "Node [%s], fromRev [%s] -> %s, toRev [%s] -> %s",
-                    path, fromRev, from != null, toRev, to != null);
-            throw new DocumentStoreException(msg);
-        }
-        String compactDiff = diffCache.getChanges(fromRev, toRev, path,
-                new DiffCache.Loader() {
-            @Override
-            public String call() {
-                // calculate the diff
-                return diffImpl(from, to);
-            }
-        });
-        JsopWriter writer = new JsopStream();
-        diffProperties(from, to, writer);
-        JsopTokenizer t = new JsopTokenizer(compactDiff);
-        int r;
-        do {
-            r = t.read();
-            switch (r) {
-                case '+':
-                case '^': {
-                    String name = t.readString();
-                    t.read(':');
-                    t.read('{');
-                    t.read('}');
-                    writer.tag((char) r).key(concat(path, name));
-                    writer.object().endObject().newline();
-                    break;
-                }
-                case '-': {
-                    String name = t.readString();
-                    writer.tag('-').value(concat(path, name));
-                    writer.newline();
-                }
-            }
-        } while (r != JsopReader.END);
-        return writer.toString();
-    }
-
     /**
      * Creates a tracker for the given commit revision.
      *
@@ -2153,67 +2097,45 @@ public final class DocumentNodeStore
         }
     }
 
-    private boolean dispatch(@Nonnull String jsonDiff,
-                             @Nonnull DocumentNodeState node,
-                             @Nonnull DocumentNodeState base,
-                             @Nonnull NodeStateDiff diff) {
-        if (jsonDiff.trim().isEmpty()) {
-            return true;
-        }
-        JsopTokenizer t = new JsopTokenizer(jsonDiff);
-        boolean continueComparison = true;
-        while (continueComparison) {
-            int r = t.read();
-            if (r == JsopReader.END) {
-                break;
+    private boolean dispatch(@Nonnull final String jsonDiff,
+                             @Nonnull final DocumentNodeState node,
+                             @Nonnull final DocumentNodeState base,
+                             @Nonnull final NodeStateDiff diff) {
+        return DiffCache.parseJsopDiff(jsonDiff, new DiffCache.Diff() {
+            @Override
+            public boolean childNodeAdded(String name) {
+                return diff.childNodeAdded(name,
+                        node.getChildNode(name));
             }
-            switch (r) {
-                case '+': {
-                    String name = unshareString(t.readString());
-                    t.read(':');
-                    t.read('{');
-                    while (t.read() != '}') {
-                        // skip properties
-                    }
-                    continueComparison = diff.childNodeAdded(name,
-                            node.getChildNode(name));
-                    break;
-                }
-                case '-': {
-                    String name = unshareString(t.readString());
-                    continueComparison = diff.childNodeDeleted(name,
-                            base.getChildNode(name));
-                    break;
-                }
-                case '^': {
-                    String name = unshareString(t.readString());
-                    t.read(':');
-                    t.read('{');
-                    t.read('}');
-                    NodeState baseChild = base.getChildNode(name);
-                    NodeState nodeChild = node.getChildNode(name);
-                    if (baseChild.exists()) {
-                        if (nodeChild.exists()) {
-                            continueComparison = diff.childNodeChanged(name,
-                                    baseChild, nodeChild);
-                        } else {
-                            continueComparison = diff.childNodeDeleted(name,
-                                    baseChild);
-                        }
+
+            @Override
+            public boolean childNodeChanged(String name) {
+                boolean continueComparison = true;
+                NodeState baseChild = base.getChildNode(name);
+                NodeState nodeChild = node.getChildNode(name);
+                if (baseChild.exists()) {
+                    if (nodeChild.exists()) {
+                        continueComparison = diff.childNodeChanged(name,
+                                baseChild, nodeChild);
                     } else {
-                        if (nodeChild.exists()) {
-                            continueComparison = diff.childNodeAdded(name,
-                                    nodeChild);
-                        }
+                        continueComparison = diff.childNodeDeleted(name,
+                                baseChild);
                     }
-                    break;
+                } else {
+                    if (nodeChild.exists()) {
+                        continueComparison = diff.childNodeAdded(name,
+                                nodeChild);
+                    }
                 }
-                default:
-                    throw new IllegalArgumentException("jsonDiff: illegal token '"
-                            + t.getToken() + "' at pos: " + t.getLastPos() + ' ' + jsonDiff);
+                return continueComparison;
             }
-        }
-        return continueComparison;
+
+            @Override
+            public boolean childNodeDeleted(String name) {
+                return diff.childNodeDeleted(name,
+                        base.getChildNode(name));
+            }
+        });
     }
 
     /**
@@ -2253,31 +2175,6 @@ public final class DocumentNodeStore
         }
 
         return false;
-    }
-
-    private static void diffProperties(DocumentNodeState from,
-                                       DocumentNodeState to,
-                                       JsopWriter w) {
-        for (PropertyState fromValue : from.getProperties()) {
-            String name = fromValue.getName();
-            // changed or removed properties
-            PropertyState toValue = to.getProperty(name);
-            if (!fromValue.equals(toValue)) {
-                w.tag('^').key(concat(from.getPath(), name));
-                if (toValue == null) {
-                    w.value(null);
-                } else {
-                    w.encodedValue(to.getPropertyAsString(name)).newline();
-                }
-            }
-        }
-        for (String name : to.getPropertyNames()) {
-            // added properties
-            if (!from.hasProperty(name)) {
-                w.tag('^').key(concat(from.getPath(), name))
-                        .encodedValue(to.getPropertyAsString(name)).newline();
-            }
-        }
     }
 
     private String diffImpl(DocumentNodeState from, DocumentNodeState to)
