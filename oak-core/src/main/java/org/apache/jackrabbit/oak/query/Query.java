@@ -15,7 +15,6 @@ package org.apache.jackrabbit.oak.query;
 
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -179,11 +178,20 @@ public interface Query {
      * @return {@code true} if the current query is internal. {@code false} otherwise.
      */
     boolean isInternal();
-    
+
     /**
+     * <p>
+     * Some queries can bring with them a cost overhead that the query engine could consider when
+     * electing the best query between the original SQL2 and the possible available optimisations.
+     * </p>
+     * <p>
+     * For example for the case of <a href="https://issues.apache.org/jira/browse/OAK-2660" /> if
+     * you have a case where {@code (a = 'v' OR CONTAINS(b, 'v1') OR CONTAINS(c, 'v2')) AND (...)}
+     * currently the query engine does not know how to leverage indexes and post conditions and the
+     * query is better suited with a UNION.
+     * </p>
      * 
-     * @return {@code true} if the current constraints have any FullText conditions. {@code false}
-     *         otherwise.
+     * @return a positive number or 0. <strong>Cannot be negative.</strong>
      */
     double getCostOverhead();
 }
