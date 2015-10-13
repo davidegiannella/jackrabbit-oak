@@ -398,7 +398,8 @@ public class UnionQueryImpl implements Query {
     }
 
     @Override
-    public boolean isFullText() {
-        return left.isFullText() || right.isFullText();
+    public double getCostOverhead() {
+        // for now we don't really have any case where a union query should suffer from overheads.
+        return 0;
     }
 }

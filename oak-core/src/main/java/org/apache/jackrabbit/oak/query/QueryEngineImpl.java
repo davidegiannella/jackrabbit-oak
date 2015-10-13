@@ -291,78 +291,95 @@ public abstract class QueryEngineImpl implements QueryEngine {
     @Nonnull
     private MdcAndPrepared prepareAndGetCheapest(@Nonnull final Set<Query> queries) {
         MdcAndPrepared map = null;
-        double bestCost = Double.POSITIVE_INFINITY;
         Query cheapest = null;
-        Query original = null, optimisedFT = null;
         
-        boolean fulltextInOptimised = false;
-        // always prepare all of the queries and compute the cheapest as it's the default behaviour.
-        // It should trigger more errors during unit and integration testing. Changing
-        // `forceOptimised` flag should be in case used only during testing.
-        for (Query q : checkNotNull(queries)) {
-            LOG.debug("Preparing: {}", q);
-            q.prepare();
-            if (q.getEstimatedCost() < bestCost) {
-                bestCost = q.getEstimatedCost();
-                cheapest = q;
-            }
-            if (q.isOptimised()) {
-                fulltextInOptimised = q.isFullText();
-                optimisedFT = q;
-            } else {
-                original = q;
-            }
-        }
-
-        if (fulltextInOptimised) {
-            // for the OAK-2660 case, we address it by forcing the optimised UNION query. As
-            // soon as there's a CONTAINS() in the Optimised query constraints we prefer the
-            // UNION as it should help up leveraging more indexes.
-            LOG.debug("Forcing the optimised SQL2 as of at least one fulltext in the query");
-            cheapest = optimisedFT;
-        } else if (original != null && bestCost == original.getEstimatedCost()
-            // if the optimised cost is the same as the original SQL2 query we prefer the original. As
-            // we deal with references the `cheapest!=original` should work.
-            && cheapest != original) {
-            LOG.trace("Same cost for original and optimised. Forcing original");
-            cheapest = original;
-        }
         
-        switch (forceOptimised) {
-        case ORIGINAL:
-            LOG.debug("Forcing the original SQL2 query to be executed by flag");
-            for (Query q  : checkNotNull(queries)) {
+        if (checkNotNull(queries).size() == 1) {
+            // Optimisation. We only have the original query so we prepare and return it.
+            cheapest = queries.iterator().next();
+            cheapest.prepare();
+            LOG.debug("No optimisations found. Cheapest is the original query: {}", cheapest);
+            map = new MdcAndPrepared(setupMDC(cheapest), cheapest);
+        } else {
+            double bestCost = Double.MAX_VALUE;
+            double originalCost = Double.MAX_VALUE;
+            boolean firstLoop = true;
+            Query original = null;
+            
+            // always prepare all of the queries and compute the cheapest as it's the default behaviour.
+            // It should trigger more errors during unit and integration testing. Changing
+            // `forceOptimised` flag should be in case used only during testing.
+            for (Query q : checkNotNull(queries)) {
+                LOG.debug("Preparing: {}", q);
+                q.prepare();
+                
+                double actualCost = q.getEstimatedCost();
+                double costOverhead = q.getCostOverhead();
+                double overallCost = Math.min(actualCost + costOverhead, Double.MAX_VALUE);
+                
+                LOG.debug("actualCost: {} - costOverhead: {} - overallCost: {}", actualCost,
+                    costOverhead, overallCost);
+                
+                if (firstLoop) {
+                    // first time we're always the best cost. Avoiding situations where the original
+                    // query has an overall cost as Double.MAX_VALUE.
+                    bestCost = overallCost;
+                    cheapest = q;
+                    firstLoop = false;
+                } else if (overallCost < bestCost) {
+                    bestCost = overallCost;
+                    cheapest = q;
+                }
                 if (!q.isOptimised()) {
-                    map = new MdcAndPrepared(setupMDC(q), q);
+                    original = q;
+                    originalCost = overallCost;
                 }
             }
-            break;
-
-        case OPTIMISED:
-            LOG.debug("Forcing the optimised SQL2 query to be executed by flag");
-            for (Query q  : checkNotNull(queries)) {
-                if (q.isOptimised()) {
-                    map = new MdcAndPrepared(setupMDC(q), q);
-                }
+            
+            if (original != null && bestCost == originalCost && cheapest != original) {
+                // if the optimised cost is the same as the original SQL2 query we prefer the original. As
+                // we deal with references the `cheapest!=original` should work.
+                LOG.trace("Same cost for original and optimised. Forcing original");
+                cheapest = original;
             }
-            break;
 
-        // CHEAPEST is the default behaviour
-        case CHEAPEST:
-        default:
-            if (cheapest == null) {
-                // this should not really happen. Defensive coding.
-                LOG.debug("Cheapest is null. Returning the original SQL2 query.");
+            switch (forceOptimised) {
+            case ORIGINAL:
+                LOG.debug("Forcing the original SQL2 query to be executed by flag");
                 for (Query q  : checkNotNull(queries)) {
                     if (!q.isOptimised()) {
                         map = new MdcAndPrepared(setupMDC(q), q);
                     }
                 }
-            } else {
-                LOG.debug("Cheapest cost: {} - query: {}", bestCost, cheapest);
-                map = new MdcAndPrepared(setupMDC(cheapest), cheapest);                
+                break;
+
+            case OPTIMISED:
+                LOG.debug("Forcing the optimised SQL2 query to be executed by flag");
+                for (Query q  : checkNotNull(queries)) {
+                    if (q.isOptimised()) {
+                        map = new MdcAndPrepared(setupMDC(q), q);
+                    }
+                }
+                break;
+
+            // CHEAPEST is the default behaviour
+            case CHEAPEST:
+            default:
+                if (cheapest == null) {
+                    // this should not really happen. Defensive coding.
+                    LOG.debug("Cheapest is null. Returning the original SQL2 query.");
+                    for (Query q  : checkNotNull(queries)) {
+                        if (!q.isOptimised()) {
+                            map = new MdcAndPrepared(setupMDC(q), q);
+                        }
+                    }
+                } else {
+                    LOG.debug("Cheapest cost: {} - query: {}", bestCost, cheapest);
+                    map = new MdcAndPrepared(setupMDC(cheapest), cheapest);                
+                }
             }
         }
+
         
         if (map == null) {
             // we should only get here in case of testing forcing weird conditions
@@ -370,6 +387,7 @@ public abstract class QueryEngineImpl implements QueryEngine {
             for (Query q  : checkNotNull(queries)) {
                 if (!q.isOptimised()) {
                     map = new MdcAndPrepared(setupMDC(q), q);
+                    break;
                 }
             }
         }

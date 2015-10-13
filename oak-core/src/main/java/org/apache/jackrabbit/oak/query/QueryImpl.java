@@ -1321,14 +1321,48 @@ public class QueryImpl implements Query {
     }
 
     @Override
-    public boolean isFullText() {
-        boolean ft = false;
-        for (SelectorImpl s : selectors) {
-            if (getConstraint().getFullTextConstraint(s) != null) {
-                ft = true;
-                break;
+    public double getCostOverhead() {
+        return oak2660CostOverhead(getConstraint());
+    }
+
+    /**
+     * compute a cost overhead for the OAK-2660 use case. The query engine better perform/compute
+     * the use case `(a = 'v' OR CONTAINS(b, 'v1') OR CONTAINS(c, 'v2') AND (...)` as a UNION query
+     * to leverage different indexes. In this case we return an 'Infinity' overhead for make the
+     * query engine choose a union query instead.
+     * 
+     * @param constraint the constraint to analyse. Cannot be null.
+     * @return
+     */
+    private double oak2660CostOverhead(@Nonnull ConstraintImpl constraint) {
+        if (checkNotNull(constraint) instanceof OrImpl) {
+            boolean fulltext = false, plain = false;
+            for (ConstraintImpl c : constraint.getConstraints()) {
+                if (c instanceof FullTextSearchImpl) {
+                    fulltext = true;
+                } else {
+                    plain = true;
+                }
+                
+                if (fulltext && plain) {
+                    return Double.MAX_VALUE;
+                }
+            }
+        } else {
+            List<ConstraintImpl> cs = constraint.getConstraints();
+            if (cs == null) {
+                return 0;
+            } else {
+                double cost = 0;
+                for (ConstraintImpl c : cs) {
+                    cost += oak2660CostOverhead(c);
+                    if (cost == Double.MAX_VALUE) {
+                        return cost;
+                    }
+                }
+                return cost;
             }
         }
-        return ft;
+        return 0;
     }
 }
