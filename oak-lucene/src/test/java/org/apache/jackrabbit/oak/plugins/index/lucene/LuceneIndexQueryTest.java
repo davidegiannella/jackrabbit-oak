@@ -24,7 +24,9 @@ import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Tree;
@@ -67,6 +69,7 @@ public class LuceneIndexQueryTest extends AbstractQueryTest {
         props.getParent().setProperty(LuceneIndexConstants.INDEX_NODE_NAME, true);
         TestUtil.enablePropertyIndex(props, "c1/p", false);
         TestUtil.enableForFullText(props, LuceneIndexConstants.REGEX_ALL_PROPS, true);
+        TestUtil.enablePropertyIndex(props, "sa", false);
 
         root.commit();
     }
@@ -554,6 +557,36 @@ public class LuceneIndexQueryTest extends AbstractQueryTest {
             "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND NOT CONTAINS(foo, 'bar cat')",
             of("/test/c"));
 
+        setTraversalEnabled(true);
+    }
+    
+    @Test
+    public void oak2539() throws CommitFailedException {
+        setTraversalEnabled(false);
+        Tree t;
+        List<String> expected;
+        
+        t = root.getTree("/").addChild("test");
+        t = t.addChild("node");
+        t.setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+        t.setProperty("sa", "a");
+        t.setProperty("sb", "b");
+        root.commit();
+        
+        expected = of(t.getPath());
+        
+        assertQuery(
+            "SELECT * FROM [nt:base] AS s WHERE ISDESCENDANTNODE([/test/]) AND (s.[sa] = 'a' OR CONTAINS(s.[sb], 'b'))",
+            SQL2, expected);
+        
+        assertQuery(
+            "SELECT * FROM [nt:base] AS s WHERE ISDESCENDANTNODE([/test/]) AND CONTAINS(s.[sb], 'b')",
+            SQL2, expected);
+
+        assertQuery(
+            "SELECT * FROM [nt:base] AS s WHERE ISDESCENDANTNODE([/test/]) AND (s.[sa] = 'x' OR CONTAINS(s.[sb], 'b'))",
+            SQL2, expected);
+        
         setTraversalEnabled(true);
     }
 }
