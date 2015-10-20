@@ -16,10 +16,10 @@
  */
 package org.apache.jackrabbit.oak.plugins.atomic;
 
+import java.util.concurrent.ScheduledExecutorService;
+
 import javax.annotation.Nullable;
 
-import org.apache.felix.scr.annotations.Component;
-import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
@@ -30,19 +30,28 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 /**
  * Provide an instance of {@link AtomicCounterEditor}
  */
-@Component
-@Service
 public class AtomicCounterEditorProvider implements EditorProvider {
     private String instanceId;
+    private ScheduledExecutorService executor;
     
-    public AtomicCounterEditorProvider(@Nullable String instanceId) {
+    /**
+     * See
+     * {@link AtomicCounterEditor#AtomicCounterEditor(NodeBuilder, String, ScheduledExecutorService)}
+     * for details on behaviour when {@code instanceId} and/or {@code executor} are null.
+     * 
+     * @param instanceId the current Oak instance Id.
+     * @param executor the Oak executor on which the consolidating thread will be scheduled.
+     */
+    public AtomicCounterEditorProvider(@Nullable String instanceId, 
+                                       @Nullable ScheduledExecutorService executor) {
         this.instanceId = instanceId;
+        this.executor = executor;
     }
     
     @Override
     public Editor getRootEditor(final NodeState before, final NodeState after,
                                 final NodeBuilder builder, final CommitInfo info)
                                     throws CommitFailedException {        
-        return new AtomicCounterEditor(builder, instanceId);
+        return new AtomicCounterEditor(builder, instanceId, executor);
     }
 }

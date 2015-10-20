@@ -23,6 +23,7 @@ import static org.apache.jackrabbit.oak.api.Type.NAMES;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 
 import java.util.UUID;
+import java.util.concurrent.ScheduledExecutorService;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -36,7 +37,6 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.databind.deser.impl.PropertyValue;
 import com.google.common.collect.Iterators;
 
 /**
@@ -85,6 +85,10 @@ import com.google.common.collect.Iterators;
  *  
  *  session.logout();
  * </pre>
+ * 
+ * <p>
+ * TODO add details on how it works with consolidation and asynchronous lazy thread.
+ * </p>
  */
 public class AtomicCounterEditor extends DefaultEditor {
     /**
@@ -106,21 +110,34 @@ public class AtomicCounterEditor extends DefaultEditor {
     private final NodeBuilder builder;
     private final String path;
     private final String instanceId;
-
+    private final ScheduledExecutorService executor;
+    
     /**
      * instruct whether to update the node on leave.
      */
     private boolean update;
     
-    public AtomicCounterEditor(@Nonnull final NodeBuilder builder, @Nullable String instanceId) {
-        this("", checkNotNull(builder), instanceId);
+    /**
+     * If {@code instanceId} or {@code executor} are null, the editor will switch to a "Synchronous"
+     * way of consolidating the counter. Which means it will update it straight away rather than
+     * lazily do it in a separate thread.
+     * 
+     * @param builder the build on which to work. Cannot be null.
+     * @param instanceId the current Oak instance Id.
+     * @param executor the current Oak executor service.
+     */
+    public AtomicCounterEditor(@Nonnull final NodeBuilder builder, @Nullable String instanceId,
+                               @Nullable ScheduledExecutorService executor) {
+        this("", checkNotNull(builder), instanceId, executor);
     }
 
     private AtomicCounterEditor(final String path, final NodeBuilder builder, 
-                                @Nullable String instanceId) {
+                                @Nullable String instanceId, 
+                                @Nullable ScheduledExecutorService executor) {
         this.builder = checkNotNull(builder);
         this.path = path;
         this.instanceId = instanceId;
+        this.executor = executor;
     }
 
     private static boolean shallWeProcessProperty(final PropertyState property,
@@ -163,7 +180,6 @@ public class AtomicCounterEditor extends DefaultEditor {
         for (PropertyState p : builder.getProperties()) {
             if (p.getName().startsWith(PREFIX_PROP_COUNTER)) {
                 count += p.getValue(LONG);
-                builder.removeProperty(p.getName());
             }
         }
 
@@ -196,14 +212,16 @@ public class AtomicCounterEditor extends DefaultEditor {
 
     @Override
     public Editor childNodeAdded(final String name, final NodeState after) throws CommitFailedException {
-        return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name), instanceId);
+        return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name), instanceId,
+            executor);
     }
 
     @Override
     public Editor childNodeChanged(final String name, 
                                    final NodeState before, 
                                    final NodeState after) throws CommitFailedException {
-        return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name), instanceId);
+        return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name), instanceId,
+            executor);
     }
 
     @Override

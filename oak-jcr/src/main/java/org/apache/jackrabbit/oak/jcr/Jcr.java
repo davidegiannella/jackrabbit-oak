@@ -122,7 +122,8 @@ public class Jcr {
         with(new ConflictValidatorProvider());
         
         // FIXME once OAK-3529 will be in place, replace with the `instanceId`
-        with(new AtomicCounterEditorProvider(UUID.randomUUID().toString()));
+        with(new AtomicCounterEditorProvider(UUID.randomUUID().toString(),
+            Oak.defaultScheduledExecutor()));
         
         with(new ReferenceEditorProvider());
         with(new ReferenceIndexProvider());
