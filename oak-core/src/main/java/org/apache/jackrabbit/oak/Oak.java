@@ -93,6 +93,7 @@ import org.apache.jackrabbit.oak.spi.query.CompositeQueryIndexProvider;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 import org.apache.jackrabbit.oak.spi.security.SecurityConfiguration;
 import org.apache.jackrabbit.oak.spi.security.SecurityProvider;
+import org.apache.jackrabbit.oak.spi.state.Clusterable;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -742,4 +743,10 @@ public class Oak {
         }
     }
 
+    /**
+     * @return the current instance id if availabe or null if not.
+     */
+    public String getInstanceId() {
+        return (store instanceof Clusterable) ? ((Clusterable) store).getInstanceId() : null;
+    }
 }
