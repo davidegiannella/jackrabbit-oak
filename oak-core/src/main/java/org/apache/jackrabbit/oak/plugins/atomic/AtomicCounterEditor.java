@@ -25,6 +25,7 @@ import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_A
 import java.util.UUID;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
@@ -103,19 +104,22 @@ public class AtomicCounterEditor extends DefaultEditor {
     private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterEditor.class);
     private final NodeBuilder builder;
     private final String path;
+    private final String instanceId;
 
     /**
      * instruct whether to update the node on leave.
      */
     private boolean update;
     
-    public AtomicCounterEditor(@Nonnull final NodeBuilder builder) {
-        this("", checkNotNull(builder));
+    public AtomicCounterEditor(@Nonnull final NodeBuilder builder, @Nullable String instanceId) {
+        this("", checkNotNull(builder), instanceId);
     }
 
-    private AtomicCounterEditor(final String path, final NodeBuilder builder) {
+    private AtomicCounterEditor(final String path, final NodeBuilder builder, 
+                                @Nullable String instanceId) {
         this.builder = checkNotNull(builder);
         this.path = path;
+        this.instanceId = instanceId;
     }
 
     private static boolean shallWeProcessProperty(final PropertyState property,
@@ -180,14 +184,14 @@ public class AtomicCounterEditor extends DefaultEditor {
 
     @Override
     public Editor childNodeAdded(final String name, final NodeState after) throws CommitFailedException {
-        return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name));
+        return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name), instanceId);
     }
 
     @Override
     public Editor childNodeChanged(final String name, 
                                    final NodeState before, 
                                    final NodeState after) throws CommitFailedException {
-        return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name));
+        return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name), instanceId);
     }
 
     @Override

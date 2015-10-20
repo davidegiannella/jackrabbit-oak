@@ -16,6 +16,8 @@
  */
 package org.apache.jackrabbit.oak.plugins.atomic;
 
+import javax.annotation.Nullable;
+
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
@@ -31,11 +33,16 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 @Component
 @Service
 public class AtomicCounterEditorProvider implements EditorProvider {
+    private String instanceId;
+    
+    public AtomicCounterEditorProvider(@Nullable String instanceId) {
+        this.instanceId = instanceId;
+    }
     
     @Override
     public Editor getRootEditor(final NodeState before, final NodeState after,
                                 final NodeBuilder builder, final CommitInfo info)
                                     throws CommitFailedException {        
-        return new AtomicCounterEditor(builder);
+        return new AtomicCounterEditor(builder, instanceId);
     }
 }
