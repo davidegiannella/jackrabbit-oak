@@ -30,7 +30,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 import javax.annotation.Nonnull;
 
@@ -40,25 +39,9 @@ import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
-import org.junit.Ignore;
 import org.junit.Test;
 
 public class AtomicCounterEditorTest {
-    @Test
-    @Ignore // FIXME fix test expectations
-    public void childNodeAdded() throws CommitFailedException {
-        NodeBuilder builder = EMPTY_NODE.builder();
-        
-        Editor editor = new AtomicCounterEditor(EMPTY_NODE.builder());
-        
-        assertNull("without the mixin we should not process",
-            editor.childNodeAdded("foo", builder.getNodeState()));
-        
-        builder = EMPTY_NODE.builder();
-        builder = setMixin(builder);
-        assertTrue("with the mixin set we should get a proper Editor",
-            editor.childNodeAdded("foo", builder.getNodeState()) instanceof AtomicCounterEditor);
-    }
     
     @Test
     public void increment() throws CommitFailedException {
@@ -67,14 +50,14 @@ public class AtomicCounterEditorTest {
         PropertyState property;
         
         builder = EMPTY_NODE.builder();
-        editor = new AtomicCounterEditor(builder);
+        editor = new AtomicCounterEditor(builder, "0");
         property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
         editor.propertyAdded(property);
         assertNoCounters(builder.getProperties());
         
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
-        editor = new AtomicCounterEditor(builder);
+        editor = new AtomicCounterEditor(builder, "0");
         property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
         editor.propertyAdded(property);
         assertNull("the oak:increment should never be set", builder.getProperty(PROP_INCREMENT));
@@ -89,7 +72,7 @@ public class AtomicCounterEditorTest {
         
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
-        editor = new AtomicCounterEditor(builder);
+        editor = new AtomicCounterEditor(builder, "0");
         property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
         
         editor.propertyAdded(property);

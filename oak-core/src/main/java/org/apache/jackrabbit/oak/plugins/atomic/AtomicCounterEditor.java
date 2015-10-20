@@ -36,6 +36,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.deser.impl.PropertyValue;
 import com.google.common.collect.Iterators;
 
 /**
@@ -171,7 +172,18 @@ public class AtomicCounterEditor extends DefaultEditor {
 
     private void setUniqueCounter(final long value) {
         update = true;
-        builder.setProperty(PREFIX_PROP_COUNTER + UUID.randomUUID(), value, LONG);
+        
+        // FIXME once OAK-3529 is in place this has to be replace with some other logic like updating straight the oak:counter
+        String id = instanceId == null ? UUID.randomUUID().toString() : instanceId;
+
+        String propName = PREFIX_PROP_COUNTER + id;
+        PropertyState p = builder.getProperty(propName);
+        long currentValue = 0;
+        if (p != null) {
+            currentValue = p.getValue(LONG).longValue();
+        }
+        currentValue += value;
+        builder.setProperty(propName, currentValue, LONG);
     }
     
     @Override
