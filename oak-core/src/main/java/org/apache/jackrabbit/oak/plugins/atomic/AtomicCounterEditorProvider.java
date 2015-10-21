@@ -17,41 +17,125 @@
 package org.apache.jackrabbit.oak.plugins.atomic;
 
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.Nullable;
 
+import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Reference;
+import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.ReferencePolicy;
+import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.osgi.framework.BundleContext;
 
 /**
- * Provide an instance of {@link AtomicCounterEditor}
+ * Provide an instance of {@link AtomicCounterEditor}. See {@link AtomicCounterEditor} for
+ * behavioural details.
  */
+@Component
+@Service
 public class AtomicCounterEditorProvider implements EditorProvider {
+
+    //TODO uncomment once OAK-3529 will be in place
     private String instanceId;
-    private ScheduledExecutorService executor;
+//    @Reference(policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_UNARY, referenceInterface = Clusterable.class)
+//    private AtomicReference<Clusterable> store = new AtomicReference<Clusterable>();
+
+    @Reference(policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_UNARY, referenceInterface = ScheduledExecutorService.class)
+    private AtomicReference<ScheduledExecutorService> scheduler = new AtomicReference<ScheduledExecutorService>();
     
     /**
-     * See
-     * {@link AtomicCounterEditor#AtomicCounterEditor(NodeBuilder, String, ScheduledExecutorService)}
-     * for details on behaviour when {@code instanceId} and/or {@code executor} are null.
-     * 
-     * @param instanceId the current Oak instance Id.
-     * @param executor the Oak executor on which the consolidating thread will be scheduled.
+     * OSGi oriented constructor where all the required dependencies will be taken care of.
      */
-    public AtomicCounterEditorProvider(@Nullable String instanceId, 
+    public AtomicCounterEditorProvider() {
+    }
+
+    /**
+     * Plain Java oriented constructor.
+     * 
+     * @param instanceId the current Oak instanceId.
+     * @param executor the executor for running asynchronously.
+     */
+    public AtomicCounterEditorProvider(@Nullable final String instanceId, 
                                        @Nullable ScheduledExecutorService executor) {
+        this.scheduler.set(executor);
+
+        //TODO uncomment once OAK-3529 is in place
+//        if (instanceId == null) {
+//            store.set(null);
+//        } else {
+//            store.set(new Clusterable() {
+//                @Override
+//                public String getInstanceId() {
+//                    return instanceId;
+//                }
+//            });
+//        }
         this.instanceId = instanceId;
-        this.executor = executor;
     }
     
+    /**
+     * convenience method wrapping logic around {@link AtomicReference}
+     * 
+     * @return
+     */
+    private String getInstanceId() {
+        return instanceId;
+        //TODO un-comment after OAK-3529
+//        Clusterable c = store.get();
+//        if (c == null) {
+//            return null;
+//        } else {
+//            return c.getInstanceId();
+//        }
+    }
+    
+    /**
+     * convenience method wrapping logic around {@link AtomicReference}
+     * 
+     * @return
+     */
+    private ScheduledExecutorService getScheduler() {
+        return scheduler.get();
+    }
+    
+    @Activate
+    public void activate(BundleContext context) {
+    }
+    
+    @Deactivate
+    public void deactivate() {
+    }
+
+    //TODO uncomment once OAK-3529 is in place
+//    protected void bindStore(Clusterable store) {
+//        this.store.set(store);
+//    }
+//
+//    protected void unbindStore(Clusterable store) {
+//        this.store.compareAndSet(store, null);
+//    }
+
+    protected void bindScheduler(ScheduledExecutorService scheduler) {
+        this.scheduler.set(scheduler);
+    }
+
+    protected void unbindScheduler(ScheduledExecutorService scheduler) {
+        this.scheduler.compareAndSet(scheduler, null);
+    }
+
     @Override
     public Editor getRootEditor(final NodeState before, final NodeState after,
                                 final NodeBuilder builder, final CommitInfo info)
-                                    throws CommitFailedException {        
-        return new AtomicCounterEditor(builder, instanceId, executor);
+                                    throws CommitFailedException {
+        return new AtomicCounterEditor(builder, getInstanceId(), getScheduler());
     }
 }
