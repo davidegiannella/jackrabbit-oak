@@ -29,7 +29,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.jcr.Node;
@@ -38,6 +40,8 @@ import javax.jcr.Session;
 
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
+import org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditorProvider;
+import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -162,6 +166,16 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
         }
     }
     
+    @Override
+    protected Jcr getContentRepository(NodeStore store) {
+        return super.getContentRepository(store)
+            .with(new AtomicCounterEditorProvider(
+                // TODO replace with OAK-3529
+                UUID.randomUUID().toString(), 
+                new ScheduledThreadPoolExecutor(5)
+                ));
+    }
+
     @Test @Ignore("louncher to inspect logging. Don't enable")
     public void longRunning() throws Exception {
         setUpCluster(getClass(), mks, repos);

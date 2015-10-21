@@ -22,7 +22,6 @@ import static com.google.common.collect.Sets.newLinkedHashSet;
 import static org.apache.jackrabbit.oak.plugins.commit.JcrConflictHandler.createJcrConflictHandler;
 
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -32,7 +31,6 @@ import javax.jcr.Repository;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.jcr.repository.RepositoryImpl;
-import org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditorProvider;
 import org.apache.jackrabbit.oak.plugins.commit.ConflictValidatorProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.counter.NodeCounterEditorProvider;
@@ -120,11 +118,7 @@ public class Jcr {
         with(new NamespaceEditorProvider());
         with(new TypeEditorProvider());
         with(new ConflictValidatorProvider());
-        
-        // FIXME once OAK-3529 will be in place, replace with the `instanceId`
-        with(new AtomicCounterEditorProvider(UUID.randomUUID().toString(),
-            Oak.defaultScheduledExecutor()));
-        
+                
         with(new ReferenceEditorProvider());
         with(new ReferenceIndexProvider());
 
