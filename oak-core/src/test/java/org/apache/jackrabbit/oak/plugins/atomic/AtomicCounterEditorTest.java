@@ -32,7 +32,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import java.util.Set;
 
@@ -40,58 +39,61 @@ import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
-import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
-import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
-import org.apache.jackrabbit.oak.spi.state.ReadOnlyBuilder;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableSet;
 
 public class AtomicCounterEditorTest {
+    private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
+        new AtomicCounterEditorProvider(null, null));
+    private static final EditorHook HOOK_1_SYNC = new EditorHook(
+        new AtomicCounterEditorProvider("1", null));
+    private static final EditorHook HOOK_2_SYNC = new EditorHook(
+        new AtomicCounterEditorProvider("2", null));
+
+    private static final PropertyState INCREMENT_BY_1 = PropertyStates.createProperty(
+        PROP_INCREMENT, 1L);
+    private static final PropertyState INCREMENT_BY_2 = PropertyStates.createProperty(
+        PROP_INCREMENT, 2L);
     
     @Test
     public void increment() throws CommitFailedException {
         NodeBuilder builder;
         Editor editor;
-        PropertyState property;
         
         builder = EMPTY_NODE.builder();
-        editor = new AtomicCounterEditor(builder, "0", null);
-        property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
-        editor.propertyAdded(property);
+        editor = new AtomicCounterEditor(builder, null, null);
+        editor.propertyAdded(INCREMENT_BY_1);
         assertNoCounters(builder.getProperties());
         
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
-        editor = new AtomicCounterEditor(builder, "0", null);
-        property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
-        editor.propertyAdded(property);
+        editor = new AtomicCounterEditor(builder, null, null);
+        editor.propertyAdded(INCREMENT_BY_1);
         assertNull("the oak:increment should never be set", builder.getProperty(PROP_INCREMENT));
-        assertTotalCounters(builder.getProperties(), 1);
+        assertTotalCountersValue(builder.getProperties(), 1);
     }
     
     @Test
     public void consolidate() throws CommitFailedException {
         NodeBuilder builder;
         Editor editor;
-        PropertyState property;
         
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
-        editor = new AtomicCounterEditor(builder, "0", null);
-        property = PropertyStates.createProperty(PROP_INCREMENT, 1L, Type.LONG);
+        editor = new AtomicCounterEditor(builder, null, null);
         
-        editor.propertyAdded(property);
-        assertTotalCounters(builder.getProperties(), 1);
-        editor.propertyAdded(property);
-        assertTotalCounters(builder.getProperties(), 2);
+        editor.propertyAdded(INCREMENT_BY_1);
+        assertTotalCountersValue(builder.getProperties(), 1);
+        editor.propertyAdded(INCREMENT_BY_1);
+        assertTotalCountersValue(builder.getProperties(), 2);
         AtomicCounterEditor.consolidateCount(builder);
-        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER + "0"), 2);
+        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER), 2);
     }
 
     /**
@@ -114,7 +116,7 @@ public class AtomicCounterEditorTest {
      * 
      * @param properties
      */
-    private static void assertTotalCounters(@Nonnull final Iterable<? extends PropertyState> properties,
+    private static void assertTotalCountersValue(@Nonnull final Iterable<? extends PropertyState> properties,
                                             int expected) {
         int total = 0;
         for (PropertyState p : checkNotNull(properties)) {
@@ -158,16 +160,6 @@ public class AtomicCounterEditorTest {
         assertEquals("The counter does not match the expected value", expectedCounter, counter
             .getValue(LONG).longValue());
     }
-    
-    private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
-        new AtomicCounterEditorProvider(null, null));
-    private static final EditorHook HOOK_1_SYNC = new EditorHook(
-        new AtomicCounterEditorProvider("1", null));
-    private static final EditorHook HOOK_2_SYNC = new EditorHook(
-        new AtomicCounterEditorProvider("2", null));
-
-    private static final PropertyState INCREMENT_BY_1 = PropertyStates.createProperty(PROP_INCREMENT, 1L);
-    private static final PropertyState INCREMENT_BY_2 = PropertyStates.createProperty(PROP_INCREMENT, 2L);
 
     private static NodeBuilder incrementBy(@Nonnull NodeBuilder builder, @Nonnull PropertyState increment) {
         return checkNotNull(builder).setProperty(checkNotNull(increment));
