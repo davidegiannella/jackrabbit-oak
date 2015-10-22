@@ -91,9 +91,7 @@ public class AtomicCounterEditorTest {
         editor.propertyAdded(property);
         assertTotalCounters(builder.getProperties(), 2);
         AtomicCounterEditor.consolidateCount(builder);
-        assertNotNull(builder.getProperty(PROP_COUNTER));
-        assertEquals(2, builder.getProperty(PROP_COUNTER).getValue(LONG).longValue());
-        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER + "0"));
+        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER + "0"), 2);
     }
 
     /**
@@ -133,14 +131,17 @@ public class AtomicCounterEditorTest {
     }
     
     
-    private static void assertCounterNodeState(@Nonnull NodeBuilder builder, @Nonnull Set<String> hiddenProps) {
+    private static void assertCounterNodeState(@Nonnull NodeBuilder builder, 
+                                               @Nonnull Set<String> hiddenProps, 
+                                               long expectedCounter) {
         checkNotNull(builder);
         int totalHiddenProps = 0;
         long totalHiddenValue = 0;
         PropertyState counter = builder.getProperty(PROP_COUNTER);
 
         assertNotNull("counter property cannot be null", counter);
-        
+        assertNull("The increment property should not be there",
+            builder.getProperty(PROP_INCREMENT));
         for (PropertyState p : builder.getProperties()) {
             String name = p.getName();
             if (name.startsWith(PREFIX_PROP_COUNTER)) {
@@ -154,6 +155,8 @@ public class AtomicCounterEditorTest {
             totalHiddenProps);
         assertEquals("The sum of the hidden properties does not match the counter", counter
             .getValue(LONG).longValue(), totalHiddenValue);
+        assertEquals("The counter does not match the expected value", expectedCounter, counter
+            .getValue(LONG).longValue());
     }
     
     private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
@@ -169,15 +172,21 @@ public class AtomicCounterEditorTest {
     @Test
     public void notCluster() throws CommitFailedException {
         NodeBuilder builder;
-        NodeState before, after, processed;
+        NodeState before, after;
         
         builder = EMPTY_NODE.builder();
         before = builder.getNodeState();
         builder = setMixin(builder);
         builder = incrementBy(builder, INCREMENT_BY_1);
         after = builder.getNodeState();
-        processed = HOOK_NO_CLUSTER.processCommit(before, after, EMPTY);
-        assertCounterNodeState(new ReadOnlyBuilder(processed), ImmutableSet.of(PREFIX_PROP_COUNTER));
+        builder = HOOK_NO_CLUSTER.processCommit(before, after, EMPTY).builder();
+        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER), 1);
+
+        before = builder.getNodeState();
+        builder = incrementBy(builder, INCREMENT_BY_2);
+        after = builder.getNodeState(); 
+        builder = HOOK_NO_CLUSTER.processCommit(before, after, EMPTY).builder();
+        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER), 3);
     }
     
     /**
