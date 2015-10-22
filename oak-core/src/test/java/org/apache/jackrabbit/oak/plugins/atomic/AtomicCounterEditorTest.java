@@ -161,6 +161,10 @@ public class AtomicCounterEditorTest {
     
     private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
         new AtomicCounterEditorProvider(null, null));
+    private static final EditorHook HOOK_1_SYNC = new EditorHook(
+        new AtomicCounterEditorProvider("1", null));
+    private static final EditorHook HOOK_2_SYNC = new EditorHook(
+        new AtomicCounterEditorProvider("2", null));
 
     private static final PropertyState INCREMENT_BY_1 = PropertyStates.createProperty(PROP_INCREMENT, 1L);
     private static final PropertyState INCREMENT_BY_2 = PropertyStates.createProperty(PROP_INCREMENT, 2L);
@@ -195,17 +199,15 @@ public class AtomicCounterEditorTest {
      */
     @Test
     public void multipleNodeUpdates() throws CommitFailedException {
-//        NodeBuilder builder;
-//        Editor e1, e2;
-//        
-//        builder = setMixin(EMPTY_NODE.builder());
-//        e1 = new AtomicCounterEditor(builder, "1", null);
-//        e2 = new AtomicCounterEditor(builder, "2", null);
-//        
-//        fail("instead of calling propertyAdded we should call the whole CommitHook");
-//        
-//        e1.propertyAdded(incrementBy1);
-//        assertCounterNodeState(builder,
-//            ImmutableSet.of(PREFIX_PROP_COUNTER + "1"));
+        NodeBuilder builder;
+        NodeState before, after;
+        
+        builder = EMPTY_NODE.builder();
+        before = builder.getNodeState(); 
+        builder = setMixin(builder);
+        builder = incrementBy(builder, INCREMENT_BY_1);
+        after = builder.getNodeState();
+        builder = HOOK_1_SYNC.processCommit(before, after, EMPTY).builder();
+        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER + "1"), 1);
     }
 }
