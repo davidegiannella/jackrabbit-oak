@@ -209,5 +209,12 @@ public class AtomicCounterEditorTest {
         after = builder.getNodeState();
         builder = HOOK_1_SYNC.processCommit(before, after, EMPTY).builder();
         assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER + "1"), 1);
+        
+        before = builder.getNodeState();
+        builder = incrementBy(builder, INCREMENT_BY_1);
+        after = builder.getNodeState();
+        builder = HOOK_2_SYNC.processCommit(before, after, EMPTY).builder();
+        assertCounterNodeState(builder,
+            ImmutableSet.of(PREFIX_PROP_COUNTER + "1", PREFIX_PROP_COUNTER + "2"), 2);
     }
 }
