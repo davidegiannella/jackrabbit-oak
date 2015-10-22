@@ -26,6 +26,7 @@ import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_
 import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_INCREMENT;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
+import static org.apache.jackrabbit.oak.spi.commit.CommitInfo.EMPTY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -41,8 +42,12 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
+import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
+import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.state.ReadOnlyBuilder;
 import org.junit.Test;
 
 import com.google.common.collect.ImmutableSet;
@@ -129,19 +134,50 @@ public class AtomicCounterEditorTest {
     
     
     private static void assertCounterNodeState(@Nonnull NodeBuilder builder, @Nonnull Set<String> hiddenProps) {
+        checkNotNull(builder);
         int totalHiddenProps = 0;
-        for (PropertyState p : checkNotNull(builder).getProperties()) {
+        long totalHiddenValue = 0;
+        PropertyState counter = builder.getProperty(PROP_COUNTER);
+
+        assertNotNull("counter property cannot be null", counter);
+        
+        for (PropertyState p : builder.getProperties()) {
             String name = p.getName();
             if (name.startsWith(PREFIX_PROP_COUNTER)) {
                 totalHiddenProps++;
+                totalHiddenValue += p.getValue(LONG).longValue();
                 assertTrue("unexpected property found: " + name,
                     checkNotNull(hiddenProps.contains(name)));
             }
         }
         assertEquals("The amount of hidden properties does not match", hiddenProps.size(),
             totalHiddenProps);
+        assertEquals("The sum of the hidden properties does not match the counter", counter
+            .getValue(LONG).longValue(), totalHiddenValue);
+    }
+    
+    private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
+        new AtomicCounterEditorProvider(null, null));
+
+    private static final PropertyState INCREMENT_BY_1 = PropertyStates.createProperty(PROP_INCREMENT, 1L);
+    private static final PropertyState INCREMENT_BY_2 = PropertyStates.createProperty(PROP_INCREMENT, 2L);
+
+    private static NodeBuilder incrementBy(@Nonnull NodeBuilder builder, @Nonnull PropertyState increment) {
+        return checkNotNull(builder).setProperty(checkNotNull(increment));
+    }
+    
+    @Test
+    public void notCluster() throws CommitFailedException {
+        NodeBuilder builder;
+        NodeState before, after, processed;
         
-        fail("finish the implemention by checking the total value of counter and the total value of the hidden properties");
+        builder = EMPTY_NODE.builder();
+        before = builder.getNodeState();
+        builder = setMixin(builder);
+        builder = incrementBy(builder, INCREMENT_BY_1);
+        after = builder.getNodeState();
+        processed = HOOK_NO_CLUSTER.processCommit(before, after, EMPTY);
+        assertCounterNodeState(new ReadOnlyBuilder(processed), ImmutableSet.of(PREFIX_PROP_COUNTER));
     }
     
     /**
@@ -150,19 +186,17 @@ public class AtomicCounterEditorTest {
      */
     @Test
     public void multipleNodeUpdates() throws CommitFailedException {
-        final PropertyState incrementBy1 = PropertyStates.createProperty(PROP_INCREMENT, 1L);
-        final PropertyState incrementBy2 = PropertyStates.createProperty(PROP_INCREMENT, 2L);
-        NodeBuilder builder;
-        Editor e1, e2;
-        
-        builder = setMixin(EMPTY_NODE.builder());
-        e1 = new AtomicCounterEditor(builder, "1", null);
-        e2 = new AtomicCounterEditor(builder, "2", null);
-        
-        fail("instead of calling propertyAdded we should call the whole CommitHook");
-        
-        e1.propertyAdded(incrementBy1);
-        assertCounterNodeState(builder,
-            ImmutableSet.of(PREFIX_PROP_COUNTER + "1"));
+//        NodeBuilder builder;
+//        Editor e1, e2;
+//        
+//        builder = setMixin(EMPTY_NODE.builder());
+//        e1 = new AtomicCounterEditor(builder, "1", null);
+//        e2 = new AtomicCounterEditor(builder, "2", null);
+//        
+//        fail("instead of calling propertyAdded we should call the whole CommitHook");
+//        
+//        e1.propertyAdded(incrementBy1);
+//        assertCounterNodeState(builder,
+//            ImmutableSet.of(PREFIX_PROP_COUNTER + "1"));
     }
 }

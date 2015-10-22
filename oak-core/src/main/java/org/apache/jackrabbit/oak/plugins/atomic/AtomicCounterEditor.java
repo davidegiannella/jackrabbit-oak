@@ -22,7 +22,6 @@ import static org.apache.jackrabbit.oak.api.Type.LONG;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 
-import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 
 import javax.annotation.Nonnull;
@@ -37,6 +36,7 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.Iterators;
 
 /**
@@ -136,7 +136,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                                 @Nullable ScheduledExecutorService executor) {
         this.builder = checkNotNull(builder);
         this.path = path;
-        this.instanceId = instanceId;
+        this.instanceId = Strings.isNullOrEmpty(instanceId) ? null : instanceId;
         this.executor = executor;
     }
 
@@ -188,11 +188,8 @@ public class AtomicCounterEditor extends DefaultEditor {
 
     private void setUniqueCounter(final long value) {
         update = true;
-        
-        // FIXME once OAK-3529 is in place this has to be replace with some other logic like updating straight the oak:counter
-        String id = instanceId == null ? UUID.randomUUID().toString() : instanceId;
-
-        String propName = PREFIX_PROP_COUNTER + id;
+        String propName = instanceId == null ? PREFIX_PROP_COUNTER : 
+                                                PREFIX_PROP_COUNTER + instanceId;
         PropertyState p = builder.getProperty(propName);
         long currentValue = 0;
         if (p != null) {
