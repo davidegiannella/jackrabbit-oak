@@ -22,7 +22,9 @@ import static org.apache.jackrabbit.oak.api.Type.LONG;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 
+import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -33,6 +35,7 @@ import org.apache.jackrabbit.oak.spi.commit.DefaultEditor;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -111,6 +114,7 @@ public class AtomicCounterEditor extends DefaultEditor {
     private final String path;
     private final String instanceId;
     private final ScheduledExecutorService executor;
+    private final NodeStore store;
     
     /**
      * instruct whether to update the node on leave.
@@ -138,6 +142,7 @@ public class AtomicCounterEditor extends DefaultEditor {
         this.path = path;
         this.instanceId = Strings.isNullOrEmpty(instanceId) ? null : instanceId;
         this.executor = executor;
+        this.store = null;
     }
 
     private static boolean shallWeProcessProperty(final PropertyState property,
@@ -224,6 +229,22 @@ public class AtomicCounterEditor extends DefaultEditor {
         if (update) {
             // TODO here is where the Async check could be done
             consolidateCount(builder);
+            
+            executor.schedule(new Callable<Void>() {
+                
+                @Override
+                public Void call() throws Exception {
+                    try {
+                        consolidateCount(builder);
+                    } catch (Exception e) {
+                        LOG.debug("sdfsdsdfsdf");
+                        executor.schedule(this, 1, TimeUnit.SECONDS);
+                    }
+                    
+                    return null;
+                }
+                
+            }, 0, TimeUnit.SECONDS);
         }
     }
 }
