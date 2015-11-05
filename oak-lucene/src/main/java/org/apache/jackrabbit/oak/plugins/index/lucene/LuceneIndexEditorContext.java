@@ -16,6 +16,7 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.lucene;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.oak.commons.IOUtils.humanReadableByteCount;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.PERSISTENCE_PATH;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.VERSION;
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import org.apache.commons.io.IOUtils;
@@ -182,7 +184,13 @@ public class LuceneIndexEditorContext {
         return writer;
     }
 
-    private void trackIndexSizeInfo() throws IOException {
+    private static void trackIndexSizeInfo(@Nonnull IndexWriter writer,
+                                           @Nonnull IndexDefinition definition,
+                                           @Nonnull Directory directory) throws IOException {
+        checkNotNull(writer);
+        checkNotNull(definition);
+        checkNotNull(directory);
+        
         int docs = writer.numDocs();
         int ram = writer.numRamDocs();
 
@@ -202,7 +210,9 @@ public class LuceneIndexEditorContext {
             }
             sb.append(", ");
         }
-        log.trace("Directory overall size: {}, files: {}", overallSize, sb.toString());
+        log.trace("Directory overall size: {}, files: {}",
+            org.apache.jackrabbit.oak.commons.IOUtils.humanReadableByteCount(overallSize),
+            sb.toString());
     }
 
     /**
@@ -219,7 +229,7 @@ public class LuceneIndexEditorContext {
 
         if (writer != null) {
             if (log.isTraceEnabled()) {
-                trackIndexSizeInfo();
+                trackIndexSizeInfo(writer, definition, directory);
             }
             
             final long start = PERF_LOGGER.start();
