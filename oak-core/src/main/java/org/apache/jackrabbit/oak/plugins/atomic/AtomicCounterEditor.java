@@ -278,24 +278,30 @@ public class AtomicCounterEditor extends DefaultEditor {
     @Override
     public void leave(final NodeState before, final NodeState after) throws CommitFailedException {
         if (update) {
-            // TODO here is where the Async check could be done
-            consolidateCount(builder);
-            
-//            executor.schedule(new Callable<Void>() {
-//                
-//                @Override
-//                public Void call() throws Exception {
-//                    try {
-//                        consolidateCount(builder);
-//                    } catch (Exception e) {
-//                        LOG.debug("sdfsdsdfsdf");
-//                        executor.schedule(this, 1, TimeUnit.SECONDS);
-//                    }
-//                    
-//                    return null;
-//                }
-//                
-//            }, 0, TimeUnit.SECONDS);
+            if (instanceId == null || store == null || executor == null) {
+                LOG.trace("Executing synchronously");
+                consolidateCount(builder);
+            } else {
+                LOG.trace("Scheduling process");
+                executor.schedule(new Callable<Void>() {
+                    
+                    @Override
+                    public Void call() throws Exception {
+                        try {
+                            LOG.debug("Running!");
+                        } catch (Exception e) {
+                            LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
+                            if (LOG.isTraceEnabled()) {
+                                LOG.trace("{}", e);
+                            }
+                            executor.schedule(this, 1, TimeUnit.SECONDS);
+                        }
+                        
+                        return null;
+                    }
+                    
+                }, 0, TimeUnit.SECONDS);
+            }
         }
     }
 }
