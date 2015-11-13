@@ -51,11 +51,11 @@ import com.google.common.collect.ImmutableSet;
 
 public class AtomicCounterEditorTest {
     private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
-        new AtomicCounterEditorProvider(null, null));
+        new AtomicCounterEditorProvider(null, null, null));
     private static final EditorHook HOOK_1_SYNC = new EditorHook(
-        new AtomicCounterEditorProvider("1", null));
+        new AtomicCounterEditorProvider("1", null, null));
     private static final EditorHook HOOK_2_SYNC = new EditorHook(
-        new AtomicCounterEditorProvider("2", null));
+        new AtomicCounterEditorProvider("2", null, null));
 
     private static final PropertyState INCREMENT_BY_1 = PropertyStates.createProperty(
         PROP_INCREMENT, 1L);
@@ -68,13 +68,13 @@ public class AtomicCounterEditorTest {
         Editor editor;
         
         builder = EMPTY_NODE.builder();
-        editor = new AtomicCounterEditor(builder, null, null);
+        editor = new AtomicCounterEditor(builder, null, null, null);
         editor.propertyAdded(INCREMENT_BY_1);
         assertNoCounters(builder.getProperties());
         
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
-        editor = new AtomicCounterEditor(builder, null, null);
+        editor = new AtomicCounterEditor(builder, null, null, null);
         editor.propertyAdded(INCREMENT_BY_1);
         assertNull("the oak:increment should never be set", builder.getProperty(PROP_INCREMENT));
         assertTotalCountersValue(builder.getProperties(), 1);
@@ -87,7 +87,7 @@ public class AtomicCounterEditorTest {
         
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
-        editor = new AtomicCounterEditor(builder, null, null);
+        editor = new AtomicCounterEditor(builder, null, null, null);
         
         editor.propertyAdded(INCREMENT_BY_1);
         assertTotalCountersValue(builder.getProperties(), 1);

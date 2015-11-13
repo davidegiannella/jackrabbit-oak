@@ -52,13 +52,13 @@ import com.google.common.collect.Iterators;
  * <p>
  * Whenever you add a {@link NodeTypeConstants#MIX_ATOMIC_COUNTER} mixin to a node it will turn it
  * into an atomic counter. Then in order to increment or decrement the {@code oak:counter} property
- * you'll need to set the {@code oak:increment} one ({@link #PROP_INCREMENT). Please note that the
+ * you'll need to set the {@code oak:increment} one ({@link #PROP_INCREMENT}). Please note that the
  * <strong>{@code oak:incremement} will never be saved</strong>, only the {@code oak:counter} will
  * be amended accordingly.
  * </p>
  * 
  * <p>
- *  So in order to deal with the counter from a JCR point of view you'll do something as follows 
+ * So in order to deal with the counter from a JCR point of view you'll do something as follows
  * </p>
  * 
  * <pre>
@@ -89,8 +89,30 @@ import com.google.common.collect.Iterators;
  *  session.logout();
  * </pre>
  * 
+ * <h3>Internal behavioural details</h3>
+ * 
  * <p>
- * TODO add details on how it works with consolidation and asynchronous lazy thread.
+ * The related jira ticket is <a href="https://issues.apache.org/jira/browse/OAK-2472">OAK-2472</a>.
+ * In a nutshell when you save an {@code oak:increment} behind the scene it takes its value and
+ * increment an internal counter. There will be an individual counter for each cluster node.
+ * </p>
+ * 
+ * <p>
+ * Then it will consolidate all the internal counters into a single one: {@code oak:counter}. The
+ * consolidation process can happen either synchronously or asynchronously. Refer to
+ * {@link #AtomicCounterEditor(NodeBuilder, String, ScheduledExecutorService, NodeStore)} for
+ * details on when it consolidate one way or the other.
+ * </p>
+ * 
+ * <p>
+ * <strong>synchronous</strong>. It means the consolidation, sum of all the internal counters, will
+ * happen in the same thread. During the lifecycle of the same commit.
+ * </p>
+ * 
+ * <p>
+ * <strong>asynchronous</strong>. It means the internal counters will be set during the same commit;
+ * but it will eventually schedule a separate thread in which will retry some times to consolidate
+ * them.
  * </p>
  */
 public class AtomicCounterEditor extends DefaultEditor {
@@ -127,27 +149,37 @@ public class AtomicCounterEditor extends DefaultEditor {
     private boolean update;
     
     /**
-     * If {@code instanceId} or {@code executor} are null, the editor will switch to a "Synchronous"
-     * way of consolidating the counter. Which means it will update it straight away rather than
-     * lazily do it in a separate thread.
+     * <p>
+     * Create an instance of the editor for atomic increments. It can works synchronously as well as
+     * asynchronously. See class javadoc for details around it.
+     * </p>
+     * <p>
+     * If {@code instanceId} OR {@code executor} OR {@code store} are null, the editor will switch
+     * to synchronous behaviour for consolidation.
+     * </p>
      * 
      * @param builder the build on which to work. Cannot be null.
-     * @param instanceId the current Oak instance Id.
-     * @param executor the current Oak executor service.
+     * @param instanceId the current Oak instance Id. If null editor will be synchronous.
+     * @param executor the current Oak executor service. If null editor will be synchronous.
+     * @param store the current Oak node store. If null the editor will be synchronous.
      */
-    public AtomicCounterEditor(@Nonnull final NodeBuilder builder, @Nullable String instanceId,
-                               @Nullable ScheduledExecutorService executor) {
-        this("", checkNotNull(builder), instanceId, executor);
+    public AtomicCounterEditor(@Nonnull final NodeBuilder builder, 
+                               @Nullable String instanceId,
+                               @Nullable ScheduledExecutorService executor,
+                               @Nullable NodeStore store) {
+        this("", checkNotNull(builder), instanceId, executor, store);
     }
 
-    private AtomicCounterEditor(final String path, final NodeBuilder builder, 
+    private AtomicCounterEditor(final String path, 
+                                final NodeBuilder builder, 
                                 @Nullable String instanceId, 
-                                @Nullable ScheduledExecutorService executor) {
+                                @Nullable ScheduledExecutorService executor,
+                                @Nullable NodeStore store) {
         this.builder = checkNotNull(builder);
         this.path = path;
         this.instanceId = Strings.isNullOrEmpty(instanceId) ? null : instanceId;
         this.executor = executor;
-        this.store = null;
+        this.store = store;
     }
 
     private static boolean shallWeProcessProperty(final PropertyState property,
@@ -232,7 +264,7 @@ public class AtomicCounterEditor extends DefaultEditor {
     @Override
     public Editor childNodeAdded(final String name, final NodeState after) throws CommitFailedException {
         return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name), instanceId,
-            executor);
+            executor, store);
     }
 
     @Override
@@ -240,7 +272,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                                    final NodeState before, 
                                    final NodeState after) throws CommitFailedException {
         return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name), instanceId,
-            executor);
+            executor, store);
     }
 
     @Override

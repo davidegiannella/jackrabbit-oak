@@ -16,6 +16,9 @@
  */
 package org.apache.jackrabbit.oak.plugins.atomic;
 
+import static org.apache.felix.scr.annotations.ReferenceCardinality.OPTIONAL_UNARY;
+import static org.apache.felix.scr.annotations.ReferencePolicy.DYNAMIC;
+
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -35,6 +38,7 @@ import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.osgi.framework.BundleContext;
 
 /**
@@ -51,8 +55,12 @@ public class AtomicCounterEditorProvider implements EditorProvider {
 //    @Reference(policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_UNARY, referenceInterface = Clusterable.class)
 //    private AtomicReference<Clusterable> store = new AtomicReference<Clusterable>();
 
-    @Reference(policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_UNARY, referenceInterface = ScheduledExecutorService.class)
+    @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY,
+               referenceInterface = ScheduledExecutorService.class)
     private AtomicReference<ScheduledExecutorService> scheduler = new AtomicReference<ScheduledExecutorService>();
+    
+    @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY, referenceInterface = NodeStore.class)
+    private AtomicReference<NodeStore> store = new AtomicReference<NodeStore>();
     
     /**
      * OSGi oriented constructor where all the required dependencies will be taken care of.
@@ -61,15 +69,19 @@ public class AtomicCounterEditorProvider implements EditorProvider {
     }
 
     /**
-     * Plain Java oriented constructor.
+     * Plain Java oriented constructor. Refer to
+     * {@link AtomicCounterEditor#AtomicCounterEditor(NodeBuilder, String, ScheduledExecutorService, NodeStore)}
+     * for constructions details of the actual editor.
      * 
      * @param instanceId the current Oak instanceId.
      * @param executor the executor for running asynchronously.
+     * @param store reference to the NodeStore.
      */
     public AtomicCounterEditorProvider(@Nullable final String instanceId, 
-                                       @Nullable ScheduledExecutorService executor) {
+                                       @Nullable ScheduledExecutorService executor,
+                                       @Nullable NodeStore store) {
         this.scheduler.set(executor);
-
+        this.store.set(store);
         //TODO uncomment once OAK-3529 is in place
 //        if (instanceId == null) {
 //            store.set(null);
@@ -109,6 +121,15 @@ public class AtomicCounterEditorProvider implements EditorProvider {
         return scheduler.get();
     }
     
+    /**
+     * convenience method wrapping logic around {@link AtomicReference}
+     * 
+     * @return
+     */
+    private NodeStore getStore() {
+        return store.get();
+    }
+    
     @Activate
     public void activate(BundleContext context) {
     }
@@ -134,10 +155,18 @@ public class AtomicCounterEditorProvider implements EditorProvider {
         this.scheduler.compareAndSet(scheduler, null);
     }
 
+    protected void bindStore(NodeStore store) {
+        this.store.set(store);
+    }
+    
+    protected void unbindStore(NodeStore store) {
+        this.store.compareAndSet(store, null);
+    }
+    
     @Override
     public Editor getRootEditor(final NodeState before, final NodeState after,
                                 final NodeBuilder builder, final CommitInfo info)
                                     throws CommitFailedException {
-        return new AtomicCounterEditor(builder, getInstanceId(), getScheduler());
+        return new AtomicCounterEditor(builder, getInstanceId(), getScheduler(), getStore());
     }
 }
