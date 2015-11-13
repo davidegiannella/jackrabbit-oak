@@ -22,6 +22,7 @@ import static org.apache.jackrabbit.JcrConstants.JCR_MIXINTYPES;
 import static org.apache.jackrabbit.oak.api.Type.LONG;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
 import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PREFIX_PROP_COUNTER;
+import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PREFIX_PROP_REVISION;
 import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_COUNTER;
 import static org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditor.PROP_INCREMENT;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
@@ -208,5 +209,45 @@ public class AtomicCounterEditorTest {
         builder = HOOK_2_SYNC.processCommit(before, after, EMPTY).builder();
         assertCounterNodeState(builder,
             ImmutableSet.of(PREFIX_PROP_COUNTER + "1", PREFIX_PROP_COUNTER + "2"), 2);
+    }
+    
+    /**
+     * covers the revision increments aspect
+     * @throws CommitFailedException 
+     */
+    @Test
+    public void revisionIncrements() throws CommitFailedException {
+        NodeBuilder builder;
+        NodeState before, after;
+        PropertyState rev;
+        
+        builder = EMPTY_NODE.builder();
+        before = builder.getNodeState();
+        builder = setMixin(builder);
+        builder = incrementBy(builder, INCREMENT_BY_1);
+        after = builder.getNodeState();
+        builder = HOOK_1_SYNC.processCommit(before, after, EMPTY).builder();
+        rev = builder.getProperty(PREFIX_PROP_REVISION + "1");
+        assertNotNull(rev);
+        assertEquals(1, rev.getValue(LONG).longValue());
+
+        before = builder.getNodeState();
+        builder = incrementBy(builder, INCREMENT_BY_2);
+        after = builder.getNodeState();
+        builder = HOOK_1_SYNC.processCommit(before, after, EMPTY).builder();
+        rev = builder.getProperty(PREFIX_PROP_REVISION + "1");
+        assertNotNull(rev);
+        assertEquals(2, rev.getValue(LONG).longValue());
+
+        before = builder.getNodeState();
+        builder = incrementBy(builder, INCREMENT_BY_1);
+        after = builder.getNodeState();
+        builder = HOOK_2_SYNC.processCommit(before, after, EMPTY).builder();
+        rev = builder.getProperty(PREFIX_PROP_REVISION + "1");
+        assertNotNull(rev);
+        assertEquals(2, rev.getValue(LONG).longValue());
+        rev = builder.getProperty(PREFIX_PROP_REVISION + "2");
+        assertNotNull(rev);
+        assertEquals(1, rev.getValue(LONG).longValue());
     }
 }

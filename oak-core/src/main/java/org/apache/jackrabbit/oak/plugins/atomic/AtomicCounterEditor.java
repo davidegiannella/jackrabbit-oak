@@ -109,6 +109,11 @@ public class AtomicCounterEditor extends DefaultEditor {
      */
     public static final String PREFIX_PROP_COUNTER = ":oak-counter-";
     
+    /**
+     * prefix used internally for tracking the cluster node related revision numbers
+     */
+    public static final String PREFIX_PROP_REVISION = ":rev-";
+    
     private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterEditor.class);
     private final NodeBuilder builder;
     private final String path;
@@ -191,15 +196,29 @@ public class AtomicCounterEditor extends DefaultEditor {
 
     private void setUniqueCounter(final long value) {
         update = true;
-        String propName = instanceId == null ? PREFIX_PROP_COUNTER : 
+        String counterName = instanceId == null ? PREFIX_PROP_COUNTER : 
                                                 PREFIX_PROP_COUNTER + instanceId;
-        PropertyState p = builder.getProperty(propName);
+        String revisionName = instanceId == null ? PREFIX_PROP_REVISION :
+                                                PREFIX_PROP_REVISION + instanceId;
+        
+        PropertyState counter = builder.getProperty(counterName);
+        PropertyState revision = builder.getProperty(revisionName);
+        
         long currentValue = 0;
-        if (p != null) {
-            currentValue = p.getValue(LONG).longValue();
+        if (counter != null) {
+            currentValue = counter.getValue(LONG).longValue();
         }
+        
+        long currentRevision = 0;
+        if (revision != null) {
+            currentRevision = revision.getValue(LONG).longValue();
+        }
+        
         currentValue += value;
-        builder.setProperty(propName, currentValue, LONG);
+        currentRevision += 1;
+
+        builder.setProperty(counterName, currentValue, LONG);
+        builder.setProperty(revisionName, currentRevision, LONG);
     }
     
     @Override
@@ -230,21 +249,21 @@ public class AtomicCounterEditor extends DefaultEditor {
             // TODO here is where the Async check could be done
             consolidateCount(builder);
             
-            executor.schedule(new Callable<Void>() {
-                
-                @Override
-                public Void call() throws Exception {
-                    try {
-                        consolidateCount(builder);
-                    } catch (Exception e) {
-                        LOG.debug("sdfsdsdfsdf");
-                        executor.schedule(this, 1, TimeUnit.SECONDS);
-                    }
-                    
-                    return null;
-                }
-                
-            }, 0, TimeUnit.SECONDS);
+//            executor.schedule(new Callable<Void>() {
+//                
+//                @Override
+//                public Void call() throws Exception {
+//                    try {
+//                        consolidateCount(builder);
+//                    } catch (Exception e) {
+//                        LOG.debug("sdfsdsdfsdf");
+//                        executor.schedule(this, 1, TimeUnit.SECONDS);
+//                    }
+//                    
+//                    return null;
+//                }
+//                
+//            }, 0, TimeUnit.SECONDS);
         }
     }
 }
