@@ -21,12 +21,12 @@ import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Root;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.plugins.tree.RootFactory;
 import org.apache.jackrabbit.oak.plugins.tree.TreeLocation;
+import org.apache.jackrabbit.oak.plugins.tree.TreeType;
 import org.apache.jackrabbit.oak.plugins.version.VersionConstants;
 import org.apache.jackrabbit.oak.spi.security.ConfigurationParameters;
 import org.apache.jackrabbit.oak.spi.security.Context;
@@ -142,17 +142,16 @@ public class PermissionProviderImpl implements PermissionProvider, AccessControl
         return isGranted(location, location.getPath(), permissions);
     }
 
+    @Nonnull
+    @Override
+    public TreePermission getTreePermission(@Nonnull Tree tree, @Nonnull TreeType type, @Nonnull TreePermission parentPermission) {
+        return compiledPermissions.getTreePermission(PermissionUtil.getImmutableTree(tree, immutableRoot), type, parentPermission);
+    }
+
     //--------------------------------------------------------------------------
 
     private static boolean isVersionStorePath(@Nonnull String oakPath) {
-        if (oakPath.indexOf(JcrConstants.JCR_SYSTEM) == 1) {
-            for (String p : VersionConstants.SYSTEM_PATHS) {
-                if (oakPath.startsWith(p)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return oakPath.startsWith(VersionConstants.VERSION_STORE_PATH);
     }
 
     private boolean isGranted(@Nonnull TreeLocation location, @Nonnull String oakPath, long permissions) {

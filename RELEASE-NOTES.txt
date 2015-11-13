@@ -1,4 +1,4 @@
-Release Notes -- Apache Jackrabbit Oak -- Version 1.3.8
+Release Notes -- Apache Jackrabbit Oak -- Version 1.3.10
 
 Introduction
 ------------
@@ -7,7 +7,7 @@ Jackrabbit Oak is a scalable, high-performance hierarchical content
 repository designed for use as the foundation of modern world-class
 web sites and other demanding content applications.
 
-Apache Jackrabbit Oak 1.3.8 is an unstable release cut directly from
+Apache Jackrabbit Oak 1.3.10 is an unstable release cut directly from
 Jackrabbit Oak trunk, with a focus on new features and other
 improvements. For production use we recommend the latest stable 1.2.x
 release.
@@ -15,105 +15,65 @@ release.
 The Oak effort is a part of the Apache Jackrabbit project.
 Apache Jackrabbit is a project of the Apache Software Foundation.
 
-New configuration in 1.3.9
---------------------------
-
-Providing the start-up parameter `-Doak.query.sql2optimisation` will
-enable the experimental feature OAK-1617 that performs another round
-of optimisations on top of a SQL2 query.
-
-Changes in Oak 1.3.8
+Changes in Oak 1.3.10
 --------------------
 
 Sub-task
 
-    [OAK-2507] - Truncate journal.log after off line compaction
-    [OAK-2879] - Compaction should check for required disk space
-    before running
-    [OAK-3172] - Unreleased closed sessions can keep a root reference
-    from getting collected
-    [OAK-3260] - oak-jcr: update test exclusions once JCR-3900 is
-    resolved
-
-Technical task
-
-    [OAK-3384] - Revisit PartialCompactionMapTest
-    [OAK-3479] - Add generation info to compaction map
-    [OAK-3501] - PersistedCompactionMap could release reference to
-    records early
+    [OAK-1708] - extend DocumentNodeStoreService to support
+    RDBPersistence
+    [OAK-3542] - evaluation for special tree types in aggregation
 
 Bug
 
-    [OAK-1648] - Creating multiple checkpoint on same head revision
-    overwrites previous entries
-    [OAK-2635] - TimeSeriesMax's frequent 'drops to 0'
-    [OAK-2881] - ConsistencyChecker#checkConsistency can't cope with
-    inconsistent journal
-    [OAK-2929] - Parent of unseen children must not be removable
-    [OAK-3235] - Deadlock when closing a concurrently used FileStore
-    [OAK-3371] - Wrong evaluation of NOT clause
-    [OAK-3388] - Inconsistent read in cluster with clock differences
-    [OAK-3396] - NPE during syncAllExternalUsers in
-    LdapIdentityProvider.createUser
-    [OAK-3405] - Avoid instanceof check in LastRevRecoveryAgent
-    [OAK-3417] - oak-run OakFixture might set incorrect clusterIDs
-    [OAK-3456] - MongoBlobGCTest.gcLongRunningBlobCollection() fails
-    [OAK-3463] - Communicate Password Change Failure Reason During
-    Expiry + Pw History
-    [OAK-3473] - CliUtils#handleSigInt uses classes from sun.misc.*
-    [OAK-3474] - NodeDocument.getNodeAtRevision can go into property
-    history traversal when latest rev on current doc isn't committed
-    [OAK-3476] - Memory leak caused by using marker names based on non
-    static session id
-    [OAK-3481] - CompationMapTest does not close file store
-    [OAK-3487] - NodeDocumentTest.getNewestRevisionTooExpensive()
-    fails occasionally
-    [OAK-3490] - QueryTest.orderBy() fails occasionally
-    [OAK-3491] - DocumentDiscoveryLiteServiceTest makes incorrect call
-    to MissingLastRevRecovery
-    [OAK-3492] - reduce DocumentDiscoveryLiteService hasBacklog WARNs
-    [OAK-3493] - Deadlock when closing a concurrently used FileStore
-    2.0
-
-Documentation
-
-    [OAK-3452] - Document possible migration options
+    [OAK-3335] - RepositorySidegrade has runtime dependency on
+    jackrabbit-core
+    [OAK-3499] - Test failures when there is no network interface
+    [OAK-3556] - MongoDocumentStore may create incomplete document
+    [OAK-3557] - NodeDocument.isConflicting() reads complete revision
+    history for changed property
+    [OAK-3567] - Long running query holds TreeLock
+    [OAK-3579] - BackgroundLeaseUpdate not scheduled when asyncDelay=0
+    [OAK-3582] - Background split may throw NPE
+    [OAK-3584] - PathNotFoundException when reading child node and
+    property definitions below nt root
+    [OAK-3590] - Incomplete doc of GlobPattern
+    [OAK-3592] - merge-paths option not working for repository upgrade
 
 Improvement
 
-    [OAK-3166] - Apply adjustments for newly exported
-    JackrabbitSession#getItemOrNull
-    [OAK-3251] - speeding up the build time
-    [OAK-3290] - Revision gc blocks repository shutdown
-    [OAK-3329] - TarMK cleanup blocks writers
-    [OAK-3448] - Update jackrabbit version to 2.11.1
-    [OAK-3454] - Improve the logging capabilities of offline
-    compaction
-    [OAK-3455] - Improve conflict exception message
-    [OAK-3460] - Progress logging for RepositorySidegrade
-    [OAK-3465] - Move ContinuousRevisionGCTest to benchmark package
-    [OAK-3469] - Fix naming in oak-upgrade
-    [OAK-3471] - Avoid reflection in DocumentDiscoveryLiteServiceTest
-    [OAK-3475] - Confusing SNFE whith oak-run debug
-    [OAK-3484] - Oak Explorer: add property type to reference output
-    [OAK-3485] - FileStoreIT cleanup after tests
-    [OAK-3497] - Remove DocumentNodeStore.diff()
-    [OAK-3502] - Improve logging during cleanup
+    [OAK-3372] - Collapsing external events in BackgroundObserver even
+    before queue is full leads to JournalEntry not getting used
+    [OAK-3449] - DocumentNodeStore support for predefined clusterIds
+    should use ClusterNodeInfos
+    [OAK-3494] - MemoryDiffCache should also check parent paths before
+    falling to Loader (or returning null)
+    [OAK-3555] - Remove usage of deprecated mongo-java-driver methods
+    [OAK-3565] - Use DocumentStore.create() for new previous documents
+    [OAK-3581] - Increase tracked info on Lucene index closing
+    [OAK-3587] - SegmentNodeStore stricter checkpoint creation policy
+    [OAK-3588] - SegmentNodeStore allow tweaking of lock fairness
+    [OAK-3593] - improvements to plugins/tree
+    [OAK-3596] - Allow specific OSGi reference for atomic counter
+    provider
 
 New Feature
 
-    [OAK-3457] - Multivalued restriction to limit effect of ACE to
-    items with a given name
-    [OAK-3472] - Run mode to identify blob garbage
+    [OAK-3550] - Add meta data to segments
+    [OAK-3560] - Tooling for writing segment graphs to a file
 
 Task
 
-    [OAK-2623] - Add test for GC of previous docs of a deleted
-    document
+    [OAK-3439] - MissingLastRevSeeker potential race condition
+    acquiring the lock
+    [OAK-3535] - Update jackrabbit version to 2.11.2
+    [OAK-3569] - Bump mongo java driver version to 2.13.3
 
-Wish
+Test
 
-    [OAK-3467] - Tests slow after OAK-2171
+    [OAK-3562] - Tests do not close MongoConnection
+    [OAK-3570] - concurrentLoop(MongoDocumentStoreIT) test failures
+    [OAK-3585] - Reduce memory usage of SegmentParserTest
 
 In addition to the above-mentioned changes, this release contains
 all changes included up to the Apache Jackrabbit Oak 1.2.x release.

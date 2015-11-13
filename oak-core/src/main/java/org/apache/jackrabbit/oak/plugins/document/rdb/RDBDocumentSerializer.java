@@ -74,12 +74,13 @@ public class RDBDocumentSerializer {
         StringBuilder sb = new StringBuilder(32768);
         sb.append("{");
         boolean needComma = false;
-        for (String key : doc.keySet()) {
+        for (Map.Entry<String, Object> entry : doc.entrySet()) {
+            String key = entry.getKey();
             if (!columnProperties.contains(key)) {
                 if (needComma) {
                     sb.append(",");
                 }
-                appendMember(sb, key, doc.get(key));
+                appendMember(sb, key, entry.getValue());
                 needComma = true;
             }
         }
@@ -175,6 +176,7 @@ public class RDBDocumentSerializer {
     /**
      * Reconstructs a {@link Document) based on the persisted {@link RDBRow}.
      */
+    @Nonnull
     public <T extends Document> T fromRow(@Nonnull Collection<T> collection, @Nonnull RDBRow row) throws DocumentStoreException {
         T doc = collection.newDocument(store);
         doc.put(ID, row.getId());

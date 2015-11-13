@@ -24,6 +24,7 @@ import javax.annotation.Nullable;
 import org.apache.felix.scr.annotations.Activate;
 import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Property;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
@@ -41,7 +42,8 @@ import org.osgi.framework.BundleContext;
  * behavioural details.
  */
 @Component
-@Service
+@Property(name = "type", value = "atomicCounter", propertyPrivate = true)
+@Service(EditorProvider.class)
 public class AtomicCounterEditorProvider implements EditorProvider {
 
     //TODO uncomment once OAK-3529 will be in place
