@@ -57,10 +57,10 @@ public class AtomicCounterEditorProvider implements EditorProvider {
 
     @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY,
                referenceInterface = ScheduledExecutorService.class)
-    private AtomicReference<ScheduledExecutorService> scheduler = new AtomicReference<ScheduledExecutorService>();
-    
+    private volatile AtomicReference<ScheduledExecutorService> scheduler = new AtomicReference<ScheduledExecutorService>();
+
     @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY, referenceInterface = NodeStore.class)
-    private AtomicReference<NodeStore> store = new AtomicReference<NodeStore>();
+    private volatile AtomicReference<NodeStore> store = new AtomicReference<NodeStore>();
     
     /**
      * OSGi oriented constructor where all the required dependencies will be taken care of.
