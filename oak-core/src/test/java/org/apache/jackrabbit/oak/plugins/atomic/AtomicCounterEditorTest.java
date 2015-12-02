@@ -61,6 +61,8 @@ import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.apache.jackrabbit.oak.spi.whiteboard.DefaultWhiteboard;
+import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,11 +72,11 @@ import com.google.common.collect.ImmutableSet;
 
 public class AtomicCounterEditorTest {
     private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
-        new AtomicCounterEditorProvider(null, null, null));
+        new AtomicCounterEditorProvider(null, null, null, null));
     private static final EditorHook HOOK_1_SYNC = new EditorHook(
-        new AtomicCounterEditorProvider("1", null, null));
+        new AtomicCounterEditorProvider("1", null, null, null));
     private static final EditorHook HOOK_2_SYNC = new EditorHook(
-        new AtomicCounterEditorProvider("2", null, null));
+        new AtomicCounterEditorProvider("2", null, null, null));
 
     private static final PropertyState INCREMENT_BY_1 = PropertyStates.createProperty(
         PROP_INCREMENT, 1L);
@@ -87,13 +89,13 @@ public class AtomicCounterEditorTest {
         Editor editor;
         
         builder = EMPTY_NODE.builder();
-        editor = new AtomicCounterEditor(builder, null, null, null);
+        editor = new AtomicCounterEditor(builder, null, null, null, null);
         editor.propertyAdded(INCREMENT_BY_1);
         assertNoCounters(builder.getProperties());
         
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
-        editor = new AtomicCounterEditor(builder, null, null, null);
+        editor = new AtomicCounterEditor(builder, null, null, null, null);
         editor.propertyAdded(INCREMENT_BY_1);
         assertNull("the oak:increment should never be set", builder.getProperty(PROP_INCREMENT));
         assertTotalCountersValue(builder.getProperties(), 1);
@@ -106,7 +108,7 @@ public class AtomicCounterEditorTest {
         
         builder = EMPTY_NODE.builder();
         builder = setMixin(builder);
-        editor = new AtomicCounterEditor(builder, null, null, null);
+        editor = new AtomicCounterEditor(builder, null, null, null, null);
         
         editor.propertyAdded(INCREMENT_BY_1);
         assertTotalCountersValue(builder.getProperties(), 1);
@@ -275,7 +277,8 @@ public class AtomicCounterEditorTest {
         NodeStore store = NodeStoreFixture.MEMORY_NS.createNodeStore();
         String instanceId1 = "1";
         MyExecutor exec1 = new MyExecutor();
-        EditorHook hook1 = new EditorHook(new AtomicCounterEditorProvider(instanceId1, exec1, store));
+        Whiteboard board = new DefaultWhiteboard();
+        EditorHook hook1 = new EditorHook(new AtomicCounterEditorProvider(instanceId1, exec1, store, board));
         NodeBuilder builder;
         NodeState before, after;
         PropertyState p;

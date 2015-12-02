@@ -36,6 +36,7 @@ import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -142,6 +143,7 @@ public class AtomicCounterEditor extends DefaultEditor {
     private final String instanceId;
     private final ScheduledExecutorService executor;
     private final NodeStore store;
+    private final Whiteboard board;
     
     /**
      * instruct whether to update the node on leave.
@@ -154,32 +156,36 @@ public class AtomicCounterEditor extends DefaultEditor {
      * asynchronously. See class javadoc for details around it.
      * </p>
      * <p>
-     * If {@code instanceId} OR {@code executor} OR {@code store} are null, the editor will switch
-     * to synchronous behaviour for consolidation.
+     * If {@code instanceId} OR {@code executor} OR {@code store} OR {@code board} are null, the
+     * editor will switch to synchronous behaviour for consolidation.
      * </p>
      * 
      * @param builder the build on which to work. Cannot be null.
      * @param instanceId the current Oak instance Id. If null editor will be synchronous.
      * @param executor the current Oak executor service. If null editor will be synchronous.
      * @param store the current Oak node store. If null the editor will be synchronous.
+     * @param board the current Oak {@link Whiteboard}.
      */
     public AtomicCounterEditor(@Nonnull final NodeBuilder builder, 
                                @Nullable String instanceId,
                                @Nullable ScheduledExecutorService executor,
-                               @Nullable NodeStore store) {
-        this("", checkNotNull(builder), instanceId, executor, store);
+                               @Nullable NodeStore store,
+                               @Nullable Whiteboard board) {
+        this("", checkNotNull(builder), instanceId, executor, store, board);
     }
 
     private AtomicCounterEditor(final String path, 
                                 final NodeBuilder builder, 
                                 @Nullable String instanceId, 
                                 @Nullable ScheduledExecutorService executor,
-                                @Nullable NodeStore store) {
+                                @Nullable NodeStore store,
+                                @Nullable Whiteboard board) {
         this.builder = checkNotNull(builder);
         this.path = path;
         this.instanceId = Strings.isNullOrEmpty(instanceId) ? null : instanceId;
         this.executor = executor;
         this.store = store;
+        this.board = board;
     }
 
     private static boolean shallWeProcessProperty(final PropertyState property,
@@ -264,7 +270,7 @@ public class AtomicCounterEditor extends DefaultEditor {
     @Override
     public Editor childNodeAdded(final String name, final NodeState after) throws CommitFailedException {
         return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name), instanceId,
-            executor, store);
+            executor, store, board);
     }
 
     @Override
@@ -272,7 +278,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                                    final NodeState before, 
                                    final NodeState after) throws CommitFailedException {
         return new AtomicCounterEditor(path + '/' + name, builder.getChildNode(name), instanceId,
-            executor, store);
+            executor, store, board);
     }
 
     @Override

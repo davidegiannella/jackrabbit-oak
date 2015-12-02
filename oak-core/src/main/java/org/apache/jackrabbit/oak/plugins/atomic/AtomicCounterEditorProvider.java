@@ -39,6 +39,7 @@ import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.osgi.framework.BundleContext;
 
 /**
@@ -60,7 +61,10 @@ public class AtomicCounterEditorProvider implements EditorProvider {
     private volatile AtomicReference<ScheduledExecutorService> scheduler = new AtomicReference<ScheduledExecutorService>();
 
     @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY, referenceInterface = NodeStore.class)
-    private volatile AtomicReference<NodeStore> store = new AtomicReference<NodeStore>();
+    private volatile AtomicReference<NodeStore> store = new AtomicReference<NodeStore>();    
+    
+    @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY, referenceInterface = NodeStore.class)
+    private volatile AtomicReference<Whiteboard> whiteboard = new AtomicReference<Whiteboard>();
     
     /**
      * OSGi oriented constructor where all the required dependencies will be taken care of.
@@ -79,9 +83,11 @@ public class AtomicCounterEditorProvider implements EditorProvider {
      */
     public AtomicCounterEditorProvider(@Nullable final String instanceId, 
                                        @Nullable ScheduledExecutorService executor,
-                                       @Nullable NodeStore store) {
+                                       @Nullable NodeStore store,
+                                       @Nullable Whiteboard whiteboard) {
         this.scheduler.set(executor);
         this.store.set(store);
+        this.whiteboard.set(whiteboard);
         //TODO uncomment once OAK-3529 is in place
 //        if (instanceId == null) {
 //            store.set(null);
@@ -130,6 +136,15 @@ public class AtomicCounterEditorProvider implements EditorProvider {
         return store.get();
     }
     
+    /**
+     * Convenience method wrapping logic around {@link AtomicReference}
+     * 
+     * @return
+     */
+    private Whiteboard getBoard() {
+        return whiteboard.get();
+    }
+    
     @Activate
     public void activate(BundleContext context) {
     }
@@ -163,10 +178,19 @@ public class AtomicCounterEditorProvider implements EditorProvider {
         this.store.compareAndSet(store, null);
     }
     
+    protected void bindWhiteboard(Whiteboard board) {
+        this.whiteboard.set(board);
+    }
+    
+    protected void unbindWhiteboard(Whiteboard board) {
+        this.whiteboard.compareAndSet(board, null);
+    }
+    
     @Override
     public Editor getRootEditor(final NodeState before, final NodeState after,
                                 final NodeBuilder builder, final CommitInfo info)
                                     throws CommitFailedException {
-        return new AtomicCounterEditor(builder, getInstanceId(), getScheduler(), getStore());
+        return new AtomicCounterEditor(builder, getInstanceId(), getScheduler(), getStore(),
+            getBoard());
     }
 }
