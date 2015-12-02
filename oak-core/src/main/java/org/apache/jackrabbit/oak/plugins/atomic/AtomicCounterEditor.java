@@ -31,12 +31,15 @@ import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.DefaultEditor;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.apache.jackrabbit.oak.spi.whiteboard.Tracker;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
+import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -157,7 +160,8 @@ public class AtomicCounterEditor extends DefaultEditor {
      * </p>
      * <p>
      * If {@code instanceId} OR {@code executor} OR {@code store} OR {@code board} are null, the
-     * editor will switch to synchronous behaviour for consolidation.
+     * editor will switch to synchronous behaviour for consolidation. The code will be executed
+     * synchronously even if no {@link CommitHook} has been found registered within the whiteboard.
      * </p>
      * 
      * @param builder the build on which to work. Cannot be null.
@@ -284,29 +288,40 @@ public class AtomicCounterEditor extends DefaultEditor {
     @Override
     public void leave(final NodeState before, final NodeState after) throws CommitFailedException {
         if (update) {
-            if (instanceId == null || store == null || executor == null) {
-                LOG.trace("Executing synchronously");
+            if (instanceId == null || store == null || executor == null || board == null) {
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace(
+                        "Executing synchronously. instanceId: {}, store: {}, executor: {}, board: {}",
+                        new Object[] { instanceId, store.toString(), executor.toString(),
+                                      board.toString() });
+                }
                 consolidateCount(builder);
             } else {
-                LOG.trace("Scheduling process");
-                executor.schedule(new Callable<Void>() {
-                    
-                    @Override
-                    public Void call() throws Exception {
-                        try {
-                            LOG.debug("Running!");
-                        } catch (Exception e) {
-                            LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
-                            if (LOG.isTraceEnabled()) {
-                                LOG.trace("{}", e);
+                final CommitHook hook = WhiteboardUtils.getService(board, CommitHook.class);
+                if (hook == null) {
+                    LOG.trace("Executing synchronously. CommitHook not found in the whiteboard");
+                    consolidateCount(builder);
+                } else {
+                    LOG.trace("Scheduling process");
+                    executor.schedule(new Callable<Void>() {
+                        
+                        @Override
+                        public Void call() throws Exception {
+                            try {
+                                LOG.debug("Running!");
+                            } catch (Exception e) {
+                                LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
+                                if (LOG.isTraceEnabled()) {
+                                    LOG.trace("{}", e);
+                                }
+                                executor.schedule(this, 1, TimeUnit.SECONDS);
                             }
-                            executor.schedule(this, 1, TimeUnit.SECONDS);
+                            
+                            return null;
                         }
                         
-                        return null;
-                    }
-                    
-                }, 0, TimeUnit.SECONDS);
+                    }, 0, TimeUnit.SECONDS);
+                }
             }
         }
     }
