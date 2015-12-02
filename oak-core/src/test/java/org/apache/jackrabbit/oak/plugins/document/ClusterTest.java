@@ -16,8 +16,6 @@
  */
 package org.apache.jackrabbit.oak.plugins.document;
 
-import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
-import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.MISSING_NODE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -26,7 +24,6 @@ import static org.junit.Assert.fail;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -40,12 +37,10 @@ import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.document.memory.MemoryDocumentStore;
 import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.spi.blob.MemoryBlobStore;
-import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
-import org.apache.jackrabbit.oak.spi.state.DefaultNodeStateDiff;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -53,12 +48,16 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 /**
  * A set of simple cluster tests.
  */
 public class ClusterTest {
+
+    @Rule
+    public MongoConnectionFactory connectionFactory = new MongoConnectionFactory();
 
     private static final boolean MONGO_DB = false;
     // private static final boolean MONGO_DB = true;
@@ -404,7 +403,7 @@ public class ClusterTest {
         }
         mks.clear();
         if (MONGO_DB) {
-            DB db = MongoUtils.getConnection().getDB();
+            DB db = connectionFactory.getConnection().getDB();
             MongoUtils.dropCollections(db);
         }
     }
@@ -420,7 +419,7 @@ public class ClusterTest {
 
     private DocumentMK createMK(int clusterId, int asyncDelay) {
         if (MONGO_DB) {
-            DB db = MongoUtils.getConnection().getDB();
+            DB db = connectionFactory.getConnection().getDB();
             return register(new DocumentMK.Builder().setMongoDB(db)
                     .setClusterId(clusterId).setAsyncDelay(asyncDelay).open());
         } else {
@@ -458,54 +457,6 @@ public class ClusterTest {
     private void traverse(NodeState node, String path) {
         for (ChildNodeEntry child : node.getChildNodeEntries()) {
             traverse(child.getNodeState(), PathUtils.concat(path, child.getName()));
-        }
-    }
-
-    static class TrackingDiff extends DefaultNodeStateDiff {
-
-        final String path;
-        final Set<String> added;
-        final Set<String> deleted;
-        final Set<String> modified;
-
-        TrackingDiff() {
-            this("/", new HashSet<String>(),
-                    new HashSet<String>(), new HashSet<String>());
-        }
-
-        private TrackingDiff(String path,
-                             Set<String> added,
-                             Set<String> deleted,
-                             Set<String> modified) {
-            this.path = path;
-            this.added = added;
-            this.deleted = deleted;
-            this.modified = modified;
-        }
-
-        @Override
-        public boolean childNodeAdded(String name, NodeState after) {
-            String p = PathUtils.concat(path, name);
-            added.add(p);
-            return after.compareAgainstBaseState(EMPTY_NODE,
-                    new TrackingDiff(p, added, deleted, modified));
-        }
-
-        @Override
-        public boolean childNodeChanged(String name,
-                                        NodeState before,
-                                        NodeState after) {
-            String p = PathUtils.concat(path, name);
-            modified.add(p);
-            return after.compareAgainstBaseState(before,
-                    new TrackingDiff(p, added, deleted, modified));
-        }
-
-        @Override
-        public boolean childNodeDeleted(String name, NodeState before) {
-            String p = PathUtils.concat(path, name);
-            deleted.add(p);
-            return MISSING_NODE.compareAgainstBaseState(before, new TrackingDiff(p, added, deleted, modified));
         }
     }
 }

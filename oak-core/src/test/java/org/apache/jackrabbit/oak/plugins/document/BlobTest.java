@@ -43,6 +43,9 @@ public class BlobTest {
 
     @Rule
     public DocumentMKBuilderProvider builderProvider = new DocumentMKBuilderProvider();
+
+    @Rule
+    public MongoConnectionFactory connectionFactory = new MongoConnectionFactory();
     
     private static final Logger LOG = LoggerFactory.getLogger(RandomizedClusterTest.class);
 
@@ -54,20 +57,22 @@ public class BlobTest {
     private static final long TOTAL_SIZE = 1 * 1024 * 1024;
     private static final int DOCUMENT_COUNT = 10;
 
-    DB openMongoConnection() {
-        return MONGO_DB ? MongoUtils.getConnection().getDB() : null;
+    DocumentMK.Builder setMongoConnection(DocumentMK.Builder builder) {
+        if (MONGO_DB) {
+            builder.setMongoDB(connectionFactory.getConnection().getDB());
+        }
+        return builder;
     }
 
     void dropCollections() {
         if (MONGO_DB) {
-            MongoUtils.dropCollections(MongoUtils.getConnection().getDB());
+            MongoUtils.dropCollections(connectionFactory.getConnection().getDB());
         }
     }
 
     @Test
     public void addBlobs() throws Exception {
-        DocumentMK mk = builderProvider.newBuilder().
-                setMongoDB(openMongoConnection()).open();
+        DocumentMK mk = setMongoConnection(builderProvider.newBuilder()).open();
         long blobSize = TOTAL_SIZE / DOCUMENT_COUNT;
         ArrayList<String> blobIds = new ArrayList<String>();
         // use a new seed each time, to allow running the test multiple times

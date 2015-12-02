@@ -13,6 +13,10 @@
  */
 package org.apache.jackrabbit.oak.query;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Lists.newArrayList;
+import static org.apache.jackrabbit.oak.query.ast.AstElementFactory.copyElementAndCheckReference;
+
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -24,11 +28,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import javax.annotation.Nonnull;
+
+import com.google.common.base.Strings;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-
 import com.google.common.collect.Ordering;
+
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
@@ -131,7 +138,7 @@ public class QueryImpl implements Query {
     };
 
     SourceImpl source;
-    final String statement;
+    private String statement;
     final HashMap<String, PropertyValue> bindVariableMap = new HashMap<String, PropertyValue>();
     final HashMap<String, Integer> selectorIndexes = new HashMap<String, Integer>();
     final ArrayList<SelectorImpl> selectors = new ArrayList<SelectorImpl>();
@@ -160,6 +167,11 @@ public class QueryImpl implements Query {
     private long size = -1;
     private boolean prepared;
     private ExecutionContext context;
+    
+    /**
+     * whether the object has been initialised or not
+     */
+    private boolean init;
 
     private boolean isSortedByIndex;
 
@@ -174,7 +186,7 @@ public class QueryImpl implements Query {
     private boolean isInternal;
 
     QueryImpl(String statement, SourceImpl source, ConstraintImpl constraint,
-            ColumnImpl[] columns, NamePathMapper mapper, QueryEngineSettings settings) {
+        ColumnImpl[] columns, NamePathMapper mapper, QueryEngineSettings settings) {
         this.statement = statement;
         this.source = source;
         this.constraint = constraint;
@@ -416,6 +428,8 @@ public class QueryImpl implements Query {
             }
             distinctColumns[i] = distinct;
         }
+        
+        init = true;
     }
 
     @Override
@@ -1138,8 +1152,9 @@ public class QueryImpl implements Query {
         return Math.min(limit, source.getSize(precision, max));
     }
 
+    @Override
     public String getStatement() {
-        return statement;
+        return Strings.isNullOrEmpty(statement) ? toString() : statement;
     }
 
     public QueryEngineSettings getSettings() {
@@ -1168,6 +1183,123 @@ public class QueryImpl implements Query {
         BigInteger max = BigInteger.valueOf(Long.MAX_VALUE);
         BigInteger sum = BigInteger.valueOf(x).add(BigInteger.valueOf(y));
         return sum.min(max).max(min).longValue();
+    }
+
+    @Override
+    public Query buildAlternativeQuery() {
+        Query result = this;
+        
+        if (constraint != null) {
+            Set<ConstraintImpl> unionList = constraint.convertToUnion();
+            if (unionList.size() > 1) {
+                // there are some cases where multiple ORs simplify into a single one. If we get a
+                // union list of just one we don't really have to UNION anything.
+                QueryImpl left = null;
+                Query right = null;
+                // we have something to do here.
+                for (ConstraintImpl c : unionList) {
+                    if (right != null) {
+                        right = newAlternativeUnionQuery(left, right);
+                    } else {
+                        // pulling left to the right
+                        if (left != null) {
+                            right = left;
+                        }
+                    }
+                    
+                    // cloning original query
+                    left = (QueryImpl) this.copyOf();
+                    
+                    // cloning the constraints and assigning to new query
+                    left.constraint = (ConstraintImpl) copyElementAndCheckReference(c);
+                    // re-composing the statement for better debug messages
+                    left.statement = recomposeStatement(left);
+                }
+                
+                result = newAlternativeUnionQuery(left, right);
+            }
+        }
+        
+        return result;
+    }
+    
+    private static String recomposeStatement(@Nonnull QueryImpl query) {
+        checkNotNull(query);
+        String original = query.getStatement();
+        String origUpper = original.toUpperCase();
+        StringBuilder recomputed = new StringBuilder();
+        final String where = " WHERE ";
+        final String orderBy = " ORDER BY ";
+        int whereOffset = where.length();
+        
+        if (query.getConstraint() == null) {
+            recomputed.append(original);
+        } else {
+            recomputed.append(original.substring(0, origUpper.indexOf(where) + whereOffset));
+            recomputed.append(query.getConstraint());
+            if (origUpper.indexOf(orderBy) > -1) {
+                recomputed.append(original.substring(origUpper.indexOf(orderBy)));
+            }
+        }
+        return recomputed.toString();
+    }
+    
+    /**
+     * Convenience method for creating a UnionQueryImpl with proper settings.
+     * 
+     * @param left the first subquery
+     * @param right the second subquery
+     * @return the union query
+     */
+    private UnionQueryImpl newAlternativeUnionQuery(@Nonnull Query left, @Nonnull Query right) {
+        UnionQueryImpl u = new UnionQueryImpl(
+            false, 
+            checkNotNull(left, "`left` cannot be null"), 
+            checkNotNull(right, "`right` cannot be null"),
+            this.settings);
+        u.setExplain(explain);
+        u.setMeasure(measure);
+        u.setInternal(isInternal);
+        return u;
+    }
+    
+    @Override
+    public Query copyOf() {
+        if (isInit()) {
+            throw new IllegalStateException("QueryImpl cannot be cloned once initialised.");
+        }
+        
+        List<ColumnImpl> cols = newArrayList();
+        for (ColumnImpl c : columns) {
+            cols.add((ColumnImpl) copyElementAndCheckReference(c));
+        }
+                
+        QueryImpl copy = new QueryImpl(
+            this.statement, 
+            (SourceImpl) copyElementAndCheckReference(this.source),
+            this.constraint,
+            cols.toArray(new ColumnImpl[0]),
+            this.namePathMapper,
+            this.settings);
+        copy.explain = this.explain;
+        copy.distinct = this.distinct;
+        
+        return copy;        
+    }
+
+    @Override
+    public boolean isInit() {
+        return init;
+    }
+
+    @Override
+    public boolean isInternal() {
+        return isInternal;
+    }
+
+    @Override
+    public boolean containsUnfilteredFullTextCondition() {
+        return constraint.containsUnfilteredFullTextCondition();
     }
 
 }

@@ -16,7 +16,11 @@ package org.apache.jackrabbit.oak.query;
 import java.util.Iterator;
 import java.util.List;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
 import aQute.bnd.annotation.ProviderType;
+
 import org.apache.jackrabbit.oak.api.PropertyValue;
 import org.apache.jackrabbit.oak.api.Result;
 import org.apache.jackrabbit.oak.api.Tree;
@@ -125,4 +129,58 @@ public interface Query {
      * @return if sorted by index
      */
     boolean isSortedByIndex();
+    
+    /**
+     * Try to convert the query to an alternative form, specially a "union". To
+     * avoid any potential error due to state variables perform the conversion
+     * before the {@link #init()}.
+     * 
+     * @return {@code this} if no conversions are possible or a new instance of
+     *         a {@link Query}. Cannot return null.
+     */
+    @Nonnull
+    Query buildAlternativeQuery();
+    
+    /**
+     * <p>
+     * returns a clone of the current object. Will throw an exception in case it's invoked in a non
+     * appropriate moment. For example the default {@link QueryImpl} cannot be cloned once the
+     * {@link #init()} has been executed.
+     * </p>
+     * 
+     * <p>
+     * <strong>May return null if not implemented.</strong>
+     * </p>
+     * @return a clone of self
+     * @throws IllegalStateException
+     */
+    @Nullable
+    Query copyOf() throws IllegalStateException;
+    
+    /**
+     * @return {@code true} if the query has been already initialised. {@code false} otherwise.
+     */
+    boolean isInit();
+    
+    /**
+     * @return the original statement as it was used to construct the object. If not provided the
+     *         {@link #toString()} will be used instead.
+     */
+    String getStatement();
+    
+    /**
+     * 
+     * @return {@code true} if the current query is internal. {@code false} otherwise.
+     */
+    boolean isInternal();
+
+    /**
+     * Whether the condition contains a fulltext condition that can not be 
+     * applied to the filter, for example because it is part of an "or" condition
+     * of the form "where a=1 or contains(., 'x')".
+     * 
+     * @return true if yes
+     */    
+    boolean containsUnfilteredFullTextCondition();
+
 }

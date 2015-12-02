@@ -41,6 +41,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.io.CountingInputStream;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
@@ -66,18 +67,18 @@ import org.apache.jackrabbit.oak.query.AbstractQueryTest;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
-import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.util.ISO8601;
 import org.junit.After;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import static com.google.common.collect.ImmutableSet.of;
+import static com.google.common.collect.Lists.newArrayList;
 import static java.util.Arrays.asList;
 import static org.apache.jackrabbit.JcrConstants.JCR_CONTENT;
 import static org.apache.jackrabbit.JcrConstants.JCR_DATA;
+import static org.apache.jackrabbit.JcrConstants.NT_FILE;
 import static org.apache.jackrabbit.oak.api.QueryEngine.NO_BINDINGS;
 import static org.apache.jackrabbit.oak.api.QueryEngine.NO_MAPPINGS;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
@@ -94,6 +95,7 @@ import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstant
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.PROP_NODE;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.TIKA;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorTest.createCal;
+import static org.apache.jackrabbit.oak.plugins.index.lucene.TestUtil.newNodeAggregator;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.TestUtil.useV2;
 import static org.apache.jackrabbit.oak.plugins.index.property.OrderedIndex.OrderDirection;
 import static org.apache.jackrabbit.oak.plugins.memory.PropertyStates.createProperty;
@@ -102,7 +104,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
-import static org.junit.matchers.JUnitMatchers.containsString;
+import static org.hamcrest.CoreMatchers.containsString;
 
 public class LucenePropertyIndexTest extends AbstractQueryTest {
     /**
@@ -124,7 +126,7 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
 
     @Override
     protected ContentRepository createRepository() {
-        editorProvider = new LuceneIndexEditorProvider(createIndexCopier());
+        editorProvider = new LuceneIndexEditorProvider(createIndexCopier(), new ExtractedTextCache(10* FileUtils.ONE_MB, 100));
         LuceneIndexProvider provider = new LuceneIndexProvider();
         return new Oak()
                 .with(new InitialContent())
@@ -1436,6 +1438,59 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
     }
 
     @Test
+    public void preExtractedTextCache() throws Exception{
+        Tree idx = createFulltextIndex(root.getTree("/"), "test");
+        TestUtil.useV2(idx);
+        root.commit();
+
+        AccessStateProvidingBlob testBlob =
+                new AccessStateProvidingBlob("fox is jumping", "id1");
+
+        //1. Check by adding blobs in diff commit and reset
+        //cache each time. In such case blob stream would be
+        //accessed as many times
+        Tree test = root.getTree("/").addChild("test");
+        createFileNode(test, "text", testBlob, "text/plain");
+        root.commit();
+
+        editorProvider.getExtractedTextCache().resetCache();
+
+        test = root.getTree("/").addChild("test");
+        createFileNode(test, "text2", testBlob, "text/plain");
+        root.commit();
+
+        assertTrue(testBlob.isStreamAccessed());
+        assertEquals(2, testBlob.accessCount);
+
+        //Reset all test state
+        testBlob.resetState();
+        editorProvider.getExtractedTextCache().resetCache();
+
+        //2. Now add 2 nodes with same blob in same commit
+        //This time cache effect would come and blob would
+        //be accessed only once
+        test = root.getTree("/").addChild("test");
+        createFileNode(test, "text3", testBlob, "text/plain");
+        createFileNode(test, "text4", testBlob, "text/plain");
+        root.commit();
+
+        assertTrue(testBlob.isStreamAccessed());
+        assertEquals(1, testBlob.accessCount);
+
+        //Reset
+        testBlob.resetState();
+
+        //3. Now just add another node with same blob with no cache
+        //reset. This time blob stream would not be accessed at all
+        test = root.getTree("/").addChild("test");
+        createFileNode(test, "text5", testBlob, "text/plain");
+        root.commit();
+
+        assertFalse(testBlob.isStreamAccessed());
+        assertEquals(0, testBlob.accessCount);
+    }
+
+    @Test
     public void maxFieldLengthCheck() throws Exception{
         Tree idx = createFulltextIndex(root.getTree("/"), "test");
         TestUtil.useV2(idx);
@@ -1626,6 +1681,39 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
     }
 
     @Test
+    public void aggregationAndExcludeProperty() throws Exception {
+        NodeTypeRegistry.register(root, IOUtils.toInputStream(TestUtil.TEST_NODE_TYPE), "test nodeType");
+        Tree idx = createIndex("test1", of("propa", "propb"));
+        Tree props = TestUtil.newRulePropTree(idx, TestUtil.NT_TEST);
+        Tree prop = props.addChild(TestUtil.unique("prop"));
+        prop.setProperty(LuceneIndexConstants.PROP_NAME, "jcr:title");
+        prop.setProperty(LuceneIndexConstants.PROP_PROPERTY_INDEX, true);
+
+        Tree prop1 = props.addChild(TestUtil.unique("prop"));
+        prop1.setProperty(LuceneIndexConstants.PROP_NAME, "original/jcr:content/type");
+        prop1.setProperty(LuceneIndexConstants.PROP_INDEX, false);
+
+        newNodeAggregator(idx)
+                .newRuleWithName(NT_FILE, newArrayList(JCR_CONTENT, JCR_CONTENT + "/*"))
+                .newRuleWithName(TestUtil.NT_TEST, newArrayList("/*"));
+        root.commit();
+
+        Tree test = root.getTree("/").addChild("test");
+        Tree a = createNodeWithType(test, "a", TestUtil.NT_TEST);
+        Tree af = createFileNode(a, "original", "hello", "text/plain");
+        af.setProperty("type", "jpg"); //Should be excluded
+        af.setProperty("class", "image"); //Should be included
+
+        root.commit();
+
+        // hello and image would be index by aggregation but
+        // jpg should be exclude as there is a property defn to exclude it
+        assertQuery("select [jcr:path] from [oak:TestNode] where contains(*, 'hello')", asList("/test/a"));
+        assertQuery("select [jcr:path] from [oak:TestNode] where contains(*, 'image')", asList("/test/a"));
+        assertQuery("select [jcr:path] from [oak:TestNode] where contains(*, 'jpg')", Collections.<String>emptyList());
+    }
+
+    @Test
     public void indexingBasedOnMixin() throws Exception {
         Tree idx = createIndex("test1", of("propa", "propb"));
         Tree props = TestUtil.newRulePropTree(idx, "mix:title");
@@ -1664,6 +1752,74 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         assertThat(explain(propabQuery), containsString("lucene:test1(/oak:index/test1)"));
         assertQuery(propabQuery, asList("/test/a"));
     }
+    
+    @Test
+    public void indexingPropertyWithAnalyzeButQueryWithWildcard() throws Exception {
+        Tree index = root.getTree("/");
+        Tree idx = index.addChild(INDEX_DEFINITIONS_NAME).addChild("test2");
+        // not async, to speed up testing
+        // idx.setProperty("async", "async");
+        idx.setProperty(JcrConstants.JCR_PRIMARYTYPE,
+                INDEX_DEFINITIONS_NODE_TYPE, Type.NAME);
+        // idx.setProperty(LuceneIndexConstants.FULL_TEXT_ENABLED, true);
+        idx.setProperty(TYPE_PROPERTY_NAME, LuceneIndexConstants.TYPE_LUCENE);
+        idx.setProperty(REINDEX_PROPERTY_NAME, true);
+        Tree props = TestUtil.newRulePropTree(idx, "nt:base");
+        Tree prop = props.addChild(TestUtil.unique("jcr:mimeType"));
+        prop.setProperty(LuceneIndexConstants.PROP_NAME, "jcr:mimeType");
+        prop.setProperty(LuceneIndexConstants.PROP_PROPERTY_INDEX, true);
+        prop.setProperty(LuceneIndexConstants.PROP_ANALYZED, true);
+        root.commit();
+        
+        Tree test = root.getTree("/").addChild("test");
+        test.addChild("a").setProperty("jcr:mimeType", "1234");
+        test.addChild("b").setProperty("other", "1234");
+        test.addChild("c").setProperty("jcr:mimeType", "a");
+        root.commit();        
+        
+        String query;
+        
+        query = "/jcr:root/test//*[jcr:contains(@jcr:mimeType, '1234')]";
+        assertThat(explainXpath(query), containsString("lucene:test2(/oak:index/test2)"));
+        assertQuery(query, "xpath", asList("/test/a"));
+
+        query = "/jcr:root/test//*[jcr:contains(., '1234')]";
+        assertThat(explainXpath(query), containsString("no-index"));
+        
+        query = "/jcr:root/test//*[@jcr:mimeType = '1234']";
+        assertThat(explainXpath(query), containsString("lucene:test2(/oak:index/test2)"));
+        assertQuery(query, "xpath", asList("/test/a"));
+    }
+
+    @Test
+    public void indexingBasedOnMixinAndRelativeProps() throws Exception {
+        Tree idx = createIndex("test1", of("propa", "propb"));
+        Tree props = TestUtil.newRulePropTree(idx, "mix:title");
+        Tree prop1 = props.addChild(TestUtil.unique("prop"));
+        prop1.setProperty(LuceneIndexConstants.PROP_NAME, "jcr:title");
+        prop1.setProperty(LuceneIndexConstants.PROP_PROPERTY_INDEX, true);
+
+        Tree prop2 = props.addChild(TestUtil.unique("prop"));
+        prop2.setProperty(LuceneIndexConstants.PROP_NAME, "jcr:content/type");
+        prop2.setProperty(LuceneIndexConstants.PROP_PROPERTY_INDEX, true);
+        root.commit();
+
+        Tree test = root.getTree("/").addChild("test");
+        Tree a = createNodeWithMixinType(test, "a", "mix:title");
+        a.setProperty("jcr:title", "a");
+        a.addChild("jcr:content").setProperty("type", "foo-a");
+
+        Tree c = createNodeWithMixinType(test, "c", "mix:title");
+        c.setProperty("jcr:title", "c");
+        c.addChild("jcr:content").setProperty("type", "foo-c");
+
+        test.addChild("c").setProperty("jcr:title", "a");
+        root.commit();
+
+        String propabQuery = "select [jcr:path] from [mix:title] where [jcr:content/type] = 'foo-a'";
+        assertThat(explain(propabQuery), containsString("lucene:test1(/oak:index/test1)"));
+        assertQuery(propabQuery, asList("/test/a"));
+    }
 
     private static Tree createNodeWithMixinType(Tree t, String nodeName, String typeName){
         t = t.addChild(nodeName);
@@ -1676,7 +1832,9 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
     }
 
     private Tree createFileNode(Tree tree, String name, Blob content, String mimeType){
-        Tree jcrContent = tree.addChild(name).addChild(JCR_CONTENT);
+        Tree fileNode = tree.addChild(name);
+        fileNode.setProperty(JcrConstants.JCR_PRIMARYTYPE, JcrConstants.NT_FILE, Type.NAME);
+        Tree jcrContent = fileNode.addChild(JCR_CONTENT);
         jcrContent.setProperty(JcrConstants.JCR_DATA, content);
         jcrContent.setProperty(JcrConstants.JCR_MIMETYPE, mimeType);
         return jcrContent;
@@ -1879,6 +2037,7 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
     private static class AccessStateProvidingBlob extends ArrayBasedBlob {
         private CountingInputStream stream;
         private String id;
+        private int accessCount;
 
         public AccessStateProvidingBlob(byte[] value) {
             super(value);
@@ -1896,6 +2055,7 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         @Nonnull
         @Override
         public InputStream getNewStream() {
+            accessCount++;
             stream = new CountingInputStream(super.getNewStream());
             return stream;
         }
@@ -1906,6 +2066,7 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
 
         public void resetState(){
             stream = null;
+            accessCount = 0;
         }
 
         public long readByteCount(){

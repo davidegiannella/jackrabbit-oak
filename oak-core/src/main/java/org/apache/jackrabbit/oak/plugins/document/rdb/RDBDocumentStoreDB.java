@@ -16,12 +16,16 @@
  */
 package org.apache.jackrabbit.oak.plugins.document.rdb;
 
+import static org.apache.jackrabbit.oak.plugins.document.rdb.RDBJDBCTools.closeResultSet;
+import static org.apache.jackrabbit.oak.plugins.document.rdb.RDBJDBCTools.closeStatement;
+
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -36,6 +40,7 @@ import org.slf4j.LoggerFactory;
  * Defines variation in the capabilities of different RDBs.
  */
 public enum RDBDocumentStoreDB {
+
     DEFAULT("default") {
     },
 
@@ -95,8 +100,8 @@ public enum RDBDocumentStoreDB {
             } catch (SQLException ex) {
                 LOG.debug("while getting diagnostics", ex);
             } finally {
-                ch.closeResultSet(rs);
-                ch.closeStatement(stmt);
+                closeResultSet(rs);
+                closeStatement(stmt);
                 ch.closeConnection(con);
             }
             return result.toString();
@@ -107,6 +112,21 @@ public enum RDBDocumentStoreDB {
         @Override
         public String checkVersion(DatabaseMetaData md) throws SQLException {
             return RDBJDBCTools.versionCheck(md, 10, 1, description);
+        }
+
+        public String getTableCreationStatement(String tableName) {
+            return "create table " + tableName
+                    + " (ID varchar(512) not null, MODIFIED bigint, HASBINARY smallint, DELETEDONCE smallint, MODCOUNT bigint, CMODCOUNT bigint, DSIZE bigint, DATA varchar(16384), BDATA blob("
+                    + 1024 * 1024 * 1024 + "))";
+        }
+
+        public List<String> getIndexCreationStatements(String tableName) {
+            List<String> statements = new ArrayList<String>();
+            String pkName = tableName + "_pk";
+            statements.add("create unique index " + pkName + " on " + tableName + " ( ID ) cluster");
+            statements.add("alter table " + tableName + " add constraint " + pkName + " primary key ( ID )");
+            statements.addAll(super.getIndexCreationStatements(tableName));
+            return statements;
         }
 
         @Override
@@ -146,8 +166,8 @@ public enum RDBDocumentStoreDB {
             } catch (SQLException ex) {
                 LOG.debug("while getting diagnostics", ex);
             } finally {
-                ch.closeResultSet(rs);
-                ch.closeStatement(stmt);
+                closeResultSet(rs);
+                closeStatement(stmt);
                 ch.closeConnection(con);
             }
             return result.toString();
@@ -192,8 +212,8 @@ public enum RDBDocumentStoreDB {
             } catch (SQLException ex) {
                 LOG.debug("while getting diagnostics", ex);
             } finally {
-                ch.closeResultSet(rs);
-                ch.closeStatement(stmt);
+                closeResultSet(rs);
+                closeStatement(stmt);
                 ch.closeConnection(con);
             }
             return result.toString();
@@ -218,9 +238,22 @@ public enum RDBDocumentStoreDB {
         }
 
         @Override
-        public String getConcatQueryString(int dataOctetLimit, int dataLength) {
-            return "CONCAT(DATA, ?)";
+        public PreparedStatementComponent getConcatQuery(final String appendData, final int dataOctetLimit) {
+            return new PreparedStatementComponent() {
+
+                @Override
+                public String getStatementComponent() {
+                    return "CONCAT(DATA, ?)";
+                }
+
+                @Override
+                public int setParameters(PreparedStatement stmt, int startIndex) throws SQLException {
+                    stmt.setString(startIndex++, appendData);
+                    return startIndex;
+                }
+            };
         }
+
         @Override
         public String getAdditionalDiagnostics(RDBConnectionHandler ch, String tableName) {
             Connection con = null;
@@ -248,8 +281,8 @@ public enum RDBDocumentStoreDB {
             } catch (SQLException ex) {
                 LOG.debug("while getting diagnostics", ex);
             } finally {
-                ch.closeResultSet(rs);
-                ch.closeStatement(stmt);
+                closeResultSet(rs);
+                closeStatement(stmt);
                 ch.closeConnection(con);
             }
             return result.toString();
@@ -274,14 +307,23 @@ public enum RDBDocumentStoreDB {
         }
 
         @Override
-        public String getConcatQueryString(int dataOctetLimit, int dataLength) {
-            /*
-             * To avoid truncation when concatenating force an error when limit
-             * is above the octet limit
-             */
-            return "CASE WHEN LEN(DATA) <= " + (dataOctetLimit - dataLength) + " THEN (DATA + CAST(? AS nvarchar(" + dataOctetLimit
-                    + "))) ELSE (DATA + CAST(DATA AS nvarchar(max))) END";
+        public PreparedStatementComponent getConcatQuery(final String appendData, final int dataOctetLimit) {
+            return new PreparedStatementComponent() {
 
+                @Override
+                // this statement ensures that SQL server will generate an exception on overflow
+                public String getStatementComponent() {
+                    return "CASE WHEN LEN(DATA) < ? THEN (DATA + CAST(? AS nvarchar(" + dataOctetLimit
+                            + "))) ELSE (DATA + CAST(DATA AS nvarchar(max))) END";
+                }
+
+                @Override
+                public int setParameters(PreparedStatement stmt, int startIndex) throws SQLException {
+                    stmt.setInt(startIndex++, dataOctetLimit - appendData.length());
+                    stmt.setString(startIndex++, appendData);
+                    return startIndex;
+                }
+            };
         }
 
         @Override
@@ -309,8 +351,8 @@ public enum RDBDocumentStoreDB {
             } catch (SQLException ex) {
                 LOG.debug("while getting diagnostics", ex);
             } finally {
-                ch.closeResultSet(rs);
-                ch.closeStatement(stmt);
+                closeResultSet(rs);
+                closeStatement(stmt);
                 ch.closeConnection(con);
             }
             return result.toString();
@@ -326,6 +368,29 @@ public enum RDBDocumentStoreDB {
     public enum FETCHFIRSTSYNTAX {
         FETCHFIRST, LIMIT, TOP
     };
+
+
+    /**
+     * Provides a component for a {@link PreparedStatement} and a method for setting the
+     * parameters within this component
+     */
+    public interface PreparedStatementComponent {
+
+        /**
+         * @return a string suitable for inclusion into a {@link PreparedStatement}
+         */
+        @Nonnull
+        public String getStatementComponent();
+
+        /**
+         * Set the parameters need by the statement component returned by {@link #getStatementComponent()}
+         * @param stmt the statement
+         * @param index of first parameter to set
+         * @return index of next parameter to set
+         * @throws SQLException
+         */
+        public int setParameters(PreparedStatement stmt, int startIndex) throws SQLException;
+    }
 
     /**
      * Check the database brand and version
@@ -359,15 +424,26 @@ public enum RDBDocumentStoreDB {
      * Returns the CONCAT function or its equivalent function or sub-query. Note
      * that the function MUST NOT cause a truncated value to be written!
      *
+     * @param appendData
+     *            string to be inserted
      * @param dataOctetLimit
      *            expected capacity of data column
-     * @param dataLength
-     *            length of string to be inserted
-     * 
-     * @return the concat query string
      */
-    public String getConcatQueryString(int dataOctetLimit, int dataLength) {
-        return "DATA || CAST(? AS varchar(" + dataOctetLimit + "))";
+    public PreparedStatementComponent getConcatQuery(final String appendData, final int dataOctetLimit) {
+
+        return new PreparedStatementComponent() {
+
+            @Override
+            public String getStatementComponent() {
+                return "DATA || CAST(? AS varchar(" + dataOctetLimit + "))";
+            }
+
+            @Override
+            public int setParameters(PreparedStatement stmt, int startIndex) throws SQLException {
+                stmt.setString(startIndex++, appendData);
+                return startIndex;
+            }
+        };
     }
 
     /**

@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 
 /**
@@ -35,6 +36,9 @@ import javax.annotation.Nonnull;
  * the the result of this method is undefined.
  */
 public final class PathUtils {
+
+    public static final String ROOT_PATH = "/";
+    public static final String ROOT_NAME = "";
 
     private static final Pattern SNS_PATTERN =
             Pattern.compile("(.+)\\[[1-9][0-9]*\\]$");
@@ -56,7 +60,7 @@ public final class PathUtils {
     }
 
     private static boolean denotesRootPath(String path) {
-        return "/".equals(path);
+        return ROOT_PATH.equals(path);
     }
 
     /**
@@ -130,7 +134,7 @@ public final class PathUtils {
             if (pos > 0) {
                 end = pos - 1;
             } else if (pos == 0) {
-                return "/";
+                return ROOT_PATH;
             } else {
                 return "";
             }
@@ -151,7 +155,7 @@ public final class PathUtils {
         assert isValid(path) : "Invalid path ["+path+"]";
 
         if (path.isEmpty() || denotesRootPath(path)) {
-            return "";
+            return ROOT_NAME;
         }
         int end = path.length() - 1;
         int pos = path.lastIndexOf('/', end);
@@ -317,6 +321,36 @@ public final class PathUtils {
         }
         buff.append(subPath);
         return buff.toString();
+    }
+
+    /**
+     * Relative path concatenation.
+     *
+     * @param relativePaths relative paths
+     * @return the concatenated path or {@code null} if the resulting path is empty.
+     */
+    @CheckForNull
+    public static String concatRelativePaths(String... relativePaths) {
+        StringBuilder result = new StringBuilder();
+        for (String path : relativePaths) {
+            if (path != null && !path.isEmpty()) {
+                int i0 = 0;
+                int i1 = path.length();
+                while (i0 < i1 && path.charAt(i0) == '/') {
+                    i0++;
+                }
+                while (i1 > i0 && path.charAt(i1-1) == '/') {
+                    i1--;
+                }
+                if (i1 > i0) {
+                    if (result.length() > 0) {
+                        result.append('/');
+                    }
+                    result.append(path.substring(i0, i1));
+                }
+            }
+        }
+        return result.length() == 0 ? null : result.toString();
     }
 
     /**

@@ -87,6 +87,10 @@ public class MigrationFactory {
         if (options.getExcludePaths() != null) {
             upgrade.setExcludes(options.getExcludePaths());
         }
+        if (options.getMergePaths() != null) {
+            upgrade.setMerges(options.getMergePaths());
+        }
+        upgrade.setSkipLongNames(stores.isSkipLongNames());
         upgrade.setSkipOnError(!options.isFailOnError());
         upgrade.setEarlyShutdown(options.isEarlyShutdown());
         ServiceLoader<CommitHook> loader = ServiceLoader.load(CommitHook.class);
@@ -109,6 +113,7 @@ public class MigrationFactory {
         if (options.getMergePaths() != null) {
             sidegrade.setMerges(options.getMergePaths());
         }
+        sidegrade.setSkipLongNames(stores.isSkipLongNames());
         return sidegrade;
     }
 

@@ -27,7 +27,6 @@ import org.apache.jackrabbit.oak.api.Root;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.tree.TreeLocation;
-import org.apache.jackrabbit.oak.spi.security.authorization.permission.AggregatedPermissionProvider;
 import org.apache.jackrabbit.oak.spi.security.authorization.permission.Permissions;
 import org.apache.jackrabbit.oak.spi.security.authorization.permission.RepositoryPermission;
 import org.apache.jackrabbit.oak.spi.security.authorization.permission.TreePermission;
@@ -58,26 +57,19 @@ import org.apache.jackrabbit.util.Text;
  * Consequently any path outside of the scope of this provider is not affected
  * by the permission setup.
  */
-class LimitedScopeProvider implements AggregatedPermissionProvider, PrivilegeConstants {
+class LimitedScopeProvider extends AbstractAggrProvider implements PrivilegeConstants {
 
-    private static final Set<String> grantedPrivs = ImmutableSet.of(JCR_REMOVE_CHILD_NODES, JCR_REMOVE_NODE, REP_ALTER_PROPERTIES, REP_REMOVE_PROPERTIES);
-    private static final Set<String> deniedPrivs = ImmutableSet.of(JCR_ADD_CHILD_NODES, REP_ADD_PROPERTIES);
+    private static final Set<String> GRANTED_PRIVS = ImmutableSet.of(JCR_REMOVE_CHILD_NODES, JCR_REMOVE_NODE, REP_ALTER_PROPERTIES, REP_REMOVE_PROPERTIES);
+    private static final Set<String> DENIED_PRIVS = ImmutableSet.of(JCR_ADD_CHILD_NODES, REP_ADD_PROPERTIES);
 
-    private static final long grantedPerms = Permissions.REMOVE_NODE | Permissions.REMOVE_PROPERTY | Permissions.MODIFY_PROPERTY;
-    private static final long deniedPerms = Permissions.ADD_NODE | Permissions.ADD_PROPERTY;
-
-    private final Root root;
+    private static final long GRANTED_PERMS = Permissions.REMOVE_NODE | Permissions.REMOVE_PROPERTY | Permissions.MODIFY_PROPERTY;
+    private static final long DENIED_PERMS = Permissions.ADD_NODE | Permissions.ADD_PROPERTY;
 
     LimitedScopeProvider(@Nonnull Root root) {
-        this.root = root;
+        super(root);
     }
 
     //-------------------------------------------------< PermissionProvider >---
-    @Override
-    public void refresh() {
-        //nop
-    }
-
     @Nonnull
     @Override
     public Set<String> getPrivileges(@Nullable Tree tree) {
@@ -100,9 +92,9 @@ class LimitedScopeProvider implements AggregatedPermissionProvider, PrivilegeCon
                 return pSet.size() == 1 && pSet.contains(JCR_NODE_TYPE_DEFINITION_MANAGEMENT);
             }
         } else if (isSupported(tree)) {
-            if (pSet.removeAll(deniedPrivs)) {
+            if (pSet.removeAll(DENIED_PRIVS)) {
                 return false;
-            } else if (pSet.removeAll(grantedPrivs)) {
+            } else if (pSet.removeAll(GRANTED_PRIVS)) {
                 return pSet.isEmpty();
             }
         }
@@ -124,23 +116,16 @@ class LimitedScopeProvider implements AggregatedPermissionProvider, PrivilegeCon
     @Nonnull
     @Override
     public TreePermission getTreePermission(@Nonnull Tree tree, @Nonnull TreePermission parentPermission) {
-        String path = tree.getPath();
-        if (isSupported(path)) {
-            return new TestTreePermission(path);
-        } else if (Text.isDescendant(path, AbstractCompositeProviderTest.TEST_A_PATH)) {
-            return TreePermission.EMPTY;
-        } else {
-            return TreePermission.NO_RECOURSE;
-        }
+        return createTreePermission(tree.getPath());
     }
 
     @Override
     public boolean isGranted(@Nonnull Tree tree, @Nullable PropertyState property, long permissions) {
         if (isSupported(tree)) {
-            if (Permissions.includes(permissions, Permissions.ADD_NODE|Permissions.ADD_PROPERTY)) {
+            if (Permissions.includes(permissions, DENIED_PERMS)) {
                 return false;
             } else {
-                return Permissions.diff(permissions, grantedPerms) == Permissions.NO_PERMISSION;
+                return Permissions.diff(permissions, GRANTED_PERMS) == Permissions.NO_PERMISSION;
             }
         } else {
             return false;
@@ -152,10 +137,10 @@ class LimitedScopeProvider implements AggregatedPermissionProvider, PrivilegeCon
         if (isSupported(oakPath)) {
             Tree tree = root.getTree(oakPath);
             long perms = Permissions.getPermissions(jcrActions, TreeLocation.create(tree), false);
-            if (Permissions.includes(perms, Permissions.ADD_NODE|Permissions.ADD_PROPERTY)) {
+            if (Permissions.includes(perms, DENIED_PERMS)) {
                 return false;
             } else {
-                return Permissions.diff(perms, grantedPerms) == Permissions.NO_PERMISSION;
+                return Permissions.diff(perms, GRANTED_PERMS) == Permissions.NO_PERMISSION;
             }
         } else {
             return false;
@@ -216,10 +201,10 @@ class LimitedScopeProvider implements AggregatedPermissionProvider, PrivilegeCon
     @Override
     public boolean isGranted(@Nonnull TreeLocation location, long permissions) {
         if (isSupported(location.getPath())) {
-            if (Permissions.includes(permissions, Permissions.ADD_NODE|Permissions.ADD_PROPERTY)) {
+            if (Permissions.includes(permissions, DENIED_PERMS)) {
                 return false;
             } else {
-                return Permissions.diff(permissions, grantedPerms) == Permissions.NO_PERMISSION;
+                return Permissions.diff(permissions, GRANTED_PERMS) == Permissions.NO_PERMISSION;
             }
         } else {
             return false;
@@ -235,18 +220,28 @@ class LimitedScopeProvider implements AggregatedPermissionProvider, PrivilegeCon
         return Text.isDescendantOrEqual(AbstractCompositeProviderTest.TEST_A_PATH, path);
     }
 
-    private final class TestTreePermission implements TreePermission {
+    private static TreePermission createTreePermission(@Nonnull String path) {
+        if (isSupported(path)) {
+            return new TestTreePermission(path);
+        } else if (Text.isDescendant(path, AbstractCompositeProviderTest.TEST_A_PATH)) {
+            return new EmptyTestPermission(path);
+        } else {
+            return TreePermission.NO_RECOURSE;
+        }
+    }
+
+    private static final class EmptyTestPermission implements TreePermission {
 
         private final String path;
 
-        private TestTreePermission(@Nonnull String path) {
+        private EmptyTestPermission(@Nonnull String path) {
             this.path = path;
         }
 
         @Nonnull
         @Override
         public TreePermission getChildPermission(@Nonnull String childName, @Nonnull NodeState childState) {
-            return new TestTreePermission(PathUtils.concat(path, childName));
+            return createTreePermission(PathUtils.concat(path, childName));
         }
 
         @Override
@@ -271,19 +266,64 @@ class LimitedScopeProvider implements AggregatedPermissionProvider, PrivilegeCon
 
         @Override
         public boolean isGranted(long permissions) {
-            if (Permissions.includes(permissions, Permissions.ADD_NODE|Permissions.ADD_PROPERTY)) {
+            return false;
+        }
+
+        @Override
+        public boolean isGranted(long permissions, @Nonnull PropertyState property) {
+            return false;
+        }
+    }
+
+    private static final class TestTreePermission implements TreePermission {
+
+        private final String path;
+
+        private TestTreePermission(@Nonnull String path) {
+            this.path = path;
+        }
+
+        @Nonnull
+        @Override
+        public TreePermission getChildPermission(@Nonnull String childName, @Nonnull NodeState childState) {
+            return createTreePermission(PathUtils.concat(path, childName));
+        }
+
+        @Override
+        public boolean canRead() {
+            return false;
+        }
+
+        @Override
+        public boolean canRead(@Nonnull PropertyState property) {
+            return false;
+        }
+
+        @Override
+        public boolean canReadAll() {
+            return false;
+        }
+
+        @Override
+        public boolean canReadProperties() {
+            return false;
+        }
+
+        @Override
+        public boolean isGranted(long permissions) {
+            if (Permissions.includes(permissions, DENIED_PERMS)) {
                 return false;
             } else {
-                return Permissions.diff(permissions, grantedPerms) == Permissions.NO_PERMISSION;
+                return Permissions.diff(permissions, GRANTED_PERMS) == Permissions.NO_PERMISSION;
             }
         }
 
         @Override
         public boolean isGranted(long permissions, @Nonnull PropertyState property) {
-            if (Permissions.includes(permissions, Permissions.ADD_NODE|Permissions.ADD_PROPERTY)) {
+            if (Permissions.includes(permissions, DENIED_PERMS)) {
                 return false;
             } else {
-                return Permissions.diff(permissions, grantedPerms) == Permissions.NO_PERMISSION;
+                return Permissions.diff(permissions, GRANTED_PERMS) == Permissions.NO_PERMISSION;
             }
         }
     }

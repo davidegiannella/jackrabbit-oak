@@ -43,6 +43,8 @@ import org.apache.jackrabbit.oak.plugins.document.StableRevisionComparator;
 import org.apache.jackrabbit.oak.plugins.document.UpdateOp;
 import org.apache.jackrabbit.oak.plugins.document.UpdateOp.Key;
 import org.apache.jackrabbit.oak.plugins.document.UpdateOp.Operation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Serialization/Parsing of documents.
@@ -61,6 +63,8 @@ public class RDBDocumentSerializer {
 
     private final Comparator<Revision> comparator = StableRevisionComparator.REVERSE;
 
+    private static final Logger LOG = LoggerFactory.getLogger(RDBDocumentSerializer.class);
+
     public RDBDocumentSerializer(DocumentStore store, Set<String> columnProperties) {
         this.store = store;
         this.columnProperties = columnProperties;
@@ -74,12 +78,13 @@ public class RDBDocumentSerializer {
         StringBuilder sb = new StringBuilder(32768);
         sb.append("{");
         boolean needComma = false;
-        for (String key : doc.keySet()) {
+        for (Map.Entry<String, Object> entry : doc.entrySet()) {
+            String key = entry.getKey();
             if (!columnProperties.contains(key)) {
                 if (needComma) {
                     sb.append(",");
                 }
-                appendMember(sb, key, doc.get(key));
+                appendMember(sb, key, entry.getValue());
                 needComma = true;
             }
         }
@@ -175,6 +180,7 @@ public class RDBDocumentSerializer {
     /**
      * Reconstructs a {@link Document) based on the persisted {@link RDBRow}.
      */
+    @Nonnull
     public <T extends Document> T fromRow(@Nonnull Collection<T> collection, @Nonnull RDBRow row) throws DocumentStoreException {
         T doc = collection.newDocument(store);
         doc.put(ID, row.getId());
@@ -209,10 +215,11 @@ public class RDBDocumentSerializer {
             throw new DocumentStoreException(ex);
         }
 
+        String charData = row.getData();
+        json = new JsopTokenizer(charData);
+
         // start processing the VARCHAR data
         try {
-            json = new JsopTokenizer(row.getData());
-
             int next = json.read();
 
             if (next == '{') {
@@ -249,7 +256,16 @@ public class RDBDocumentSerializer {
 
             return doc;
         } catch (Exception ex) {
-            throw new DocumentStoreException(ex);
+            String message = String.format("Error processing persisted data for document '%s'", row.getId());
+            if (charData.length() > 0) {
+                int last = charData.charAt(charData.length() - 1);
+                if (last != '}' && last != '"' && last != ']') {
+                    message += " (DATA column might be truncated)";
+                }
+            }
+
+            LOG.error(message, ex);
+            throw new DocumentStoreException(message, ex);
         }
     }
 

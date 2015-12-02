@@ -68,6 +68,168 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
     }
 
     @Test
+    public void testConditionalUpdate() {
+        String id = this.getClass().getName() + ".testConditionalUpdate";
+
+        // remove if present
+        NodeDocument nd = super.ds.find(Collection.NODES, id);
+        if (nd != null) {
+            super.ds.remove(Collection.NODES, id);
+        }
+
+        String existingProp = "_recoverylock";
+        String existingRevisionProp = "recoverylock";
+        String nonExistingProp = "_qux";
+        String nonExistingRevisionProp = "qux";
+        Revision r = new Revision(1, 1, 1);
+
+        // add
+        UpdateOp up = new UpdateOp(id, true);
+        up.set("_id", id);
+        up.set(existingProp, "lock");
+        up.setMapEntry(existingRevisionProp, r, "lock");
+        assertTrue(super.ds.create(Collection.NODES, Collections.singletonList(up)));
+
+        // updates
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.notEquals(nonExistingProp, "none");
+        NodeDocument result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNotNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.equals(nonExistingProp, null);
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNotNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.notEquals(nonExistingRevisionProp, r, "none");
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNotNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.equals(nonExistingRevisionProp, r, null);
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNotNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.equals(existingProp, "none");
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.equals(existingProp, null);
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.equals(existingRevisionProp, r, "none");
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.equals(existingRevisionProp, r, null);
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.notEquals(existingProp, "lock");
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.equals(existingProp, null);
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.notEquals(existingRevisionProp, r, "lock");
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.equals(existingRevisionProp, r, null);
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.equals(existingProp, "lock");
+        up.set(existingProp, "none");
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNotNull(result);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.equals(existingRevisionProp, r, "lock");
+        up.setMapEntry(existingRevisionProp, r, "none");
+        result = super.ds.findAndUpdate(Collection.NODES, up);
+        assertNotNull(result);
+
+        removeMe.add(id);
+    }
+
+    @Test
+    public void testConditionalupdateForbidden() {
+        String id = this.getClass().getName() + ".testConditionalupdateForbidden";
+
+        // remove if present
+        NodeDocument nd = super.ds.find(Collection.NODES, id);
+        if (nd != null) {
+            super.ds.remove(Collection.NODES, id);
+        }
+
+        try {
+            UpdateOp up = new UpdateOp(id, true);
+            up.set("_id", id);
+            up.equals("foo", "bar");
+            super.ds.create(Collection.NODES, Collections.singletonList(up));
+            fail("conditional create should fail");
+        }
+        catch (IllegalStateException expected) {
+            // reported by UpdateOp
+        }
+
+        UpdateOp cup = new UpdateOp(id, true);
+        cup.set("_id", id);
+        assertTrue(super.ds.create(Collection.NODES, Collections.singletonList(cup)));
+        removeMe.add(id);
+
+        try {
+            UpdateOp up = new UpdateOp(id, false);
+            up.set("_id", id);
+            up.equals("foo", "bar");
+            super.ds.createOrUpdate(Collection.NODES, up);
+            fail("conditional createOrUpdate should fail");
+        }
+        catch (IllegalArgumentException expected) {
+            // reported by DocumentStore
+        }
+
+        try {
+            UpdateOp up = new UpdateOp(id, false);
+            up.set("_id", id);
+            up.equals("foo", "bar");
+            super.ds.update(Collection.NODES, Collections.singletonList(id), up);
+            fail("conditional update should fail");
+        }
+        catch (IllegalArgumentException expected) {
+            // reported by DocumentStore
+        }
+    }
+
+    @Test
     public void testMaxIdAscii() {
         int result = testMaxId(true);
         assertTrue("needs to support keys of 512 bytes length, but only supports " + result, result >= 512);
@@ -182,6 +344,36 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
             }
             super.ds.remove(Collection.NODES, id);
         }
+    }
+
+    @Test
+    public void testRepeatingUpdatesOnSQLServer() {
+        // simulates two updates to trigger the off-by-one bug documented in OAK-3670
+        String id = this.getClass().getName() + ".testRepeatingUpdatesOnSQLServer";
+
+        // remove if present
+        NodeDocument nd = super.ds.find(Collection.NODES, id);
+        if (nd != null) {
+            super.ds.remove(Collection.NODES, id);
+        }
+
+        UpdateOp up = new UpdateOp(id, true);
+        up.set("_id", id);
+        assertTrue(super.ds.create(Collection.NODES, Collections.singletonList(up)));
+        removeMe.add(id);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.set("f0", generateConstantString(3000));
+        super.ds.update(Collection.NODES, Collections.singletonList(id), up);
+
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.set("f1", generateConstantString(967));
+        super.ds.update(Collection.NODES, Collections.singletonList(id), up);
+
+        NodeDocument doc = super.ds.find(Collection.NODES, id, 0);
+        assertNotNull(doc);
     }
 
     @Test

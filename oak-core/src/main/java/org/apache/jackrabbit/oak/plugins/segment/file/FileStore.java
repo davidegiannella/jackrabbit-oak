@@ -477,7 +477,7 @@ public class FileStore implements SegmentStore {
         }
 
         if (!readonly) {
-            flushThread = new BackgroundThread(
+            flushThread = BackgroundThread.run(
                     "TarMK flush thread [" + directory + "]", 5000, // 5s interval
                     new Runnable() {
                         @Override
@@ -490,7 +490,7 @@ public class FileStore implements SegmentStore {
                             }
                         }
                     });
-            compactionThread = new BackgroundThread(
+            compactionThread = BackgroundThread.run(
                     "TarMK compaction thread [" + directory + "]", -1,
                     new Runnable() {
                         @Override
@@ -499,7 +499,7 @@ public class FileStore implements SegmentStore {
                         }
                     });
 
-            diskSpaceThread = new BackgroundThread(
+            diskSpaceThread = BackgroundThread.run(
                     "TarMK disk space check [" + directory + "]", MINUTES.toMillis(1), new Runnable() {
 
                 @Override
@@ -881,7 +881,7 @@ public class FileStore implements SegmentStore {
         approximateSize.set(finalSize);
         gcMonitor.cleaned(initialSize - finalSize, finalSize);
         gcMonitor.info("TarMK GC #{}: cleanup completed in {} ({} ms). Post cleanup size is {} ({} bytes)" +
-                "and space reclaimed {} ({} bytes). Compaction map weight/depth is {}/{} ({} bytes/{}).",
+                " and space reclaimed {} ({} bytes). Compaction map weight/depth is {}/{} ({} bytes/{}).",
                 gcCount, watch, watch.elapsed(MILLISECONDS),
                 humanReadableByteCount(finalSize), finalSize,
                 humanReadableByteCount(initialSize - finalSize), initialSize - finalSize,
@@ -893,8 +893,8 @@ public class FileStore implements SegmentStore {
     /**
      * @return  a new {@link SegmentWriter} instance for writing to this store.
      */
-    public SegmentWriter createSegmentWriter() {
-        return new SegmentWriter(this, tracker, getVersion());
+    public SegmentWriter createSegmentWriter(String wid) {
+        return new SegmentWriter(this, getVersion(), wid);
     }
 
     /**
@@ -1343,9 +1343,16 @@ public class FileStore implements SegmentStore {
      * All write methods are no-ops.
      */
     public static class ReadOnlyStore extends FileStore {
+
         public ReadOnlyStore(File directory) throws IOException {
             super(null, directory, EMPTY_NODE, -1, 0, MEMORY_MAPPING_DEFAULT,
                     GCMonitor.EMPTY, true);
+        }
+
+        public ReadOnlyStore(File directory, BlobStore blobStore)
+                throws IOException {
+            super(blobStore, directory, EMPTY_NODE, -1, 0,
+                    MEMORY_MAPPING_DEFAULT, GCMonitor.EMPTY, true);
         }
 
         /**
@@ -1355,6 +1362,19 @@ public class FileStore implements SegmentStore {
          */
         public void setRevision(String revision) {
             super.setRevision(revision);
+        }
+
+        /**
+         * Build the graph of segments reachable from an initial set of segments
+         * @param referencedIds  the initial set of segments
+         * @throws IOException
+         */
+        public Map<UUID, Set<UUID>> getSegmentGraph(Set<UUID> referencedIds) throws IOException {
+            Map<UUID, Set<UUID>> graph = newHashMap();
+            for (TarReader reader : super.readers) {
+                graph.putAll(reader.getReferenceGraph(referencedIds));
+            }
+            return graph;
         }
 
         @Override

@@ -37,8 +37,6 @@ import org.apache.jackrabbit.oak.spi.security.authorization.permission.Permissio
 import org.apache.jackrabbit.oak.spi.security.authorization.permission.RepositoryPermission;
 import org.apache.jackrabbit.oak.spi.security.authorization.permission.TreePermission;
 import org.apache.jackrabbit.oak.spi.security.principal.EveryonePrincipal;
-import org.apache.jackrabbit.oak.spi.security.privilege.PrivilegeBits;
-import org.apache.jackrabbit.oak.spi.security.privilege.PrivilegeBitsProvider;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -111,7 +109,7 @@ public class CompositeProviderAllTest extends AbstractCompositeProviderTest {
     public void testIsGranted() throws Exception {
         for (String p : defPermissions.keySet()) {
             long expected = defPermissions.get(p);
-            Tree tree = root.getTree(p);
+            Tree tree = readOnlyRoot.getTree(p);
 
             assertTrue(p, cpp.isGranted(tree, null, expected));
         }
@@ -121,7 +119,7 @@ public class CompositeProviderAllTest extends AbstractCompositeProviderTest {
     public void testIsGrantedProperty() throws Exception {
         for (String p : defPermissions.keySet()) {
             long expected = defPermissions.get(p);
-            Tree tree = root.getTree(p);
+            Tree tree = readOnlyRoot.getTree(p);
 
             assertTrue(p, cpp.isGranted(tree, PROPERTY_STATE, expected));
         }
@@ -179,7 +177,7 @@ public class CompositeProviderAllTest extends AbstractCompositeProviderTest {
         TreePermission parentPermission = TreePermission.EMPTY;
 
         for (String path : TP_PATHS) {
-            TreePermission tp = cpp.getTreePermission(root.getTree(path), parentPermission);
+            TreePermission tp = cpp.getTreePermission(readOnlyRoot.getTree(path), parentPermission);
             Long toTest = (defPermissions.containsKey(path)) ? defPermissions.get(path) : defPermissions.get(PathUtils.getAncestorPath(path, 1));
             if (toTest != null) {
                 assertTrue(tp.isGranted(toTest, PROPERTY_STATE));
@@ -200,9 +198,8 @@ public class CompositeProviderAllTest extends AbstractCompositeProviderTest {
                 build();
 
         TreePermission parentPermission = TreePermission.EMPTY;
-        TreePermission parentPermission2 = TreePermission.EMPTY;
         for (String nodePath : readMap.keySet()) {
-            Tree tree = root.getTree(nodePath);
+            Tree tree = readOnlyRoot.getTree(nodePath);
             TreePermission tp = cpp.getTreePermission(tree, parentPermission);
 
             boolean expectedResult = readMap.get(nodePath);
@@ -224,9 +221,8 @@ public class CompositeProviderAllTest extends AbstractCompositeProviderTest {
                 build();
 
         TreePermission parentPermission = TreePermission.EMPTY;
-        TreePermission parentPermission2 = TreePermission.EMPTY;
         for (String nodePath : readMap.keySet()) {
-            Tree tree = root.getTree(nodePath);
+            Tree tree = readOnlyRoot.getTree(nodePath);
 
             TreePermission tp = cpp.getTreePermission(tree, parentPermission);
 
@@ -241,36 +237,15 @@ public class CompositeProviderAllTest extends AbstractCompositeProviderTest {
      * Custom permission provider that supports all permissions and grants
      * full access for everyone.
      */
-    private static final class OpenAggregateProvider implements AggregatedPermissionProvider {
+    private static final class OpenAggregateProvider extends AbstractAggrProvider {
 
         private static final PermissionProvider BASE = OpenPermissionProvider.getInstance();
-        private final Root root;
 
         private OpenAggregateProvider(@Nonnull Root root) {
-            this.root = root;
-        }
-
-        @Nonnull
-        @Override
-        public PrivilegeBits supportedPrivileges(@Nullable Tree tree, @Nullable PrivilegeBits privilegeBits) {
-            return new PrivilegeBitsProvider(root).getBits(JCR_ALL);
+            super(root);
         }
 
         //-----------------------------------< AggregatedPermissionProvider >---
-        @Override
-        public long supportedPermissions(@Nullable Tree tree, @Nullable PropertyState property, long permissions) {
-            return permissions;
-        }
-
-        @Override
-        public long supportedPermissions(@Nonnull TreeLocation location, long permissions) {
-            return permissions;
-        }
-
-        @Override
-        public long supportedPermissions(@Nonnull TreePermission treePermission, @Nullable PropertyState propertyState, long permissions) {
-            return permissions;
-        }
 
         @Override
         public boolean isGranted(@Nonnull TreeLocation location, long permissions) {
@@ -278,11 +253,6 @@ public class CompositeProviderAllTest extends AbstractCompositeProviderTest {
         }
 
         //---------------------------------------------< PermissionProvider >---
-        @Override
-        public void refresh() {
-            root.refresh();
-        }
-
         @Nonnull
         @Override
         public Set<String> getPrivileges(@Nullable Tree tree) {
@@ -315,5 +285,5 @@ public class CompositeProviderAllTest extends AbstractCompositeProviderTest {
         public boolean isGranted(@Nonnull String oakPath, @Nonnull String jcrActions) {
             return BASE.isGranted(oakPath, jcrActions);
         }
-    };
+    }
 }

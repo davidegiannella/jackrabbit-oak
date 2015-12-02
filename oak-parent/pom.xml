@@ -42,13 +42,14 @@
     <project.reporting.outputEncoding>
       ${project.build.sourceEncoding}
     </project.reporting.outputEncoding>
-    <jackrabbit.version>2.11.1</jackrabbit.version>
+    <jackrabbit.version>2.11.3-SNAPSHOT</jackrabbit.version>
     <mongo.host>127.0.0.1</mongo.host>
     <mongo.port>27017</mongo.port>
     <mongo.db>MongoMKDB</mongo.db>
     <mongo.db2>MongoMKDB2</mongo.db2>
     <segment.db>SegmentMK</segment.db>
     <lucene.version>4.7.1</lucene.version>
+    <mongo.driver.version>2.13.3</mongo.driver.version>
     <!-- Note that we're using SLF4J API version 1.7 when compiling     -->
     <!-- core Oak components but more recent SLF4J and Logback versions -->
     <!-- when compiling and running test cases and the oak-run jar.     -->
@@ -58,7 +59,7 @@
     <slf4j.api.version>1.7.6</slf4j.api.version>
     <slf4j.version>1.7.6</slf4j.version> <!-- sync with logback version -->
     <logback.version>1.1.0</logback.version>
-    <h2.version>1.4.185</h2.version>
+    <h2.version>1.4.190</h2.version>
     <findbugs.version>3.0.0</findbugs.version>
 
    <!-- specifies on which fixture to run the integration testing tests. 
@@ -109,7 +110,7 @@
         <plugin>
           <groupId>org.apache.felix</groupId>
           <artifactId>maven-bundle-plugin</artifactId>
-          <version>2.5.3</version>
+          <version>3.0.0</version>
           <extensions>true</extensions>
           <inherited>true</inherited>
           <configuration>
@@ -387,7 +388,7 @@
       <dependency>
         <groupId>org.mongodb</groupId>
         <artifactId>mongo-java-driver</artifactId>
-        <version>2.13.0</version>
+        <version>${mongo.driver.version}</version>
       </dependency>
       <dependency>
         <groupId>com.google.guava</groupId>
@@ -534,9 +535,21 @@
    </profile>
     
     <profile>
-      <id>pedantic</id>
+      <id>rat</id>
       <build>
         <plugins>
+          <plugin>
+            <groupId>org.apache.rat</groupId>
+            <artifactId>apache-rat-plugin</artifactId>
+            <executions>
+              <execution>
+                <phase>verify</phase>
+                <goals>
+                  <goal>check</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
            <plugin>
              <artifactId>maven-surefire-plugin</artifactId>
              <configuration>
@@ -545,6 +558,13 @@
                <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
              </configuration>
            </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>pedantic</id>
+      <build>
+        <plugins>
           <plugin>
             <groupId>org.apache.rat</groupId>
             <artifactId>apache-rat-plugin</artifactId>
@@ -594,7 +614,7 @@
         <dependency>
           <groupId>org.apache.derby</groupId>
           <artifactId>derby</artifactId>
-          <version>10.11.1.1</version>
+          <version>10.12.1.1</version>
         </dependency>
       </dependencies>
     </profile>
@@ -604,7 +624,7 @@
         <dependency>
           <groupId>mysql</groupId>
           <artifactId>mysql-connector-java</artifactId>
-          <version>5.1.36</version>
+          <version>5.1.37</version>
         </dependency>
       </dependencies>
     </profile>
@@ -614,7 +634,7 @@
         <dependency>
           <groupId>org.postgresql</groupId>
           <artifactId>postgresql</artifactId>
-          <version>9.4-1203-jdbc4</version>
+          <version>9.4-1205-jdbc4</version>
         </dependency>
       </dependencies>
     </profile>
@@ -814,4 +834,5 @@
       </build>
     </profile>
   </profiles>
+
 </project>

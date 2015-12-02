@@ -36,6 +36,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 
+import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 
 import com.google.common.base.Charsets;
@@ -181,6 +182,18 @@ public class Segment {
         return (short) (offset >> RECORD_ALIGN_BITS);
     }
 
+    /**
+     * Align an {@code address} on the given {@code boundary}
+     *
+     * @param address     address to align
+     * @param boundary    boundary to align to
+     * @return  {@code n = address + a} such that {@code n % boundary == 0} and
+     *          {@code 0 <= a < boundary}.
+     */
+    public static int align(int address, int boundary) {
+        return (address + boundary - 1) & ~(boundary - 1);
+    }
+
     public Segment(SegmentTracker tracker, SegmentId id, ByteBuffer data) {
         this(tracker, id, data, V_11);
     }
@@ -271,6 +284,30 @@ public class Segment {
         checkArgument(index < getRootCount());
         return (data.getShort(data.position() + refCount * 16 + index * 3 + 1) & 0xffff)
                 << RECORD_ALIGN_BITS;
+    }
+
+    /**
+     * Returns the segment meta data of this segment or {@code null} if none is present.
+     * <p>
+     * The segment meta data is a string of the format {@code "{wid=W,sno=S,gc=G,t=T}"}
+     * where:
+     * <ul>
+     * <li>{@code W} is the writer id {@code wid}, </li>
+     * <li>{@code S} is a unique, increasing sequence number corresponding to the allocation order
+     * of the segments in this store, </li>
+     * <li>{@code G} is the garbage collection generation (i.e. the number of compaction cycles
+     * that have been run),</li>
+     * <li>{@code T} is a time stamp according to {@link System#currentTimeMillis()}.</li>
+     * </ul>
+     * @return the segment meta data
+     */
+    @CheckForNull
+    public String getSegmentInfo() {
+        if (getRootCount() == 0) {
+            return null;
+        } else {
+            return readString(getRootOffset(0));
+        }
     }
 
     SegmentId getRefId(int index) {

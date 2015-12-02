@@ -68,10 +68,11 @@ public abstract class AbstractDocumentStoreTest {
                 LOG.info(removeMe.size() + " documents removed in " + elapsed + "ms (" + rate + "/ms)");
             }
         }
+        ds.dispose();
         dsf.dispose();
     }
 
-    @Parameterized.Parameters
+    @Parameterized.Parameters(name="{0}")
     public static Collection<Object[]> fixtures() {
         return fixtures(false);
     }
@@ -105,6 +106,17 @@ public abstract class AbstractDocumentStoreTest {
             } else {
                 s[i] = (char) (32 + (int) ((0xd7ff - 32) * Math.random()));
             }
+        }
+        return new String(s);
+    }
+
+    /**
+     * Generate a random string of given size, with or without non-ASCII characters.
+     */
+    public static String generateConstantString(int length) {
+        char[] s = new char[length];
+        for (int i = 0; i < length; i++) {
+            s[i] = (char)('0' + (i % 10));
         }
         return new String(s);
     }

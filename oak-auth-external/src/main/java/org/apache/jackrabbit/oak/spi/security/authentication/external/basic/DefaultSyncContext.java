@@ -43,6 +43,7 @@ import org.apache.jackrabbit.api.security.user.Group;
 import org.apache.jackrabbit.api.security.user.User;
 import org.apache.jackrabbit.api.security.user.UserManager;
 import org.apache.jackrabbit.oak.commons.DebugTimer;
+import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.spi.security.authentication.external.ExternalGroup;
 import org.apache.jackrabbit.oak.spi.security.authentication.external.ExternalIdentity;
 import org.apache.jackrabbit.oak.spi.security.authentication.external.ExternalIdentityException;
@@ -149,28 +150,10 @@ public class DefaultSyncContext implements SyncContext {
      * Robust relative path concatenation.
      * @param paths relative paths
      * @return the concatenated path
+     * @deprecated Since Oak 1.3.10. Please use {@link PathUtils#concatRelativePaths(String...)} instead.
      */
     public static String joinPaths(String... paths) {
-        StringBuilder result = new StringBuilder();
-        for (String path: paths) {
-            if (path != null && !path.isEmpty()) {
-                int i0 = 0;
-                int i1 = path.length();
-                while (i0 < i1 && path.charAt(i0) == '/') {
-                    i0++;
-                }
-                while (i1 > i0 && path.charAt(i1-1) == '/') {
-                    i1--;
-                }
-                if (i1 > i0) {
-                    if (result.length() > 0) {
-                        result.append('/');
-                    }
-                    result.append(path.substring(i0, i1));
-                }
-            }
-        }
-        return result.length() == 0 ? null : result.toString();
+        return PathUtils.concatRelativePaths(paths);
     }
 
     /**
@@ -297,7 +280,7 @@ public class DefaultSyncContext implements SyncContext {
                 return new DefaultSyncResultImpl(new DefaultSyncedIdentity(id, null, false, -1), SyncResult.Status.FOREIGN);
             }
 
-            if (auth instanceof Group) {
+            if (auth.isGroup()) {
                 Group group = (Group) auth;
                 ExternalGroup external = idp.getGroup(id);
                 timer.mark("retrieve");
@@ -390,7 +373,7 @@ public class DefaultSyncContext implements SyncContext {
                 externalUser.getId(),
                 null,
                 principal,
-                joinPaths(config.user().getPathPrefix(), externalUser.getIntermediatePath())
+                PathUtils.concatRelativePaths(config.user().getPathPrefix(), externalUser.getIntermediatePath())
         );
         user.setProperty(REP_EXTERNAL_ID, valueFactory.createValue(externalUser.getExternalId().getString()));
         return user;
@@ -410,7 +393,7 @@ public class DefaultSyncContext implements SyncContext {
         Group group = userManager.createGroup(
                 externalGroup.getId(),
                 principal,
-                joinPaths(config.group().getPathPrefix(), externalGroup.getIntermediatePath())
+                PathUtils.concatRelativePaths(config.group().getPathPrefix(), externalGroup.getIntermediatePath())
         );
         group.setProperty(REP_EXTERNAL_ID, valueFactory.createValue(externalGroup.getExternalId().getString()));
         return group;
@@ -505,35 +488,32 @@ public class DefaultSyncContext implements SyncContext {
             // get group
             ExternalGroup extGroup;
             try {
-                extGroup = (ExternalGroup) idp.getIdentity(ref);
-            } catch (ClassCastException e) {
-                // this should really not be the case, so catching the CCE is ok here.
-                log.warn("External identity '{}' is not a group, but should be one.", ref.getString());
-                continue;
+                ExternalIdentity extId = idp.getIdentity(ref);
+                if (extId instanceof ExternalGroup) {
+                    extGroup = (ExternalGroup) extId;
+                } else {
+                    log.warn("No external group found for ref '{}'.", ref.getString());
+                    continue;
+                }
             } catch (ExternalIdentityException e) {
                 log.warn("Unable to retrieve external group '{}' from provider.", ref.getString(), e);
-                continue;
-            }
-            if (extGroup == null) {
-                log.warn("External group for ref '{}' could not be retrieved from provider.", ref);
                 continue;
             }
             log.debug("- idp returned '{}'", extGroup.getId());
 
             Group grp;
-            try {
-                grp = (Group) userManager.getAuthorizable(extGroup.getId());
-            } catch (ClassCastException e) {
-                // this should really not be the case, so catching the CCE is ok here.
+            Authorizable a = userManager.getAuthorizable(extGroup.getId());
+            if (a == null) {
+                grp = createGroup(extGroup);
+                log.debug("- created new group");
+            } else if (a.isGroup()) {
+                grp = (Group) a;
+            } else {
                 log.warn("Authorizable '{}' is not a group, but should be one.", extGroup.getId());
                 continue;
             }
             log.debug("- user manager returned '{}'", grp);
 
-            if (grp == null) {
-                grp = createGroup(extGroup);
-                log.debug("- created new group");
-            }
             syncGroup(extGroup, grp);
 
             // ensure membership
