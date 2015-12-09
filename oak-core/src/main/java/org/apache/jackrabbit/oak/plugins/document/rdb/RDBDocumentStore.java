@@ -58,7 +58,6 @@ import javax.annotation.Nonnull;
 import javax.sql.DataSource;
 
 import org.apache.jackrabbit.oak.cache.CacheStats;
-import org.apache.jackrabbit.oak.cache.CacheValue;
 import org.apache.jackrabbit.oak.plugins.document.Collection;
 import org.apache.jackrabbit.oak.plugins.document.Document;
 import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
@@ -71,21 +70,20 @@ import org.apache.jackrabbit.oak.plugins.document.UpdateOp.Key;
 import org.apache.jackrabbit.oak.plugins.document.UpdateOp.Operation;
 import org.apache.jackrabbit.oak.plugins.document.UpdateUtils;
 import org.apache.jackrabbit.oak.plugins.document.cache.CacheInvalidationStats;
+import org.apache.jackrabbit.oak.plugins.document.cache.NodeDocumentCache;
+import org.apache.jackrabbit.oak.plugins.document.locks.NodeDocumentLocks;
+import org.apache.jackrabbit.oak.plugins.document.locks.StripedNodeDocumentLocks;
 import org.apache.jackrabbit.oak.plugins.document.mongo.MongoDocumentStore;
-import org.apache.jackrabbit.oak.plugins.document.util.StringValue;
 import org.apache.jackrabbit.oak.util.OakVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Objects;
-import com.google.common.cache.Cache;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnel;
 import com.google.common.hash.PrimitiveSink;
-import com.google.common.util.concurrent.Striped;
 
 /**
  * Implementation of {@link DocumentStore} for relational databases.
@@ -236,7 +234,17 @@ public class RDBDocumentStore implements DocumentStore {
     @Override
     public <T extends Document> List<T> query(Collection<T> collection, String fromKey, String toKey, String indexedProperty,
             long startValue, int limit) {
-        return internalQuery(collection, fromKey, toKey, indexedProperty, startValue, limit);
+        List<QueryCondition> conditions = Collections.emptyList();
+        if (indexedProperty != null) {
+            conditions = Collections.singletonList(new QueryCondition(indexedProperty, ">=", startValue));
+        }
+        return internalQuery(collection, fromKey, toKey, conditions, limit);
+    }
+
+    @Nonnull
+    protected <T extends Document> List<T> query(Collection<T> collection, String fromKey, String toKey,
+            List<QueryCondition> conditions, int limit) {
+        return internalQuery(collection, fromKey, toKey, conditions, limit);
     }
 
     @Override
@@ -292,6 +300,7 @@ public class RDBDocumentStore implements DocumentStore {
         }
         return null;
     }
+
     @Override
     public CacheInvalidationStats invalidateCache(Iterable<String> keys) {
         //TODO: optimize me
@@ -301,6 +310,28 @@ public class RDBDocumentStore implements DocumentStore {
     @Override
     public <T extends Document> void invalidateCache(Collection<T> collection, String id) {
         invalidateCache(collection, id, false);
+    }
+
+    private <T extends Document> void invalidateCache(Collection<T> collection, String id, boolean remove) {
+        if (collection == Collection.NODES) {
+            invalidateNodesCache(id, remove);
+        }
+    }
+
+    private void invalidateNodesCache(String id, boolean remove) {
+        Lock lock = locks.acquire(id);
+        try {
+            if (remove) {
+                nodesCache.invalidate(id);
+            } else {
+                NodeDocument entry = nodesCache.getIfPresent(id);
+                if (entry != null) {
+                    entry.markUpToDate(0);
+                }
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
@@ -316,29 +347,6 @@ public class RDBDocumentStore implements DocumentStore {
             throw new DocumentStoreException(ex);
         } finally {
             this.ch.closeConnection(connection);
-        }
-    }
-
-    private <T extends Document> void invalidateCache(Collection<T> collection, String id, boolean remove) {
-        if (collection == Collection.NODES) {
-            invalidateNodesCache(id, remove);
-        }
-    }
-
-    private void invalidateNodesCache(String id, boolean remove) {
-        StringValue key = new StringValue(id);
-        Lock lock = getAndLock(id);
-        try {
-            if (remove) {
-                nodesCache.invalidate(key);
-            } else {
-                NodeDocument entry = nodesCache.getIfPresent(key);
-                if (entry != null) {
-                    entry.markUpToDate(0);
-                }
-            }
-        } finally {
-            lock.unlock();
         }
     }
 
@@ -448,14 +456,14 @@ public class RDBDocumentStore implements DocumentStore {
         if (collection != Collection.NODES) {
             return null;
         } else {
-            NodeDocument doc = nodesCache.getIfPresent(new StringValue(id));
+            NodeDocument doc = nodesCache.getIfPresent(id);
             return castAsT(doc);
         }
     }
 
     @Override
     public CacheStats getCacheStats() {
-        return this.cacheStats;
+        return nodesCache.getCacheStats();
     }
 
     @Override
@@ -530,8 +538,8 @@ public class RDBDocumentStore implements DocumentStore {
         this.ch = new RDBConnectionHandler(ds);
         this.callStack = LOG.isDebugEnabled() ? new Exception("call stack of RDBDocumentStore creation") : null;
 
-        this.nodesCache = builder.buildDocumentCache(this);
-        this.cacheStats = new CacheStats(nodesCache, "Document-Documents", builder.getWeigher(), builder.getDocumentCacheSize());
+        this.locks = new StripedNodeDocumentLocks();
+        this.nodesCache = builder.buildNodeDocumentCache(this, locks);
 
         Connection con = this.ch.getRWConnection();
 
@@ -674,30 +682,11 @@ public class RDBDocumentStore implements DocumentStore {
             Map<String, Map<String, Object>> indices = new TreeMap<String, Map<String, Object>>();
             StringBuilder sb = new StringBuilder();
             rs = met.getIndexInfo(null, null, tableName, false, true);
-            while (rs.next()) {
-                String name = asQualifiedDbName(rs.getString(5), rs.getString(6));
-                if (name != null) {
-                    Map<String, Object> info = indices.get(name);
-                    if (info == null) {
-                        info = new HashMap<String, Object>();
-                        indices.put(name, info);
-                        info.put("fields", new TreeMap<Integer, String>());
-                    }
-                    info.put("nonunique", rs.getBoolean(4));
-                    info.put("type", indexTypeAsString(rs.getInt(7)));
-                    String inSchema = rs.getString(2);
-                    inSchema = inSchema == null ? "" : inSchema.trim();
-                    // skip indices on tables in other schemas in case we have that information
-                    if (rmetSchemaName.isEmpty() || inSchema.isEmpty() || rmetSchemaName.equals(inSchema)) {
-                        String tname = asQualifiedDbName(inSchema, rs.getString(3));
-                        info.put("tname", tname);
-                        String cname = rs.getString(9);
-                        if (cname != null) {
-                            String order = "A".equals(rs.getString(10)) ? " ASC" : ("D".equals(rs.getString(10)) ? " DESC" : "");
-                            ((Map<Integer, String>) info.get("fields")).put(rs.getInt(8), cname + order);
-                        }
-                    }
-                }
+            getIndexInformation(rs, rmetSchemaName, indices);
+            if (indices.isEmpty() && ! tableName.equals(tableName.toUpperCase(Locale.ENGLISH))) {
+                // might have failed due to the DB's handling on ucase/lcase, retry ucase
+                rs = met.getIndexInfo(null, null, tableName.toUpperCase(Locale.ENGLISH), false, true);
+                getIndexInformation(rs, rmetSchemaName, indices);
             }
             for (Entry<String, Map<String, Object>> index : indices.entrySet()) {
                 boolean nonUnique = ((Boolean) index.getValue().get("nonunique"));
@@ -728,6 +717,35 @@ public class RDBDocumentStore implements DocumentStore {
                     ex.getMessage(), ex.getErrorCode(), ex.getSQLState());
         } finally {
             closeResultSet(rs);
+        }
+    }
+
+    private void getIndexInformation(ResultSet rs, String rmetSchemaName, Map<String, Map<String, Object>> indices)
+            throws SQLException {
+        while (rs.next()) {
+            String name = asQualifiedDbName(rs.getString(5), rs.getString(6));
+            if (name != null) {
+                Map<String, Object> info = indices.get(name);
+                if (info == null) {
+                    info = new HashMap<String, Object>();
+                    indices.put(name, info);
+                    info.put("fields", new TreeMap<Integer, String>());
+                }
+                info.put("nonunique", rs.getBoolean(4));
+                info.put("type", indexTypeAsString(rs.getInt(7)));
+                String inSchema = rs.getString(2);
+                inSchema = inSchema == null ? "" : inSchema.trim();
+                // skip indices on tables in other schemas in case we have that information
+                if (rmetSchemaName.isEmpty() || inSchema.isEmpty() || rmetSchemaName.equals(inSchema)) {
+                    String tname = asQualifiedDbName(inSchema, rs.getString(3));
+                    info.put("tname", tname);
+                    String cname = rs.getString(9);
+                    if (cname != null) {
+                        String order = "A".equals(rs.getString(10)) ? " ASC" : ("D".equals(rs.getString(10)) ? " DESC" : "");
+                        ((Map<Integer, String>) info.get("fields")).put(rs.getInt(8), cname + order);
+                    }
+                }
+            }
         }
     }
 
@@ -821,11 +839,10 @@ public class RDBDocumentStore implements DocumentStore {
         if (collection != Collection.NODES) {
             return readDocumentUncached(collection, id, null);
         } else {
-            CacheValue cacheKey = new StringValue(id);
             NodeDocument doc = null;
             if (maxCacheAge > 0) {
                 // first try without lock
-                doc = nodesCache.getIfPresent(cacheKey);
+                doc = nodesCache.getIfPresent(id);
                 if (doc != null) {
                     long lastCheckTime = doc.getLastCheckTime();
                     if (lastCheckTime != 0) {
@@ -836,7 +853,7 @@ public class RDBDocumentStore implements DocumentStore {
                 }
             }
             try {
-                Lock lock = getAndLock(id);
+                Lock lock = locks.acquire(id);
                 try {
                     // caller really wants the cache to be cleared
                     if (maxCacheAge == 0) {
@@ -844,7 +861,7 @@ public class RDBDocumentStore implements DocumentStore {
                         doc = null;
                     }
                     final NodeDocument cachedDoc = doc;
-                    doc = nodesCache.get(cacheKey, new Callable<NodeDocument>() {
+                    doc = nodesCache.get(id, new Callable<NodeDocument>() {
                         @Override
                         public NodeDocument call() throws Exception {
                             NodeDocument doc = (NodeDocument) readDocumentUncached(collection, id, cachedDoc);
@@ -868,7 +885,7 @@ public class RDBDocumentStore implements DocumentStore {
                             ndoc.seal();
                         }
                         doc = wrap(ndoc);
-                        nodesCache.put(cacheKey, doc);
+                        nodesCache.put(doc);
                     }
                 } finally {
                     lock.unlock();
@@ -900,9 +917,9 @@ public class RDBDocumentStore implements DocumentStore {
                     docs.add(doc);
                 }
                 boolean done = insertDocuments(collection, docs);
-                if (done) {
+                if (done && collection == Collection.NODES) {
                     for (T doc : docs) {
-                        addToCache(collection, doc);
+                        nodesCache.putIfAbsent((NodeDocument) doc);
                     }
                 }
                 else {
@@ -934,7 +951,9 @@ public class RDBDocumentStore implements DocumentStore {
             UpdateUtils.applyChanges(doc, update);
             try {
                 insertDocuments(collection, Collections.singletonList(doc));
-                addToCache(collection, doc);
+                if (collection == Collection.NODES) {
+                    nodesCache.putIfAbsent((NodeDocument) doc);
+                }
                 return oldDoc;
             } catch (DocumentStoreException ex) {
                 // may have failed due to a race condition; try update instead
@@ -972,7 +991,7 @@ public class RDBDocumentStore implements DocumentStore {
             maintainUpdateStats(collection, update.getId());
             addUpdateCounters(update);
             T doc = createNewDocument(collection, oldDoc, update);
-            Lock l = getAndLock(update.getId());
+            Lock l = locks.acquire(update.getId());
             try {
                 boolean success = false;
 
@@ -1006,7 +1025,9 @@ public class RDBDocumentStore implements DocumentStore {
                             doc = createNewDocument(collection, oldDoc, update);
                         }
                     } else {
-                        updateCache(collection, oldDoc, doc);
+                        if (collection == Collection.NODES) {
+                            nodesCache.replaceCachedDocument((NodeDocument) oldDoc, (NodeDocument) doc);
+                        }
                     }
                 }
 
@@ -1056,7 +1077,7 @@ public class RDBDocumentStore implements DocumentStore {
                     // remember what we already have in the cache
                     cachedDocs = new HashMap<String, NodeDocument>();
                     for (String key : chunkedIds) {
-                        cachedDocs.put(key, nodesCache.getIfPresent(new StringValue(key)));
+                        cachedDocs.put(key, nodesCache.getIfPresent(key));
                     }
 
                     // keep concurrently running queries from updating
@@ -1094,16 +1115,16 @@ public class RDBDocumentStore implements DocumentStore {
                     for (Entry<String, NodeDocument> entry : cachedDocs.entrySet()) {
                         T oldDoc = castAsT(entry.getValue());
                         String id = entry.getKey();
-                        Lock lock = getAndLock(id);
+                        Lock lock = locks.acquire(id);
                         try {
                             if (oldDoc == null) {
                                 // make sure concurrently loaded document is
                                 // invalidated
-                                nodesCache.invalidate(new StringValue(id));
+                                nodesCache.invalidate(id);
                             } else {
                                 addUpdateCounters(update);
                                 T newDoc = createNewDocument(collection, oldDoc, update);
-                                updateCache(collection, oldDoc, newDoc);
+                                nodesCache.replaceCachedDocument((NodeDocument) oldDoc, (NodeDocument) newDoc);
                             }
                         } finally {
                             lock.unlock();
@@ -1193,14 +1214,16 @@ public class RDBDocumentStore implements DocumentStore {
     private Map<Thread, QueryContext> qmap = new ConcurrentHashMap<Thread, QueryContext>();
 
     private <T extends Document> List<T> internalQuery(Collection<T> collection, String fromKey, String toKey,
-            String indexedProperty, long startValue, int limit) {
+            List<QueryCondition> conditions, int limit) {
         Connection connection = null;
         RDBTableMetaData tmd = getTable(collection);
-        if (indexedProperty != null && (!INDEXEDPROPERTIES.contains(indexedProperty))) {
-            String message = "indexed property " + indexedProperty + " not supported, query was '>= '" + startValue
-                    + "'; supported properties are " + INDEXEDPROPERTIES;
-            LOG.info(message);
-            throw new DocumentStoreException(message);
+        for (QueryCondition cond : conditions) {
+            if (!INDEXEDPROPERTIES.contains(cond.getPropertyName())) {
+                String message = "indexed property " + cond.getPropertyName() + " not supported, query was '" + cond.getOperator()
+                        + "'" + cond.getValue() + "'; supported properties are " + INDEXEDPROPERTIES;
+                LOG.info(message);
+                throw new DocumentStoreException(message);
+            }
         }
         try {
             long now = System.currentTimeMillis();
@@ -1212,7 +1235,7 @@ public class RDBDocumentStore implements DocumentStore {
             connection = this.ch.getROConnection();
             String from = collection == Collection.NODES && NodeDocument.MIN_ID_VALUE.equals(fromKey) ? null : fromKey;
             String to = collection == Collection.NODES && NodeDocument.MAX_ID_VALUE.equals(toKey) ? null : toKey;
-            List<RDBRow> dbresult = db.query(connection, tmd, from, to, indexedProperty, startValue, limit);
+            List<RDBRow> dbresult = db.query(connection, tmd, from, to, conditions, limit);
             connection.commit();
 
             int size = dbresult.size();
@@ -1538,16 +1561,9 @@ public class RDBDocumentStore implements DocumentStore {
         return (T) doc;
     }
 
-    // Memory Cache
-    private Cache<CacheValue, NodeDocument> nodesCache;
-    private CacheStats cacheStats;
-    private final Striped<Lock> locks = Striped.lock(64);
+    private NodeDocumentCache nodesCache;
 
-    private Lock getAndLock(String key) {
-        Lock l = locks.get(key);
-        l.lock();
-        return l;
-    }
+    private NodeDocumentLocks locks;
 
     @CheckForNull
     private static NodeDocument unwrap(@Nonnull NodeDocument doc) {
@@ -1573,100 +1589,6 @@ public class RDBDocumentStore implements DocumentStore {
         return n != null ? n.longValue() : -1;
     }
 
-    private <T extends Document> void addToCache(Collection<T> collection, T doc) {
-        if (collection == Collection.NODES) {
-            Lock lock = getAndLock(idOf(doc));
-            try {
-                addToCache((NodeDocument) doc);
-            } finally {
-                lock.unlock();
-            }
-        }
-    }
-
-    /**
-     * Applies an update to the nodes cache. This method does not acquire
-     * a lock for the document. The caller must ensure it holds a lock for
-     * the updated document. See striped {@link #locks}.
-     *
-     * @param <T> the document type.
-     * @param collection the document collection.
-     * @param oldDoc the old document.
-     * @param updateOp the update operation.
-     */
-    private <T extends Document> void updateCache(@Nonnull Collection<T> collection,
-                                                  @Nonnull T oldDoc,
-                                                  @Nonnull T newDoc) {
-        // cache the new document
-        if (collection == Collection.NODES) {
-            checkNotNull(oldDoc);
-            checkNotNull(newDoc);
-            // we can only update the cache based on the oldDoc if we
-            // still have the oldDoc in the cache, otherwise we may
-            // update the cache with an outdated document
-            CacheValue key = new StringValue(idOf(newDoc));
-            NodeDocument cached = nodesCache.getIfPresent(key);
-            if (cached == null) {
-                // cannot use oldDoc to update cache
-                return;
-            }
-
-            // check if the currently cached document matches oldDoc
-            if (Objects.equal(cached.getModCount(), oldDoc.getModCount())) {
-                nodesCache.put(key, (NodeDocument)newDoc);
-            } else {
-                // the cache entry was modified by some other thread in
-                // the meantime. the updated cache entry may or may not
-                // include this update. we cannot just apply our update
-                // on top of the cached entry.
-                // therefore we must invalidate the cache entry
-                nodesCache.invalidate(key);
-            }
-        }
-    }
-
-    /**
-     * Adds a document to the {@link #nodesCache} iff there is no document
-     * in the cache with the document key. This method does not acquire a lock
-     * from {@link #locks}! The caller must ensure a lock is held for the
-     * given document.
-     *
-     * @param doc the document to add to the cache.
-     * @return either the given <code>doc</code> or the document already present
-     *         in the cache.
-     */
-    @Nonnull
-    private NodeDocument addToCache(@Nonnull final NodeDocument doc) {
-        if (doc == NodeDocument.NULL) {
-            throw new IllegalArgumentException("doc must not be NULL document");
-        }
-        doc.seal();
-        // make sure we only cache the document if it wasn't
-        // changed and cached by some other thread in the
-        // meantime. That is, use get() with a Callable,
-        // which is only used when the document isn't there
-        try {
-            CacheValue key = new StringValue(idOf(doc));
-            for (;;) {
-                NodeDocument cached = nodesCache.get(key, new Callable<NodeDocument>() {
-                    @Override
-                    public NodeDocument call() {
-                        return doc;
-                    }
-                });
-                if (cached != NodeDocument.NULL) {
-                    return cached;
-                } else {
-                    nodesCache.invalidate(key);
-                }
-            }
-        } catch (ExecutionException e) {
-            // will never happen because call() just returns
-            // the already available doc
-            throw new IllegalStateException(e);
-        }
-    }
-
     @Nonnull
     protected <T extends Document> T convertFromDBObject(@Nonnull Collection<T> collection, @Nonnull RDBRow row) {
         // this method is present here in order to facilitate unit testing for OAK-3566
@@ -1681,8 +1603,7 @@ public class RDBDocumentStore implements DocumentStore {
         }
 
         String id = row.getId();
-        CacheValue cacheKey = new StringValue(id);
-        NodeDocument inCache = nodesCache.getIfPresent(cacheKey);
+        NodeDocument inCache = nodesCache.getIfPresent(id);
         Number modCount = row.getModcount();
 
         // do not overwrite document in cache if the
@@ -1707,26 +1628,7 @@ public class RDBDocumentStore implements DocumentStore {
             return castAsT(fresh);
         }
 
-        Lock lock = getAndLock(id);
-        try {
-            inCache = nodesCache.getIfPresent(cacheKey);
-            if (inCache != null && inCache != NodeDocument.NULL) {
-                // check mod count
-                Number cachedModCount = inCache.getModCount();
-                if (cachedModCount == null) {
-                    throw new IllegalStateException("Missing " + Document.MOD_COUNT);
-                }
-                if (modCount.longValue() > cachedModCount.longValue()) {
-                    nodesCache.put(cacheKey, fresh);
-                } else {
-                    fresh = inCache;
-                }
-            } else {
-                nodesCache.put(cacheKey, fresh);
-            }
-        } finally {
-            lock.unlock();
-        }
+        nodesCache.putIfNewer(fresh);
         return castAsT(fresh);
     }
 
@@ -1775,7 +1677,37 @@ public class RDBDocumentStore implements DocumentStore {
         }
     }
 
-    protected Cache<CacheValue, NodeDocument> getNodeDocumentCache() {
+    protected NodeDocumentCache getNodeDocumentCache() {
         return nodesCache;
+    }
+
+    // slightly extended query support
+    protected static class QueryCondition {
+
+        private final String propertyName, operator;
+        private final long value;
+
+        public QueryCondition(String propertyName, String operator, long value) {
+            this.propertyName = propertyName;
+            this.operator = operator;
+            this.value = value;
+        }
+
+        public String getPropertyName() {
+            return propertyName;
+        }
+
+        public String getOperator() {
+            return operator;
+        }
+
+        public long getValue() {
+            return value;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s %s %d", propertyName, operator, value);
+        }
     }
 }

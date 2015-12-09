@@ -113,6 +113,8 @@ import org.apache.jackrabbit.oak.plugins.segment.compaction.CompactionStrategy.C
 import org.apache.jackrabbit.oak.plugins.segment.file.FileStore;
 import org.apache.jackrabbit.oak.plugins.segment.file.FileStore.ReadOnlyStore;
 import org.apache.jackrabbit.oak.plugins.segment.file.JournalReader;
+import org.apache.jackrabbit.oak.plugins.segment.file.tooling.RevisionHistory;
+import org.apache.jackrabbit.oak.plugins.segment.file.tooling.RevisionHistory.HistoryElement;
 import org.apache.jackrabbit.oak.plugins.segment.standby.client.StandbyClient;
 import org.apache.jackrabbit.oak.plugins.segment.standby.server.StandbyServer;
 import org.apache.jackrabbit.oak.plugins.tika.TextExtractorMain;
@@ -174,6 +176,9 @@ public final class Main {
                 break;
             case GRAPH:
                 graph(args);
+                break;
+            case HISTORY:
+                history(args);
                 break;
             case CHECK:
                 check(args);
@@ -531,7 +536,13 @@ public final class Main {
             System.out.println("    -> cleaning up");
             store = openFileStore(directory);
             try {
-                store.cleanup();
+                for (File file : store.cleanup()) {
+                    if (!file.exists() || file.delete()) {
+                        System.out.println("    -> removed old file " + file.getName());
+                    } else {
+                        System.out.println("    -> failed to remove old file " + file.getName());
+                    }
+                }
 
                 String head;
                 File journal = new File(directory, "journal.log");
@@ -874,6 +885,43 @@ public final class Main {
         long debugLevel = deep.value(options);
         long binLen = bin.value(options);
         checkConsistency(dir, journalFileName, fullTraversal, debugLevel, binLen);
+    }
+
+    private static void history(String[] args) throws IOException {
+        OptionParser parser = new OptionParser();
+        OptionSpec<File> directoryArg = parser.nonOptions(
+            "Path to segment store (required)").ofType(File.class);
+        OptionSpec<String> journalArg = parser.accepts(
+            "journal", "journal file").withRequiredArg().ofType(String.class)
+            .defaultsTo("journal.log");
+        OptionSpec<String> pathArg = parser.accepts(
+            "path", "Path for which to trace the history").withRequiredArg().ofType(String.class)
+            .defaultsTo("/");
+        OptionSpec<Integer> depthArg = parser.accepts(
+            "depth", "Depth up to which to dump node states").withRequiredArg().ofType(Integer.class)
+            .defaultsTo(0);
+        OptionSet options = parser.parse(args);
+
+        File directory = directoryArg.value(options);
+        if (directory == null) {
+            System.err.println("Trace the history of a path. Usage: history [File] <options>");
+            parser.printHelpOn(System.err);
+            System.exit(-1);
+        }
+        if (!isValidFileStore(directory.getPath())) {
+            System.err.println("Invalid FileStore directory " + args[0]);
+            System.exit(1);
+        }
+
+        String path = pathArg.value(options);
+        int depth = depthArg.value(options);
+        String journalName = journalArg.value(options);
+        File journal = new File(directory, journalName);
+
+        Iterable<HistoryElement> history = new RevisionHistory(directory).getHistory(journal, path);
+        for (HistoryElement historyElement : history) {
+            System.out.println(historyElement.toString(depth));
+        }
     }
 
     private static void debugTarFile(FileStore store, String[] args) {
@@ -1253,6 +1301,7 @@ public final class Main {
         CONSOLE("console"),
         DEBUG("debug"),
         GRAPH("graph"),
+        HISTORY("history"),
         CHECK("check"),
         COMPACT("compact"),
         SERVER("server"),
