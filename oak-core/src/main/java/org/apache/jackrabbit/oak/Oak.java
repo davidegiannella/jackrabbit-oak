@@ -732,7 +732,8 @@ public class Oak {
     }
 
     /**
-     * @return the current instance id if availabe or null if not.
+     * @return the current instance id if availabe or null if not. An instanceId is underlying
+     *         {@link NodeStore} implements a {@link Clusterable} behaviour.
      */
     public String getInstanceId() {
         return (store instanceof Clusterable) ? ((Clusterable) store).getInstanceId() : null;
