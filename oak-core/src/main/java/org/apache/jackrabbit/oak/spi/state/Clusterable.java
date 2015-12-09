@@ -28,7 +28,7 @@ public interface Clusterable {
      * effort to preserve the same number across restarts but it must be unique across the cluster.
      * </p>
      * <p>
-     *  It may be the same as a cluster id.
+     *  It may be the same as a cluster id. See {@link RevisionContext#getClusterId()}.
      * </p>
      * 
      * @return Cannot be null or empty.
