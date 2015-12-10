@@ -295,8 +295,8 @@ public class AtomicCounterEditor extends DefaultEditor {
                 if (LOG.isTraceEnabled()) {
                     LOG.trace(
                         "Executing synchronously. instanceId: {}, store: {}, executor: {}, board: {}",
-                        new Object[] { instanceId, store.toString(), executor.toString(),
-                                      board.toString() });
+                        new Object[] { instanceId, store, executor,
+                                      board});
                 }
                 consolidateCount(builder);
             } else {
