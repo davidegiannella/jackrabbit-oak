@@ -320,7 +320,13 @@ public class AtomicCounterEditor extends DefaultEditor {
                 LOG.trace("Scheduling process");
                 long delay = 0;
                 executor.schedule(
-                    new ConsolidatorTask(path, builder.getProperty(revisionName), store, executor, delay), 
+                    new ConsolidatorTask(
+                        path, 
+                        builder.getProperty(revisionName), 
+                        store, 
+                        executor, 
+                        delay, 
+                        hook), 
                     delay, TimeUnit.SECONDS);
             }
         }
@@ -333,41 +339,52 @@ public class AtomicCounterEditor extends DefaultEditor {
         private final NodeStore s;
         private final ScheduledExecutorService exec;
         private final long delay;
+        private final CommitHook hook;
         
         public ConsolidatorTask(@Nonnull String path, 
                                 @Nullable PropertyState revision, 
                                 @Nonnull NodeStore store,
                                 @Nonnull ScheduledExecutorService exec,
-                                long delay) {
+                                long delay,
+                                @Nonnull CommitHook hook) {
             p = checkNotNull(path);
             rev = revision;
             s = checkNotNull(store);
             this.exec = checkNotNull(exec);
             this.delay = delay;
+            this.hook = checkNotNull(hook);
         }
         
         @Override
         public Void call() throws Exception {            
             try {
-                LOG.trace("Async consolidation running: path: {}, revision: {}, store: {}", p, rev, s);
-                NodeBuilder b = builderFromPath(s.getRoot().builder(), p);
+                LOG.trace("Async consolidation running: path: {}, revision: {}", p, rev);
+                NodeBuilder root = s.getRoot().builder();
+                NodeBuilder b = builderFromPath(root, p);
                 
                 if (!b.exists()) {
-                    LOG.debug(
-                        "The builder from NodeStore not avaialble (yet?). Rescheduling. path: {}",
-                        p);
+                    LOG.debug("Builder for '{}' from NodeStore not available. Rescheduling.", p);
                     reschedule();
                     return null;
                 }
                 
-                LOG.debug("Yo!");
+                if (!checkRevision(b, rev)) {
+                    LOG.debug("Not yet a valid revision for '{}'. Rescheduling.", p);
+                    reschedule();
+                    return null;
+                }
+
+                consolidateCount(b);
+                s.merge(root, hook, CommitInfo.EMPTY);
             } catch (Exception e) {
                 LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
                 if (LOG.isTraceEnabled()) {
                     LOG.trace("{}", e);
                 }
+                reschedule();
             }
             
+            LOG.debug("Consolidation for '{}', '{}' completed", p, rev);
             return null;
         }
         
@@ -378,7 +395,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                 return;
             }
             
-            ConsolidatorTask task = new ConsolidatorTask(p, rev, s, exec, d);
+            ConsolidatorTask task = new ConsolidatorTask(p, rev, s, exec, d, hook);
             LOG.trace("Re-scheduling '{}' by {}sec", p, d);
             exec.schedule(task, d, TimeUnit.SECONDS);
         }

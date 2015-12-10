@@ -35,6 +35,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -73,6 +74,7 @@ import org.slf4j.LoggerFactory;
 
 import com.amazonaws.services.sqs.model.UnsupportedOperationException;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 
 public class AtomicCounterEditorTest {
     private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
@@ -163,17 +165,23 @@ public class AtomicCounterEditorTest {
                                                @Nonnull Set<String> hiddenProps, 
                                                long expectedCounter) {
         checkNotNull(builder);
+        checkNotNull(hiddenProps);
         int totalHiddenProps = 0;
         long totalHiddenValue = 0;
         PropertyState counter = builder.getProperty(PROP_COUNTER);
-
+        Set<String> hp = Sets.newHashSet(hiddenProps);
+        
         assertNotNull("counter property cannot be null", counter);
         assertNull("The increment property should not be there",
             builder.getProperty(PROP_INCREMENT));
         for (PropertyState p : builder.getProperties()) {
             String name = p.getName();
+            if (name.startsWith(":")) {
+                
+                fail("complete the method");
+//                assertTrue()
+            }
             if (name.startsWith(PREFIX_PROP_COUNTER)) {
-                totalHiddenProps++;
                 totalHiddenValue += p.getValue(LONG).longValue();
                 assertTrue("unexpected property found: " + name,
                     checkNotNull(hiddenProps.contains(name)));
@@ -288,27 +296,37 @@ public class AtomicCounterEditorTest {
         PropertyState p;
         
         root = store.getRoot().builder();
-        before = root.getNodeState();
         builder = root.child("c");
         builder = setMixin(builder);
         builder = incrementBy(builder, INCREMENT_BY_1);
-        after = root.getNodeState();
-        builder = hook1.processCommit(before, after, EMPTY).builder();
-        store.merge(builder, new EmptyHook(), CommitInfo.EMPTY);
+        store.merge(root, hook1, CommitInfo.EMPTY);
         
         // as we're providing all the information we expect the counter not to be consolidated for
         // as long as the scheduled process has run
+        builder = store.getRoot().builder().getChildNode("c");
+        assertTrue(builder.exists());
+        p = builder.getProperty(PREFIX_PROP_REVISION + instanceId1);
+        assertNotNull(p);
+        assertEquals(1, p.getValue(LONG).longValue());
+        p = builder.getProperty(PREFIX_PROP_COUNTER + instanceId1);
+        assertNotNull(p);
+        assertEquals(1, p.getValue(LONG).longValue());
         p = builder.getProperty(PROP_COUNTER);
-        assertNull("First run before consolidation we expect oak:counter to be null", p);
+        assertNull(p);
+        
+        // executing the consolidation
         exec1.execute();
         
         // fetching the latest store state to see the changes
         builder = store.getRoot().builder().getChildNode("c");
         assertTrue("the counter node should exists", builder.exists());
+        assertCounterNodeState(builder,
+            ImmutableSet.of(PREFIX_PROP_COUNTER + instanceId1, PREFIX_PROP_REVISION + instanceId1),
+            1);
         
         // TODO assertCounterNodeState(builder, hiddenProps, expectedCounter);
         // TODO to be completed by retrieving the store status. What shall I do? store.merge?
-        fail("to be completed");
+//        fail("to be completed");
     }
     
     /**
