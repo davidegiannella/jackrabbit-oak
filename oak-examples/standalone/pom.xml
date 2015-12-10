@@ -185,7 +185,7 @@
     <dependency>
       <groupId>org.apache.felix</groupId>
       <artifactId>org.apache.felix.webconsole.plugins.scriptconsole</artifactId>
-      <version>1.0.0</version>
+      <version>1.0.2</version>
     </dependency>
     <dependency>
       <groupId>org.codehaus.groovy</groupId>
@@ -255,6 +255,9 @@
           <excludes>
             <exclude>src/main/webapp/WEB-INF/log4j.dtd</exclude>
             <exclude>src/main/webapp/WEB-INF/templates/repository-config.json</exclude>
+            <exclude>src/main/resources/config-templates/mongomk-config.json</exclude>
+            <exclude>src/main/resources/config-templates/repository-config.json</exclude>
+            <exclude>src/main/resources/config-templates/segmentmk-config.json</exclude>
             <exclude>*.sh</exclude>
           </excludes>
         </configuration>
@@ -298,5 +301,32 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+  <profile>
+    <id>disable-test-jdk6</id>
+    <activation>
+      <jdk>1.6</jdk>
+    </activation>
+    <build>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <configuration>
+            <skipTests>true</skipTests>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <configuration>
+            <skipTests>true</skipTests>
+          </configuration>
+        </plugin>
+      </plugins>
+    </build>
+  </profile>
+  </profiles>
 
 </project>
