@@ -318,32 +318,47 @@ public class AtomicCounterEditor extends DefaultEditor {
                 }
                 
                 LOG.trace("Scheduling process");
-                executor.schedule(new Callable<Void>() {
-                    
-                    @Override
-                    public Void call() throws Exception {
-                        final String p = path;
-                        final PropertyState rev = builder.getProperty(revisionName); 
-                        final NodeStore s = store;
-                        
-                        try {
-                            LOG.trace("Async consolidation running: path: {}, revision: {}, store: {}", p, rev, s);
-                            NodeBuilder b = builderFromPath(s.getRoot().builder(), p);
-                            
-                            
-                        } catch (Exception e) {
-                            LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
-                            if (LOG.isTraceEnabled()) {
-                                LOG.trace("{}", e);
-                            }
-                            executor.schedule(this, 1, TimeUnit.SECONDS);
-                        }
-                        
-                        return null;
-                    }
-                    
-                }, 0, TimeUnit.SECONDS);
+                executor.schedule(
+                    new ConsolidatorTask(path, builder.getProperty(revisionName), store, executor), 
+                    0, TimeUnit.SECONDS);
             }
+        }
+    }
+    
+    private static class ConsolidatorTask implements Callable<Void> {
+        private final String p;
+        private final PropertyState rev;
+        private final NodeStore s;
+        private final ScheduledExecutorService exec;
+        
+        public ConsolidatorTask(@Nonnull String path, 
+                                @Nullable PropertyState revision, 
+                                @Nonnull NodeStore store,
+                                @Nonnull ScheduledExecutorService exec) {
+            p = checkNotNull(path);
+            rev = revision;
+            s = checkNotNull(store);
+            this.exec = checkNotNull(exec);
+        }
+        
+        @Override
+        public Void call() throws Exception {            
+            try {
+                LOG.trace("Async consolidation running: path: {}, revision: {}, store: {}", p, rev, s);
+                NodeBuilder b = builderFromPath(s.getRoot().builder(), p);
+                
+                if (!b.exists()) {
+                    LOG.debug("The builder from ");
+                }
+                
+            } catch (Exception e) {
+                LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace("{}", e);
+                }
+            }
+            
+            return null;
         }
     }
     
