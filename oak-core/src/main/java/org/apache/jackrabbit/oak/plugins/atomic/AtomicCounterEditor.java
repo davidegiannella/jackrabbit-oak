@@ -318,27 +318,31 @@ public class AtomicCounterEditor extends DefaultEditor {
                 }
                 
                 LOG.trace("Scheduling process");
+                long delay = 0;
                 executor.schedule(
-                    new ConsolidatorTask(path, builder.getProperty(revisionName), store, executor), 
-                    0, TimeUnit.SECONDS);
+                    new ConsolidatorTask(path, builder.getProperty(revisionName), store, executor, delay), 
+                    delay, TimeUnit.SECONDS);
             }
         }
     }
     
-    private static class ConsolidatorTask implements Callable<Void> {
+    public static class ConsolidatorTask implements Callable<Void> {
         private final String p;
         private final PropertyState rev;
         private final NodeStore s;
         private final ScheduledExecutorService exec;
+        private final long delay;
         
         public ConsolidatorTask(@Nonnull String path, 
                                 @Nullable PropertyState revision, 
                                 @Nonnull NodeStore store,
-                                @Nonnull ScheduledExecutorService exec) {
+                                @Nonnull ScheduledExecutorService exec,
+                                long delay) {
             p = checkNotNull(path);
             rev = revision;
             s = checkNotNull(store);
             this.exec = checkNotNull(exec);
+            this.delay = delay;
         }
         
         @Override
@@ -359,6 +363,19 @@ public class AtomicCounterEditor extends DefaultEditor {
             }
             
             return null;
+        }
+        
+        public static long nextDelay(long currentDelay) {
+            if (currentDelay < 0) {
+                return 0;
+            }
+            if (currentDelay == 0) {
+                return 1;
+            }
+            if (currentDelay >= 32) {
+                return Long.MAX_VALUE;
+            }
+            return currentDelay * 2;
         }
     }
     

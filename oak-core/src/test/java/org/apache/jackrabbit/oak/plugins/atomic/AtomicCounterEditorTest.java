@@ -482,4 +482,17 @@ public class AtomicCounterEditorTest {
         b.setProperty(LongPropertyState.createLongProperty(r.getName(), 20L));
         assertTrue(AtomicCounterEditor.checkRevision(b, r));
     }
+    
+    @Test
+    public void nextDelay() {
+        assertEquals(0, AtomicCounterEditor.ConsolidatorTask.nextDelay(-23456789));
+        assertEquals(1, AtomicCounterEditor.ConsolidatorTask.nextDelay(0));
+        assertEquals(2, AtomicCounterEditor.ConsolidatorTask.nextDelay(1));
+        assertEquals(4, AtomicCounterEditor.ConsolidatorTask.nextDelay(2));
+        assertEquals(8, AtomicCounterEditor.ConsolidatorTask.nextDelay(4));
+        assertEquals(16, AtomicCounterEditor.ConsolidatorTask.nextDelay(8));
+        assertEquals(32, AtomicCounterEditor.ConsolidatorTask.nextDelay(16));
+        assertEquals(Long.MAX_VALUE, AtomicCounterEditor.ConsolidatorTask.nextDelay(32));
+        assertEquals(Long.MAX_VALUE, AtomicCounterEditor.ConsolidatorTask.nextDelay(45678));
+    }
 }
