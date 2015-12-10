@@ -492,7 +492,23 @@ public class AtomicCounterEditorTest {
         assertEquals(8, AtomicCounterEditor.ConsolidatorTask.nextDelay(4));
         assertEquals(16, AtomicCounterEditor.ConsolidatorTask.nextDelay(8));
         assertEquals(32, AtomicCounterEditor.ConsolidatorTask.nextDelay(16));
-        assertEquals(Long.MAX_VALUE, AtomicCounterEditor.ConsolidatorTask.nextDelay(32));
+        assertEquals(Long.MAX_VALUE,
+            AtomicCounterEditor.ConsolidatorTask
+                .nextDelay(AtomicCounterEditor.ConsolidatorTask.MAX_TIMEOUT));
         assertEquals(Long.MAX_VALUE, AtomicCounterEditor.ConsolidatorTask.nextDelay(45678));
+    }
+    
+    @Test
+    public void isTimeOut() {
+        assertFalse(AtomicCounterEditor.ConsolidatorTask.isTimedOut(0));
+        assertFalse(AtomicCounterEditor.ConsolidatorTask.isTimedOut(1));
+        assertFalse(AtomicCounterEditor.ConsolidatorTask.isTimedOut(2));
+        assertFalse(AtomicCounterEditor.ConsolidatorTask.isTimedOut(4));
+        assertFalse(AtomicCounterEditor.ConsolidatorTask.isTimedOut(8));
+        assertFalse(AtomicCounterEditor.ConsolidatorTask.isTimedOut(16));
+        assertFalse(AtomicCounterEditor.ConsolidatorTask.isTimedOut(32));
+        assertTrue(AtomicCounterEditor.ConsolidatorTask
+            .isTimedOut(AtomicCounterEditor.ConsolidatorTask.MAX_TIMEOUT + 1)); // any number > 32
+        assertTrue(AtomicCounterEditor.ConsolidatorTask.isTimedOut(Long.MAX_VALUE));
     }
 }

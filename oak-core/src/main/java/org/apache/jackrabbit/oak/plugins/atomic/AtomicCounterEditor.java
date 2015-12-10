@@ -327,6 +327,7 @@ public class AtomicCounterEditor extends DefaultEditor {
     }
     
     public static class ConsolidatorTask implements Callable<Void> {
+        public static final long MAX_TIMEOUT = 32;
         private final String p;
         private final PropertyState rev;
         private final NodeStore s;
@@ -372,10 +373,17 @@ public class AtomicCounterEditor extends DefaultEditor {
             if (currentDelay == 0) {
                 return 1;
             }
-            if (currentDelay >= 32) {
+            if (currentDelay >= MAX_TIMEOUT) {
                 return Long.MAX_VALUE;
             }
             return currentDelay * 2;
+        }
+        
+        public static boolean isTimedOut(long delay) {
+            if (delay > MAX_TIMEOUT) {
+                return true;
+            }
+            return false;
         }
     }
     
