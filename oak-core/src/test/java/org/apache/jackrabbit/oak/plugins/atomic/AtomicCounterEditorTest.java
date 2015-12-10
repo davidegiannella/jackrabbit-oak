@@ -58,8 +58,10 @@ import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.plugins.memory.LongPropertyState;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.plugins.value.ValueFactoryImpl;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
+import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -292,6 +294,7 @@ public class AtomicCounterEditorTest {
         builder = incrementBy(builder, INCREMENT_BY_1);
         after = root.getNodeState();
         builder = hook1.processCommit(before, after, EMPTY).builder();
+        store.merge(builder, new EmptyHook(), CommitInfo.EMPTY);
         
         // as we're providing all the information we expect the counter not to be consolidated for
         // as long as the scheduled process has run

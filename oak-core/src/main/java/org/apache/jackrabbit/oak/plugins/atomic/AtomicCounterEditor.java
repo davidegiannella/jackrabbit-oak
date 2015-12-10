@@ -353,9 +353,14 @@ public class AtomicCounterEditor extends DefaultEditor {
                 NodeBuilder b = builderFromPath(s.getRoot().builder(), p);
                 
                 if (!b.exists()) {
-                    LOG.debug("The builder from ");
+                    LOG.debug(
+                        "The builder from NodeStore not avaialble (yet?). Rescheduling. path: {}",
+                        p);
+                    reschedule();
+                    return null;
                 }
                 
+                LOG.debug("Yo!");
             } catch (Exception e) {
                 LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
                 if (LOG.isTraceEnabled()) {
@@ -364,6 +369,18 @@ public class AtomicCounterEditor extends DefaultEditor {
             }
             
             return null;
+        }
+        
+        private void reschedule() {
+            long d = nextDelay(delay);
+            if (isTimedOut(d)) {
+                LOG.warn("The consolidator task for '{}' time out. Cancelling the retry.", p);
+                return;
+            }
+            
+            ConsolidatorTask task = new ConsolidatorTask(p, rev, s, exec, d);
+            LOG.trace("Re-scheduling '{}' by {}sec", p, d);
+            exec.schedule(task, d, TimeUnit.SECONDS);
         }
         
         public static long nextDelay(long currentDelay) {
