@@ -279,16 +279,16 @@ public class AtomicCounterEditorTest {
         MyExecutor exec1 = new MyExecutor();
         Whiteboard board = new DefaultWhiteboard();
         EditorHook hook1 = new EditorHook(new AtomicCounterEditorProvider(instanceId1, exec1, store, board));
-        NodeBuilder builder;
+        NodeBuilder builder, root;
         NodeState before, after;
         PropertyState p;
         
-        builder = store.getRoot().builder();
-        builder = builder.child("c");
+        root = store.getRoot().builder();
+        before = root.getNodeState();
+        builder = root.child("c");
         builder = setMixin(builder);
-        before = builder.getNodeState();
         builder = incrementBy(builder, INCREMENT_BY_1);
-        after = builder.getNodeState();
+        after = root.getNodeState();
         builder = hook1.processCommit(before, after, EMPTY).builder();
         
         // as we're providing all the information we expect the counter not to be consolidated for
