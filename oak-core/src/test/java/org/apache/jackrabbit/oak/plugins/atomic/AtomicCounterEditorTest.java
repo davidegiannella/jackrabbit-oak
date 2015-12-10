@@ -55,7 +55,9 @@ import javax.annotation.Nonnull;
 import org.apache.jackrabbit.oak.NodeStoreFixture;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.plugins.memory.LongPropertyState;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
+import org.apache.jackrabbit.oak.plugins.value.ValueFactoryImpl;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -461,5 +463,23 @@ public class AtomicCounterEditorTest {
                                                          long delay, TimeUnit unit) {
             throw new UnsupportedOperationException("Not implemented");
         }
+    }
+    
+    @Test
+    public void checkRevision() {
+        NodeBuilder b = EMPTY_NODE.builder();
+        PropertyState r = LongPropertyState.createLongProperty("r", 10L);
+        
+        assertTrue(AtomicCounterEditor.checkRevision(b, null));
+        assertTrue(AtomicCounterEditor.checkRevision(b, r));
+        
+        b.setProperty(LongPropertyState.createLongProperty(r.getName(), 1L));
+        assertFalse(AtomicCounterEditor.checkRevision(b, r));
+        
+        b.setProperty(LongPropertyState.createLongProperty(r.getName(), 10L));
+        assertTrue(AtomicCounterEditor.checkRevision(b, r));
+
+        b.setProperty(LongPropertyState.createLongProperty(r.getName(), 20L));
+        assertTrue(AtomicCounterEditor.checkRevision(b, r));
     }
 }

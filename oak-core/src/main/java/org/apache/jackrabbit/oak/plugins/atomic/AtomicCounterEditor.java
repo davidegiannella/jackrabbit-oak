@@ -31,6 +31,8 @@ import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
+import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.DefaultEditor;
@@ -151,6 +153,16 @@ public class AtomicCounterEditor extends DefaultEditor {
     private final Whiteboard board;
     
     /**
+     * the current counter property name
+     */
+    private final String counterName;
+    
+    /**
+     * the current revision property name
+     */
+    private final String revisionName;
+    
+    /**
      * instruct whether to update the node on leave.
      */
     private boolean update;
@@ -193,6 +205,12 @@ public class AtomicCounterEditor extends DefaultEditor {
         this.executor = executor;
         this.store = store;
         this.board = board;
+        
+        counterName = instanceId == null ? PREFIX_PROP_COUNTER : 
+            PREFIX_PROP_COUNTER + instanceId;
+        revisionName = instanceId == null ? PREFIX_PROP_REVISION :
+            PREFIX_PROP_REVISION + instanceId;
+
     }
 
     private static boolean shallWeProcessProperty(final PropertyState property,
@@ -241,10 +259,6 @@ public class AtomicCounterEditor extends DefaultEditor {
 
     private void setUniqueCounter(final long value) {
         update = true;
-        String counterName = instanceId == null ? PREFIX_PROP_COUNTER : 
-                                                PREFIX_PROP_COUNTER + instanceId;
-        String revisionName = instanceId == null ? PREFIX_PROP_REVISION :
-                                                PREFIX_PROP_REVISION + instanceId;
         
         PropertyState counter = builder.getProperty(counterName);
         PropertyState revision = builder.getProperty(revisionName);
@@ -308,9 +322,15 @@ public class AtomicCounterEditor extends DefaultEditor {
                     
                     @Override
                     public Void call() throws Exception {
-                        final String p = path; 
+                        final String p = path;
+                        final PropertyState rev = builder.getProperty(revisionName); 
+                        final NodeStore s = store;
+                        
                         try {
-                            LOG.trace("Async consolidation running: path: {}", p);
+                            LOG.trace("Async consolidation running: path: {}, revision: {}, store: {}", p, rev, s);
+                            NodeBuilder b = builderFromPath(s.getRoot().builder(), p);
+                            
+                            
                         } catch (Exception e) {
                             LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
                             if (LOG.isTraceEnabled()) {
@@ -325,5 +345,44 @@ public class AtomicCounterEditor extends DefaultEditor {
                 }, 0, TimeUnit.SECONDS);
             }
         }
+    }
+    
+    /**
+     * checks that the revision provided in the PropertyState is less or equal than the one within
+     * the builder.
+     * 
+     * if {@code revision} is null it will always be {@code true}.
+     * 
+     * If {@code builder} does not contain the property it will always return true.
+     * 
+     * @param builder
+     * @param revision
+     * @return
+     */
+    static boolean checkRevision(@Nonnull NodeBuilder builder, @Nullable PropertyState revision) {
+        if (revision == null) {
+            return true;
+        }
+        String pName = revision.getName();
+        PropertyState builderRev = builder.getProperty(pName);
+        if (builderRev == null) {
+            return true;
+        }
+        
+        long brValue = builderRev.getValue(Type.LONG).longValue();
+        long rValue = revision.getValue(Type.LONG).longValue();
+        
+        if (brValue >= rValue) {
+            return true;
+        }
+        return false;
+    }
+    
+    private static NodeBuilder builderFromPath(@Nonnull NodeBuilder ancestor, @Nonnull String path) {
+        NodeBuilder b = checkNotNull(ancestor);
+        for (String name : PathUtils.elements(checkNotNull(path))) {
+            b = b.getChildNode(name);
+        }
+        return b;
     }
 }
