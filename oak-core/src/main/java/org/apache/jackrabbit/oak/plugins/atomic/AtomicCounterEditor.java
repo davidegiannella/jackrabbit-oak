@@ -32,8 +32,10 @@ import javax.annotation.Nullable;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
+import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.DefaultEditor;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
+import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -104,8 +106,8 @@ import com.google.common.collect.Iterators;
  * <p>
  * Then it will consolidate all the internal counters into a single one: {@code oak:counter}. The
  * consolidation process can happen either synchronously or asynchronously. Refer to
- * {@link #AtomicCounterEditor(NodeBuilder, String, ScheduledExecutorService, NodeStore)} for
- * details on when it consolidate one way or the other.
+ * {@link #AtomicCounterEditor(NodeBuilder, String, ScheduledExecutorService, NodeStore, Whiteboard)}
+ * for details on when it consolidate one way or the other.
  * </p>
  * 
  * <p>
@@ -160,8 +162,9 @@ public class AtomicCounterEditor extends DefaultEditor {
      * </p>
      * <p>
      * If {@code instanceId} OR {@code executor} OR {@code store} OR {@code board} are null, the
-     * editor will switch to synchronous behaviour for consolidation. The code will be executed
-     * synchronously even if no {@link CommitHook} has been found registered within the whiteboard.
+     * editor will switch to synchronous behaviour for consolidation. If no {@link CommitHook} will
+     * be found in the whiteboard, a {@link EmptyHook} will be provided to the {@link NodeStore} for
+     * merging.
      * </p>
      * 
      * @param builder the build on which to work. Cannot be null.
@@ -297,31 +300,31 @@ public class AtomicCounterEditor extends DefaultEditor {
                 }
                 consolidateCount(builder);
             } else {
-                final CommitHook hook = WhiteboardUtils.getService(board, CommitHook.class);
+                CommitHook hook = WhiteboardUtils.getService(board, CommitHook.class);
                 if (hook == null) {
-                    LOG.trace("Executing synchronously. CommitHook not found in the whiteboard");
-                    consolidateCount(builder);
-                } else {
-                    LOG.trace("Scheduling process");
-                    executor.schedule(new Callable<Void>() {
-                        
-                        @Override
-                        public Void call() throws Exception {
-                            try {
-                                LOG.debug("Running!");
-                            } catch (Exception e) {
-                                LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
-                                if (LOG.isTraceEnabled()) {
-                                    LOG.trace("{}", e);
-                                }
-                                executor.schedule(this, 1, TimeUnit.SECONDS);
+                    LOG.trace("CommitHook not found in the Whiteboard. Defaulting to EmptyHook");
+                    hook = new EmptyHook();
+                }
+                
+                LOG.trace("Scheduling process");
+                executor.schedule(new Callable<Void>() {
+                    
+                    @Override
+                    public Void call() throws Exception {
+                        try {
+                            LOG.debug("Running!");
+                        } catch (Exception e) {
+                            LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
+                            if (LOG.isTraceEnabled()) {
+                                LOG.trace("{}", e);
                             }
-                            
-                            return null;
+                            executor.schedule(this, 1, TimeUnit.SECONDS);
                         }
                         
-                    }, 0, TimeUnit.SECONDS);
-                }
+                        return null;
+                    }
+                    
+                }, 0, TimeUnit.SECONDS);
             }
         }
     }
