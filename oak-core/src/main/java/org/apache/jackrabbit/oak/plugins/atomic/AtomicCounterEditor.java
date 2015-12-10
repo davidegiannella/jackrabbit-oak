@@ -292,12 +292,9 @@ public class AtomicCounterEditor extends DefaultEditor {
     public void leave(final NodeState before, final NodeState after) throws CommitFailedException {
         if (update) {
             if (instanceId == null || store == null || executor == null || board == null) {
-                if (LOG.isTraceEnabled()) {
-                    LOG.trace(
-                        "Executing synchronously. instanceId: {}, store: {}, executor: {}, board: {}",
-                        new Object[] { instanceId, store, executor,
-                                      board});
-                }
+                LOG.trace(
+                    "Executing synchronously. instanceId: {}, store: {}, executor: {}, board: {}",
+                    new Object[] { instanceId, store, executor, board });
                 consolidateCount(builder);
             } else {
                 CommitHook hook = WhiteboardUtils.getService(board, CommitHook.class);
@@ -311,8 +308,9 @@ public class AtomicCounterEditor extends DefaultEditor {
                     
                     @Override
                     public Void call() throws Exception {
+                        final String p = path; 
                         try {
-                            LOG.debug("Running!");
+                            LOG.trace("Async consolidation running: path: {}", p);
                         } catch (Exception e) {
                             LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
                             if (LOG.isTraceEnabled()) {

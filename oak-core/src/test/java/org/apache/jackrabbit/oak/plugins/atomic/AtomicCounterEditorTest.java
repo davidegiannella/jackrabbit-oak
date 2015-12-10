@@ -296,6 +296,11 @@ public class AtomicCounterEditorTest {
         p = builder.getProperty(PROP_COUNTER);
         assertNull("First run before consolidation we expect oak:counter to be null", p);
         exec1.execute();
+        
+        // fetching the latest store state to see the changes
+        builder = store.getRoot().builder().getChildNode("c");
+        assertTrue("the counter node should exists", builder.exists());
+        
         // TODO assertCounterNodeState(builder, hiddenProps, expectedCounter);
         // TODO to be completed by retrieving the store status. What shall I do? store.merge?
         fail("to be completed");
