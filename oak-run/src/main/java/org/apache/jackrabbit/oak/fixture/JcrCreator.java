@@ -26,7 +26,7 @@ public interface JcrCreator {
     JcrCreator DEFAULT = new JcrCreator() {
         @Override
         public Jcr customize(Oak oak) {
-            return new Jcr(oak);
+            return new Jcr(oak, null);
         }
     };
 

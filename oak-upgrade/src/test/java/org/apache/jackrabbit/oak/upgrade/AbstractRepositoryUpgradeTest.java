@@ -140,8 +140,7 @@ public abstract class AbstractRepositoryUpgradeTest {
 
     public Repository getTargetRepository() {
         if (targetRepository == null) {
-            targetRepository = (JackrabbitRepository) new Jcr(new Oak(
-                    targetNodeStore)).createRepository();
+            targetRepository = (JackrabbitRepository) new Jcr(targetNodeStore).createRepository();
         }
         return targetRepository;
     }

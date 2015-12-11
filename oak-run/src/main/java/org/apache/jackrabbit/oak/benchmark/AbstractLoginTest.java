@@ -123,7 +123,7 @@ abstract class AbstractLoginTest extends AbstractTest {
                                     UserConfiguration.NAME, ConfigurationParameters.of(iterations, cache));
                         }
                         SecurityProvider sp = new SecurityProviderImpl(conf);
-                        return new Jcr(oak).with(sp);
+                        return new Jcr(oak, null).with(sp);
                     }
                 });
             } else {

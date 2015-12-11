@@ -58,7 +58,7 @@ public class CugOakTest extends CugTest {
             return ((OakRepositoryFixture) fixture).setUpCluster(1, new JcrCreator() {
                 @Override
                 public Jcr customize(Oak oak) {
-                    Jcr jcr = new Jcr(oak).with(createSecurityProvider());
+                    Jcr jcr = new Jcr(oak, null).with(createSecurityProvider());
                     contentRepository = jcr.createContentRepository();
                     return jcr;
                 }

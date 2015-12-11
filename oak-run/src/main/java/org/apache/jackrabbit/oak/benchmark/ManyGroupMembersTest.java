@@ -138,7 +138,7 @@ public class ManyGroupMembersTest extends AbstractTest {
                 @Override
                 public Jcr customize(Oak oak) {
                     SecurityProvider sp = new SecurityProviderImpl(ConfigurationParameters.of(UserConfiguration.NAME, ConfigurationParameters.of(ProtectedItemImporter.PARAM_IMPORT_BEHAVIOR, importBehavior)));
-                    return new Jcr(oak).with(sp);
+                    return new Jcr(oak, null).with(sp);
                 }
             });
         } else {

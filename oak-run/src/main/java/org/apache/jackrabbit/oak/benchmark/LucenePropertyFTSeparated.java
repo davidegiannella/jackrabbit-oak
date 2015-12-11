@@ -65,7 +65,7 @@ public class LucenePropertyFTSeparated extends LucenePropertyFullTextTest {
                        .with(new LucenePropertyInitialiser("luceneTitle", of("title")))
                        .withAsyncIndexing("async", 5)
                        .withAsyncIndexing("async-slow", 5);
-                    return new Jcr(oak);
+                    return new Jcr(oak, null);
                 }
             });
         }

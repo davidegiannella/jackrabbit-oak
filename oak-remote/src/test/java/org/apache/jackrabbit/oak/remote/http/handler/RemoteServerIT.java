@@ -95,7 +95,7 @@ public class RemoteServerIT extends OakBaseTest {
     }
 
     private ContentRepository getContentRepository() {
-        return new Jcr(new Oak(store)).createContentRepository();
+        return new Jcr(store).createContentRepository();
     }
 
     private ContentSession getContentSession(ContentRepository repository) throws Exception {

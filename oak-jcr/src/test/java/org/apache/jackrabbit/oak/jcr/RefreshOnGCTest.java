@@ -97,7 +97,7 @@ public class RefreshOnGCTest {
         NodeStore nodeStore = new SegmentNodeStore(fileStore);
         Oak oak = new Oak(nodeStore);
         oak.with(whiteboard);
-        repository = new Jcr(oak).createRepository();
+        repository = new Jcr(oak, nodeStore).createRepository();
     }
 
     @After

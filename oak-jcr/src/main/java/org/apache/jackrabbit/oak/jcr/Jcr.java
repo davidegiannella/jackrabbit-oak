@@ -43,6 +43,7 @@ import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.reference.ReferenceEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.reference.ReferenceIndexProvider;
 import org.apache.jackrabbit.oak.plugins.itemsave.ItemSaveValidatorProvider;
+import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.plugins.name.NameValidatorProvider;
 import org.apache.jackrabbit.oak.plugins.name.NamespaceEditorProvider;
 import org.apache.jackrabbit.oak.plugins.nodetype.TypeEditorProvider;
@@ -92,7 +93,7 @@ public class Jcr {
     private final Set<Observer> observers = newLinkedHashSet();
 
     private final CompositeConflictHandler conflictHandler = createJcrConflictHandler();
-    private final String instanceId;
+    private String instanceId;
 
     private SecurityProvider securityProvider;
     private CommitRateLimiter commitRateLimiter;
@@ -101,16 +102,16 @@ public class Jcr {
     private QueryEngineSettings queryEngineSettings;
     private String defaultWorkspaceName;
     private Whiteboard whiteboard;
-    private NodeStore store;
 
     private int observationQueueLength = DEFAULT_OBSERVATION_QUEUE_LENGTH;
     private boolean fastQueryResultSize;
 
     private ContentRepository contentRepository;
     private Repository repository;
-
-    public Jcr(Oak oak) {
+        
+    public Jcr(Oak oak, NodeStore store) {
         this.oak = oak;
+        
         if (store instanceof Clusterable) {
             instanceId = ((Clusterable) store).getInstanceId();
         } else {
@@ -143,12 +144,11 @@ public class Jcr {
     }
 
     public Jcr() {
-        this(new Oak());
+        this(new MemoryNodeStore());
     }
 
     public Jcr(NodeStore store) {
-        this(new Oak(store));
-        this.store = store;
+        this(new Oak(store), store);
     }
 
     @Nonnull

@@ -106,7 +106,7 @@ public class ReadPropertyTest extends AbstractTest {
                                 .build();
                         reporter.start(30, TimeUnit.SECONDS);
                     }
-                    return new Jcr(oak);
+                    return new Jcr(oak, null);
                 }
             });
         }

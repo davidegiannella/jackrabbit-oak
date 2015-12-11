@@ -45,7 +45,7 @@ public class RepeatedRepositorySidegradeTest extends RepeatedRepositoryUpgradeTe
 
             FileStore fileStore = FileStore.newFileStore(sourceDir).create();
             SegmentNodeStore segmentNodeStore = SegmentNodeStore.newSegmentNodeStore(fileStore).create();
-            RepositoryImpl repository = (RepositoryImpl) new Jcr(new Oak(segmentNodeStore)).createRepository();
+            RepositoryImpl repository = (RepositoryImpl) new Jcr(segmentNodeStore).createRepository();
             Session session = repository.login(CREDENTIALS);
             try {
                 createSourceContent(session);
@@ -62,7 +62,7 @@ public class RepeatedRepositorySidegradeTest extends RepeatedRepositoryUpgradeTe
 
             fileStore = FileStore.newFileStore(sourceDir).create();
             segmentNodeStore = SegmentNodeStore.newSegmentNodeStore(fileStore).create();
-            repository = (RepositoryImpl) new Jcr(new Oak(segmentNodeStore)).createRepository();
+            repository = (RepositoryImpl) new Jcr(segmentNodeStore).createRepository();
             session = repository.login(CREDENTIALS);
             try {
                 modifySourceContent(session);

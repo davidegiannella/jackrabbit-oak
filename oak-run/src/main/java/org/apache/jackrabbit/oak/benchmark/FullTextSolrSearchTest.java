@@ -82,7 +82,7 @@ public class FullTextSolrSearchTest extends FullTextSearchTest {
                         .with(new NodeStateSolrServersObserver())
                         .with(new SolrIndexEditorProvider(serverProvider, configurationProvider))
                         .with(new SolrIndexInitializer(false));
-                    return new Jcr(oak);
+                    return new Jcr(oak, null);
                 }
             });
         }
