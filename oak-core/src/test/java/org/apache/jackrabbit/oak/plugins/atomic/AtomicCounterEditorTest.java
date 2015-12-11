@@ -121,7 +121,7 @@ public class AtomicCounterEditorTest {
         editor.propertyAdded(INCREMENT_BY_1);
         assertTotalCountersValue(builder.getProperties(), 2);
         AtomicCounterEditor.consolidateCount(builder);
-        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER), 2);
+        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER, PREFIX_PROP_REVISION), 2);
     }
 
     /**
@@ -166,7 +166,6 @@ public class AtomicCounterEditorTest {
                                                long expectedCounter) {
         checkNotNull(builder);
         checkNotNull(hiddenProps);
-        int totalHiddenProps = 0;
         long totalHiddenValue = 0;
         PropertyState counter = builder.getProperty(PROP_COUNTER);
         Set<String> hp = Sets.newHashSet(hiddenProps);
@@ -177,18 +176,12 @@ public class AtomicCounterEditorTest {
         for (PropertyState p : builder.getProperties()) {
             String name = p.getName();
             if (name.startsWith(":")) {
-                
-                fail("complete the method");
-//                assertTrue()
+                assertTrue("Unexpected hidden property found: " + name, hp.remove(name));
             }
             if (name.startsWith(PREFIX_PROP_COUNTER)) {
                 totalHiddenValue += p.getValue(LONG).longValue();
-                assertTrue("unexpected property found: " + name,
-                    checkNotNull(hiddenProps.contains(name)));
             }
         }
-        assertEquals("The amount of hidden properties does not match", hiddenProps.size(),
-            totalHiddenProps);
         assertEquals("The sum of the hidden properties does not match the counter", counter
             .getValue(LONG).longValue(), totalHiddenValue);
         assertEquals("The counter does not match the expected value", expectedCounter, counter
@@ -210,13 +203,13 @@ public class AtomicCounterEditorTest {
         builder = incrementBy(builder, INCREMENT_BY_1);
         after = builder.getNodeState();
         builder = HOOK_NO_CLUSTER.processCommit(before, after, EMPTY).builder();
-        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER), 1);
+        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER, PREFIX_PROP_REVISION), 1);
 
         before = builder.getNodeState();
         builder = incrementBy(builder, INCREMENT_BY_2);
         after = builder.getNodeState(); 
         builder = HOOK_NO_CLUSTER.processCommit(before, after, EMPTY).builder();
-        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER), 3);
+        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER, PREFIX_PROP_REVISION), 3);
     }
     
     /**
@@ -234,14 +227,23 @@ public class AtomicCounterEditorTest {
         builder = incrementBy(builder, INCREMENT_BY_1);
         after = builder.getNodeState();
         builder = HOOK_1_SYNC.processCommit(before, after, EMPTY).builder();
-        assertCounterNodeState(builder, ImmutableSet.of(PREFIX_PROP_COUNTER + "1"), 1);
+        assertCounterNodeState(
+            builder, 
+            ImmutableSet.of(PREFIX_PROP_COUNTER + "1", PREFIX_PROP_REVISION + "1"),
+            1);
         
         before = builder.getNodeState();
         builder = incrementBy(builder, INCREMENT_BY_1);
         after = builder.getNodeState();
         builder = HOOK_2_SYNC.processCommit(before, after, EMPTY).builder();
-        assertCounterNodeState(builder,
-            ImmutableSet.of(PREFIX_PROP_COUNTER + "1", PREFIX_PROP_COUNTER + "2"), 2);
+        assertCounterNodeState(
+            builder,
+            ImmutableSet.of(
+                PREFIX_PROP_COUNTER + "1",
+                PREFIX_PROP_COUNTER + "2", 
+                PREFIX_PROP_REVISION + "1",
+                PREFIX_PROP_REVISION + "2"),
+            2);
     }
     
     /**
