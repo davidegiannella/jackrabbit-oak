@@ -122,6 +122,6 @@ public class AtomicCounterIT extends AbstractRepositoryTest {
     @Override
     protected Jcr initJcr(Jcr jcr) {
         return super.initJcr(jcr)
-            .with(new AtomicCounterEditorProvider(null, null));
+            .with(new AtomicCounterEditorProvider(null, null, null, null));
     }
 }
