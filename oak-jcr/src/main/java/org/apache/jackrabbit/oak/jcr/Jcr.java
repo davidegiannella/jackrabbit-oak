@@ -98,6 +98,9 @@ public class Jcr {
     private QueryEngineSettings queryEngineSettings;
     private String defaultWorkspaceName;
     private Whiteboard whiteboard;
+    
+    @SuppressWarnings("unused")
+    private NodeStore store;
 
     private int observationQueueLength = DEFAULT_OBSERVATION_QUEUE_LENGTH;
     private boolean fastQueryResultSize;
@@ -107,7 +110,6 @@ public class Jcr {
 
     public Jcr(Oak oak) {
         this.oak = oak;
-
         with(new InitialContent());
 
         with(new EditorHook(new VersionEditorProvider()));
@@ -139,6 +141,7 @@ public class Jcr {
 
     public Jcr(NodeStore store) {
         this(new Oak(store));
+        this.store = store;
     }
 
     @Nonnull
