@@ -366,11 +366,4 @@ public class Jcr {
         }
         return repository;
     }
-
-    /**
-     * @return delegates to {@link Oak#getInstanceId()}
-     */
-    public String getInstanceId() {
-        return oak.getInstanceId();
-    }
 }
