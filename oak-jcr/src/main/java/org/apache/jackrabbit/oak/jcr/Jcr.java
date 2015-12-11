@@ -61,6 +61,7 @@ import org.apache.jackrabbit.oak.spi.commit.PartialConflictHandler;
 import org.apache.jackrabbit.oak.spi.lifecycle.RepositoryInitializer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 import org.apache.jackrabbit.oak.spi.security.SecurityProvider;
+import org.apache.jackrabbit.oak.spi.state.Clusterable;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 
@@ -91,6 +92,8 @@ public class Jcr {
     private final Set<Observer> observers = newLinkedHashSet();
 
     private final CompositeConflictHandler conflictHandler = createJcrConflictHandler();
+    private final String instanceId;
+
     private SecurityProvider securityProvider;
     private CommitRateLimiter commitRateLimiter;
     private ScheduledExecutorService scheduledExecutor;
@@ -98,8 +101,6 @@ public class Jcr {
     private QueryEngineSettings queryEngineSettings;
     private String defaultWorkspaceName;
     private Whiteboard whiteboard;
-    
-    @SuppressWarnings("unused")
     private NodeStore store;
 
     private int observationQueueLength = DEFAULT_OBSERVATION_QUEUE_LENGTH;
@@ -110,6 +111,12 @@ public class Jcr {
 
     public Jcr(Oak oak) {
         this.oak = oak;
+        if (store instanceof Clusterable) {
+            instanceId = ((Clusterable) store).getInstanceId();
+        } else {
+            instanceId = null;
+        }
+        
         with(new InitialContent());
 
         with(new EditorHook(new VersionEditorProvider()));
