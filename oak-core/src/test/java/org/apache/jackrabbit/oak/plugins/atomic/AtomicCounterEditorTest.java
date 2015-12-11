@@ -33,9 +33,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
-import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -44,7 +42,6 @@ import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.RunnableScheduledFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -58,11 +55,9 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.plugins.memory.LongPropertyState;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
-import org.apache.jackrabbit.oak.plugins.value.ValueFactoryImpl;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
-import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -294,7 +289,6 @@ public class AtomicCounterEditorTest {
         Whiteboard board = new DefaultWhiteboard();
         EditorHook hook1 = new EditorHook(new AtomicCounterEditorProvider(instanceId1, exec1, store, board));
         NodeBuilder builder, root;
-        NodeState before, after;
         PropertyState p;
         
         root = store.getRoot().builder();
@@ -324,11 +318,7 @@ public class AtomicCounterEditorTest {
         assertTrue("the counter node should exists", builder.exists());
         assertCounterNodeState(builder,
             ImmutableSet.of(PREFIX_PROP_COUNTER + instanceId1, PREFIX_PROP_REVISION + instanceId1),
-            1);
-        
-        // TODO assertCounterNodeState(builder, hiddenProps, expectedCounter);
-        // TODO to be completed by retrieving the store status. What shall I do? store.merge?
-//        fail("to be completed");
+            1);        
     }
     
     /**
@@ -337,9 +327,6 @@ public class AtomicCounterEditorTest {
      */
     private static class MyExecutor extends AbstractExecutorService implements ScheduledExecutorService {
         private static final Logger LOG = LoggerFactory.getLogger(MyExecutor.class);
-
-        /** Base of nanosecond timings, to avoid wrapping */
-        private static final long NANO_ORIGIN = System.nanoTime();
         
         @SuppressWarnings("rawtypes")
         private Queue<ScheduledFuture> fifo = new LinkedList<ScheduledFuture>();
@@ -378,17 +365,11 @@ public class AtomicCounterEditorTest {
             throw new UnsupportedOperationException("Not implemented");
         }
 
-        /**
-         * Returns nanosecond time offset by origin
-         */
-        final long now() {
-            return System.nanoTime() - NANO_ORIGIN;
-        }
-
-        private synchronized void addToQueue(@Nonnull ScheduledFuture future) {
+        private synchronized void addToQueue(@SuppressWarnings("rawtypes") @Nonnull ScheduledFuture future) {
             fifo.add(future);
         }
         
+        @SuppressWarnings("rawtypes")
         private synchronized ScheduledFuture getFromQueue() {
             if (fifo.isEmpty()) {
                 return null;
@@ -406,9 +387,7 @@ public class AtomicCounterEditorTest {
             if (delay < 0) {
                 delay = 0;
             }
-            
-            long triggerTime = now() + unit.toNanos(delay); 
-            
+                        
             ScheduledFuture<V> future = new ScheduledFuture<V>() {
                 final Callable<V> c = callable;
                 
