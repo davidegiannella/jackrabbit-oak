@@ -17,3 +17,74 @@
 
 ## Changing Out-Of-The-Box Index Definitions
 
+You may have the need to change an out-of-the-box index definition
+that is shipped either with oak or any other products built on top of
+it.
+
+To better deal with upgrades and changes in provided index definitions
+it would be better to follow the following practice.
+
+Let's say for example that you have the following index definition as
+`NodeTypeIndex` and you'd like to add your custom node to the list:
+`cust:unstructured`.
+
+    "oak:index/nodetype" : {
+      "jcr:primaryType": "oak:QueryIndexDefinition",
+      "declaringNodeTypes": [
+        "sling:MessageEntry",
+        "slingevent:Job",
+        "oak:QueryIndexDefinition",
+        "rep:User",
+        "rep:Authorizable",
+        "sling:bgJobData",
+        "sling:VanityPath",
+        "sling:chunks",
+        "slingevent:TimedEvent",
+      ],
+      "nodeTypeListDefined": true,
+      "propertyNames": [
+        "jcr:primaryType",
+        "jcr:mixinTypes"
+      ],
+      "type": "property",
+      "reindex": false,
+      "reindexCount": 1
+    }
+
+to customise it you would do the following:
+
+1. Copy the current index definition with a new name. Let's say
+   `oak:index/custNodeType`
+2. Add the custom nodetype to the `declaringNodeTypes`
+3. Issue a re-index by setting `reindex=true`
+4. wait for it to finish
+5. either
+   [disable](./query-engine.html#Temporarily_Disabling_an_Index) the
+   old index definition or delete it.
+
+The new index definition in our example, once completed would look
+like the following:
+
+    "oak:index/custNodetype" : {
+      "jcr:primaryType": "oak:QueryIndexDefinition",
+      "declaringNodeTypes": [
+        "sling:MessageEntry",
+        "slingevent:Job",
+        "oak:QueryIndexDefinition",
+        "rep:User",
+        "rep:Authorizable",
+        "sling:bgJobData",
+        "sling:VanityPath",
+        "sling:chunks",
+        "slingevent:TimedEvent",
+        "cust:unstructured"
+      ],
+      "nodeTypeListDefined": true,
+      "propertyNames": [
+        "jcr:primaryType",
+        "jcr:mixinTypes"
+      ],
+      "type": "property",
+      "reindex": false,
+      "reindexCount": 2
+    }
