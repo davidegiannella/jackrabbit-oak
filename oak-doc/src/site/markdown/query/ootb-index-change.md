@@ -15,26 +15,5 @@
    limitations under the License.
   -->
 
-## Oak Query
+## Changing Out-Of-The-Box Index Definitions
 
-Oak does not index as much content by default as does Jackrabbit
-2. You need to create custom indexes when necessary, much like in
-traditional RDBMSs. If there is no index for a specific query, then
-the repository will be traversed. That is, the query will still work
-but probably be very slow.
-
-[The Query Engine](./query-engine.html)
-
-### Indexes
-
-There are 3 main types of indexes available in Oak. For other type
-(eg: nodetype) please refer to the [query engine](./query-engine.html)
-documentation page.
-
-* [Lucene](./lucene.html)
-* [Solr](./solr.html)
-* [Property](./property-index.html)
-
-### Customisations
-
-* [Change Out-Of-The-Box Index Definitions](./ootb-index-change.html)
