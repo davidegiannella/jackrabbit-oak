@@ -18,11 +18,11 @@ package org.apache.jackrabbit.oak.jcr;
 
 import java.io.File;
 import java.util.Properties;
-
 import javax.jcr.Repository;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
+import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStore;
 import org.apache.jackrabbit.oak.plugins.segment.file.FileStore;
 import org.apache.jackrabbit.oak.query.QueryEngineSettings;
@@ -50,7 +50,7 @@ public class OakTarMKRepositoryStub extends OakRepositoryStub {
             File directory =
                     new File("target", "tarmk-" + System.currentTimeMillis());
             this.store = new FileStore(directory, 1, false);
-            Jcr jcr = new Jcr(new SegmentNodeStore(store));
+            Jcr jcr = new Jcr(new Oak(new SegmentNodeStore(store)));
             QueryEngineSettings qs = new QueryEngineSettings();
             qs.setFullTextComparisonWithoutIndex(true);
             jcr.with(qs);

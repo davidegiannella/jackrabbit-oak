@@ -236,7 +236,7 @@ public class CopyVersionHistoryTest extends AbstractRepositoryUpgradeTest {
             sourceContext.getRepository().shutdown();
         }
 
-        repository = (RepositoryImpl) new Jcr(targetNodeStore).createRepository();
+        repository = (RepositoryImpl) new Jcr(new Oak(targetNodeStore)).createRepository();
         Session s = repository.login(AbstractRepositoryUpgradeTest.CREDENTIALS);
         sessions.add(s);
         return s;

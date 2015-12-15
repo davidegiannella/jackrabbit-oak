@@ -1255,7 +1255,7 @@ public final class Main {
         }
 
         private void addServlets(Oak oak, String path) {
-            Jcr jcr = new Jcr(oak, null);
+            Jcr jcr = new Jcr(oak);
 
             // 1 - OakServer
             ContentRepository repository = jcr.createContentRepository();

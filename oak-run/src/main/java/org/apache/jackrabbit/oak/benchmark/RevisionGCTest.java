@@ -65,7 +65,7 @@ public class RevisionGCTest extends Benchmark {
                             @Override
                             public Jcr customize(Oak oak) {
                                 whiteboardRef.set(oak);
-                                return new Jcr(oak, null);
+                                return new Jcr(oak);
                             }
                         });
                     } else {

@@ -460,7 +460,7 @@ public class ScalabilityNodeSuite extends ScalabilityAbstractSuite {
                     }
 
                     whiteboard = oak.getWhiteboard();
-                    return new Jcr(oak, null);
+                    return new Jcr(oak);
                 }
             });
         }

@@ -82,7 +82,7 @@ public class ObservationTest extends Benchmark {
                             @Override
                             public Jcr customize(Oak oak) {
                                 whiteboardRef.set(oak.getWhiteboard());
-                                return new Jcr(oak, null);
+                                return new Jcr(oak);
                             }
                         });
                     } else {

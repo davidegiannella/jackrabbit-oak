@@ -89,7 +89,7 @@ public class RepositorySidegradeTest {
     @Before
     public synchronized void upgradeRepository() throws Exception {
         targetNodeStore = new SegmentNodeStore();
-        targetRepository = new Jcr(targetNodeStore).createRepository();
+        targetRepository = new Jcr(new Oak(targetNodeStore)).createRepository();
         NodeStore source = createSourceContent();
         RepositorySidegrade sidegrade = new RepositorySidegrade(source, targetNodeStore);
         sidegrade.copy();
@@ -118,7 +118,7 @@ public class RepositorySidegradeTest {
         NodeStore source = new SegmentNodeStore();
         setAsync(source);
         
-        Repository repository = new Jcr(source).createRepository();
+        Repository repository = new Jcr(new Oak(source)).createRepository();
 
         Session session = repository.login(CREDENTIALS);
         try {

@@ -59,7 +59,7 @@ public class CugTest extends ReadDeepTreeTest {
             return ((OakRepositoryFixture) fixture).setUpCluster(1, new JcrCreator() {
                 @Override
                 public Jcr customize(Oak oak) {
-                    return new Jcr(oak, null).with(createSecurityProvider());
+                    return new Jcr(oak).with(createSecurityProvider());
                 }
             });
         } else {

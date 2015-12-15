@@ -78,7 +78,7 @@ public class CompositeAuthorizationTest extends ReadDeepTreeTest {
             return ((OakRepositoryFixture) fixture).setUpCluster(1, new JcrCreator() {
                 @Override
                 public Jcr customize(Oak oak) {
-                    return new Jcr(oak, null).with(new TmpSecurityProvider(cnt));
+                    return new Jcr(oak).with(new TmpSecurityProvider(cnt));
                 }
             });
         } else {

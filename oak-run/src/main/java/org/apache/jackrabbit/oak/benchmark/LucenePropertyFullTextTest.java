@@ -195,7 +195,7 @@ public class LucenePropertyFullTextTest extends AbstractTest<LucenePropertyFullT
                        // the WikipediaImporter set a property `title`
                        .with(new LucenePropertyInitialiser("luceneTitle", of("title")))
                        .withAsyncIndexing("async", 5);
-                    return new Jcr(oak, null);
+                    return new Jcr(oak);
                 }
             });
         }

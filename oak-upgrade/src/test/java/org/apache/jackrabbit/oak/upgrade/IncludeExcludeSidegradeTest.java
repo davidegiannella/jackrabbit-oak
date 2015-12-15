@@ -40,7 +40,7 @@ public class IncludeExcludeSidegradeTest extends IncludeExcludeUpgradeTest {
             source.mkdirs();
             FileStore fileStore = FileStore.newFileStore(source).create();
             SegmentNodeStore segmentNodeStore = SegmentNodeStore.newSegmentNodeStore(fileStore).create();
-            RepositoryImpl repository = (RepositoryImpl) new Jcr(segmentNodeStore).createRepository();
+            RepositoryImpl repository = (RepositoryImpl) new Jcr(new Oak(segmentNodeStore)).createRepository();
             Session session = repository.login(CREDENTIALS);
             try {
                 createSourceContent(session);

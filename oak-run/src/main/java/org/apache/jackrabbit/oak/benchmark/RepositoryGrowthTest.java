@@ -76,7 +76,7 @@ public class RepositoryGrowthTest extends WikipediaImport {
                             .with(new LuceneIndexEditorProvider())
                             .with(new LuceneInitializerHelper("luceneGlobal", LuceneIndexHelper.JR_PROPERTY_INCLUDES,
                                     null, path, null));
-                    return new Jcr(oak, null);
+                    return new Jcr(oak);
                 }
             });
         }

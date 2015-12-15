@@ -186,7 +186,7 @@ public class FullTextSearchTest extends AbstractTest<FullTextSearchTest.TestCont
                             .with((Observer) provider)
                             .with(new LuceneIndexEditorProvider())
                             .with(new LuceneInitializerHelper("luceneGlobal", storageEnabled));
-                    return new Jcr(oak, null);
+                    return new Jcr(oak);
                 }
             });
         }
