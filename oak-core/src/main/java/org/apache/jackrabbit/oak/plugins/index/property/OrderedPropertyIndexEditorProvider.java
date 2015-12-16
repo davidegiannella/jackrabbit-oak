@@ -21,6 +21,7 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 
 import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.ConfigurationPolicy;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
@@ -29,7 +30,7 @@ import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
-@Component
+@Component(policy = ConfigurationPolicy.REQUIRE)
 @Service(IndexEditorProvider.class)
 public class OrderedPropertyIndexEditorProvider implements IndexEditorProvider, OrderedIndex {
    
