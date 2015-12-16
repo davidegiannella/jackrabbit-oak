@@ -57,7 +57,6 @@ import org.apache.jackrabbit.oak.plugins.index.PathFilter;
 import org.apache.jackrabbit.oak.plugins.index.fulltext.ExtractedText;
 import org.apache.jackrabbit.oak.plugins.index.fulltext.ExtractedText.ExtractionResult;
 import org.apache.jackrabbit.oak.plugins.index.lucene.Aggregate.Matcher;
-import org.apache.jackrabbit.oak.plugins.index.lucene.indexAugment.IndexAugmentorFactory;
 import org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState;
 import org.apache.jackrabbit.oak.plugins.tree.TreeFactory;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
@@ -134,13 +133,12 @@ public class LuceneIndexEditor implements IndexEditor, Aggregate.AggregateRoot {
     LuceneIndexEditor(NodeState root, NodeBuilder definition,
                         IndexUpdateCallback updateCallback,
                         @Nullable IndexCopier indexCopier,
-                        ExtractedTextCache extractedTextCache,
-                      IndexAugmentorFactory augmentorFactory) throws CommitFailedException {
+                        ExtractedTextCache extractedTextCache) throws CommitFailedException {
         this.parent = null;
         this.name = null;
         this.path = "/";
         this.context = new LuceneIndexEditorContext(root, definition,
-                updateCallback, indexCopier, extractedTextCache, augmentorFactory);
+                updateCallback, indexCopier, extractedTextCache);
         this.root = root;
         this.isDeleted = false;
         this.matcherState = MatcherState.NONE;
@@ -486,46 +484,41 @@ public class LuceneIndexEditor implements IndexEditor, Aggregate.AggregateRoot {
                                   String pname,
                                   PropertyDefinition pd) {
         boolean includeTypeForFullText = indexingRule.includePropertyType(property.getType().tag());
+        if (Type.BINARY.tag() == property.getType().tag()
+                && includeTypeForFullText) {
+            fields.addAll(newBinary(property, state, null, path + "@" + pname));
+            return true;
+        }  else {
+            boolean dirty = false;
 
-        boolean dirty = false;
-        if (!pd.skipDefaultIndexing) {
-            if (Type.BINARY.tag() == property.getType().tag()
-                    && includeTypeForFullText) {
-                fields.addAll(newBinary(property, state, null, path + "@" + pname));
-                dirty = true;
-            } else {
-                if (pd.propertyIndex && pd.includePropertyType(property.getType().tag())) {
-                    dirty |= addTypedFields(fields, property, pname);
-                }
+            if (pd.propertyIndex && pd.includePropertyType(property.getType().tag())){
+                dirty |= addTypedFields(fields, property, pname);
+            }
 
-                if (pd.fulltextEnabled() && includeTypeForFullText) {
-                    for (String value : property.getValue(Type.STRINGS)) {
-                        if (pd.analyzed && pd.includePropertyType(property.getType().tag())) {
-                            String analyzedPropName = constructAnalyzedPropertyName(pname);
-                            fields.add(newPropertyField(analyzedPropName, value, !pd.skipTokenization(pname), pd.stored));
-                        }
-
-                        if (pd.useInSuggest) {
-                            fields.add(FieldFactory.newSuggestField(value));
-                        }
-
-                        if (pd.useInSpellcheck) {
-                            fields.add(newPropertyField(FieldNames.SPELLCHECK, value, true, false));
-                        }
-
-                        if (pd.nodeScopeIndex) {
-                            Field field = newFulltextField(value);
-                            fields.add(field);
-                        }
-                        dirty = true;
+            if (pd.fulltextEnabled() && includeTypeForFullText) {
+                for (String value : property.getValue(Type.STRINGS)) {
+                    if (pd.analyzed && pd.includePropertyType(property.getType().tag())) {
+                        String analyzedPropName = constructAnalyzedPropertyName(pname);
+                        fields.add(newPropertyField(analyzedPropName, value, !pd.skipTokenization(pname), pd.stored));
                     }
+
+                    if (pd.useInSuggest) {
+                        fields.add(FieldFactory.newSuggestField(value));
+                    }
+
+                    if (pd.useInSpellcheck) {
+                        fields.add(newPropertyField(FieldNames.SPELLCHECK, value, true, false));
+                    }
+
+                    if (pd.nodeScopeIndex) {
+                        Field field = newFulltextField(value);
+                        fields.add(field);
+                    }
+                    dirty = true;
                 }
             }
+            return dirty;
         }
-
-        dirty |= augmentCustomFields(path, fields, state, property, pname);
-
-        return dirty;
     }
 
     private String constructAnalyzedPropertyName(String pname) {
@@ -660,32 +653,6 @@ public class LuceneIndexEditor implements IndexEditor, Aggregate.AggregateRoot {
             }
         }
         return fields;
-    }
-
-    private boolean augmentCustomFields(final String path, final List<Field> fields,
-                                        final NodeState document, final PropertyState property,
-                                        final String propertyName) {
-        boolean dirty = false;
-
-        IndexDefinition defn = getDefinition();
-
-        if (defn.getVersion().isAtLeast(IndexFormatVersion.V2)){
-            IndexAugmentorFactory augmentorFactory = context.getAugmentorFactory();
-            if (augmentorFactory != null) {
-                Iterable<Field> augmentedFields = augmentorFactory.getIndexFieldProvider()
-                        .getAugmentedFields(path, propertyName,
-                                document, property, defn.getDefinitionNodeState());
-
-                if (augmentedFields != null) {
-                    for (Field field : augmentedFields) {
-                        fields.add(field);
-                        dirty = true;
-                    }
-                }
-            }
-        }
-
-        return dirty;
     }
 
     //~-------------------------------------------------------< NullCheck Support >
@@ -826,6 +793,7 @@ public class LuceneIndexEditor implements IndexEditor, Aggregate.AggregateRoot {
         });
         return dirtyFlag.get();
     }
+
     /**
      * Create the fulltext field from the aggregated nodes. If result is for aggregate for a relative node
      * include then
