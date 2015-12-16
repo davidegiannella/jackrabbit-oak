@@ -17,26 +17,26 @@
 
 package org.apache.jackrabbit.oak.plugins.index.property;
 
-import java.util.List;
-import java.util.concurrent.TimeUnit;
+import static com.google.common.collect.Lists.newArrayList;
 
-import javax.annotation.Nonnull;
+import java.util.List;
 
 import org.apache.felix.scr.annotations.Component;
+import org.apache.felix.scr.annotations.ConfigurationPolicy;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.ImmutableList;
-
-@Component
+@Component(policy = ConfigurationPolicy.REQUIRE)
 @Service(QueryIndexProvider.class)
 public class OrderedPropertyIndexProvider implements QueryIndexProvider {
-
+    private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexProvider.class);
+    
     @Override
-    @Nonnull
     public List<? extends QueryIndex> getQueryIndexes(NodeState nodeState) {
-        return null;
+        return newArrayList();
     }
 }
