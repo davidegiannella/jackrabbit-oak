@@ -29,6 +29,19 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
  */
 public interface OrderedIndex {
     /**
+     * Deprecation message tracked when using the ordered index.
+     */
+    String DEPRECATION_MESSAGE = 
+        "Ordered Index has been deprecated since Oak 1.1.8. " +
+        "Please replace the index definitions with Lucene Property index. " + 
+        "See docs at http://jackrabbit.apache.org/oak/docs";
+
+    /**
+     * the deprecation message will be tracked every N times
+     */
+    int TRACK_DEPRECATION_EVERY = 1000;
+    
+    /**
      * enum for easing the order direction of the index
      */
     enum OrderDirection {

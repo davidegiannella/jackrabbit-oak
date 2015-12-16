@@ -34,9 +34,17 @@ import org.slf4j.LoggerFactory;
 @Service(QueryIndexProvider.class)
 public class OrderedPropertyIndexProvider implements QueryIndexProvider {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexProvider.class);
+    private static int hits;
     
     @Override
     public List<? extends QueryIndex> getQueryIndexes(NodeState nodeState) {
+        if (getHits() % OrderedIndex.TRACK_DEPRECATION_EVERY == 0) {
+            LOG.warn(OrderedIndex.DEPRECATION_MESSAGE);            
+        }
         return newArrayList();
+    }
+    
+    private synchronized int getHits() {
+        return hits++;
     }
 }
