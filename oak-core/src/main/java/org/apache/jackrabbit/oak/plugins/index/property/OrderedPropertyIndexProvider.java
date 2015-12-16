@@ -35,10 +35,11 @@ import org.slf4j.LoggerFactory;
 public class OrderedPropertyIndexProvider implements QueryIndexProvider {
     private static final Logger LOG = LoggerFactory.getLogger(OrderedPropertyIndexProvider.class);
     private static int hits;
+    private static int threshold = OrderedIndex.TRACK_DEPRECATION_EVERY;
     
     @Override
     public List<? extends QueryIndex> getQueryIndexes(NodeState nodeState) {
-        if (getHits() % OrderedIndex.TRACK_DEPRECATION_EVERY == 0) {
+        if (getHits() % threshold == 0) {
             LOG.warn(OrderedIndex.DEPRECATION_MESSAGE);            
         }
         return newArrayList();
@@ -46,5 +47,14 @@ public class OrderedPropertyIndexProvider implements QueryIndexProvider {
     
     private synchronized int getHits() {
         return hits++;
+    }
+    
+    /**
+     * used only for testing purposes. Not thread safe.
+     * 
+     * @param t
+     */
+    static void setThreshold(int t) {
+        threshold = t;
     }
 }

@@ -66,8 +66,10 @@ public class OrderedPropertyIndexProviderTest extends AbstractQueryTest {
     
     @Test
     public void multipleQueryRuns() {
-        final int executions = 2001;
-        final int numTraces = executions / OrderedIndex.TRACK_DEPRECATION_EVERY;
+        final int executions = 16;
+        final int trackEvery = 5;
+        final int numTraces = executions / trackEvery;
+        OrderedPropertyIndexProvider.setThreshold(trackEvery);
         List<String> expectedLogs = Collections.nCopies(numTraces, OrderedIndex.DEPRECATION_MESSAGE);
         custom.starting();
         for (int i = 0; i < executions; i++) {
