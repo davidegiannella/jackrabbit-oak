@@ -137,35 +137,5 @@ public interface OrderedIndex {
     /**
      * the default direction for sorting the index
      */
-    OrderDirection DEFAULT_DIRECTION = OrderDirection.ASC;
-    
-    /**
-     * defines the default distribution of items across the skip list. It's with a factor of 10%
-     * having therefore
-     * 
-     * <dl>
-     *  <dt>lane 0:</dt> <dd>100.0% (the base linked list)</dd>
-     *  <dt>lane 1:</dt> <dd>10.0%</dd>
-     *  <dt>lane 2:</dt> <dd>1.0%</dd>
-     *  <dt>lane 3:</dt> <dd>0.1%</dd>
-     * </dl>
-     */
-    double DEFAULT_PROBABILITY = Integer.getInteger("oak.orderedIndex.prob", 3) / 10.0;
-    
-    /**
-     * the number of lanes used in the SkipList 
-     */
-    int LANES = Integer.getInteger("oak.orderedIndex.lanes", 15);
-    
-    /**
-     * Convenience Predicate that will force the implementor to expose what we're searching for
-     *
-     * @param <T>
-     */
-    interface Predicate<T> extends com.google.common.base.Predicate<T> {
-        /**
-         * @return the string we're searching for during this predicate
-         */
-        String getSearchFor();
-    }
+    OrderDirection DEFAULT_DIRECTION = OrderDirection.ASC;    
 }
