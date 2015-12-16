@@ -64,6 +64,8 @@ class PropertyDefinition {
 
     final boolean index;
 
+    final boolean skipDefaultIndexing;
+
     final boolean stored;
 
     final boolean nodeScopeIndex;
@@ -86,6 +88,8 @@ class PropertyDefinition {
 
     final boolean useInSpellcheck;
 
+    final boolean facet;
+
     final String[] ancestors;
 
     /**
@@ -103,6 +107,7 @@ class PropertyDefinition {
 
         //By default if a property is defined it is indexed
         this.index = getOptionalValue(defn, LuceneIndexConstants.PROP_INDEX, true);
+        this.skipDefaultIndexing = getOptionalValue(defn, LuceneIndexConstants.PROP_SKIP_DEFAULT_INDEXING, false);
         this.stored = getOptionalValueIfIndexed(defn, LuceneIndexConstants.PROP_USE_IN_EXCERPT, false);
         this.nodeScopeIndex = getOptionalValueIfIndexed(defn, LuceneIndexConstants.PROP_NODE_SCOPE_INDEX, false);
 
@@ -128,6 +133,7 @@ class PropertyDefinition {
         this.notNullCheckEnabled = getOptionalValueIfIndexed(defn, LuceneIndexConstants.PROP_NOT_NULL_CHECK_ENABLED, false);
         this.nonRelativeName = determineNonRelativeName();
         this.ancestors = computeAncestors(name);
+        this.facet = getOptionalValue(defn, LuceneIndexConstants.PROP_FACET, false);
         validate();
     }
 
@@ -184,6 +190,7 @@ class PropertyDefinition {
                 ", boost=" + boost +
                 ", isRegexp=" + isRegexp +
                 ", index=" + index +
+                ", skipDefaultIndexing=" + skipDefaultIndexing +
                 ", stored=" + stored +
                 ", nodeScopeIndex=" + nodeScopeIndex +
                 ", propertyIndex=" + propertyIndex +
