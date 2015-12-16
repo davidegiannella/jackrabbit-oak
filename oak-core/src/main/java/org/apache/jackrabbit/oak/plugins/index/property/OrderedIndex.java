@@ -33,7 +33,8 @@ public interface OrderedIndex {
      */
     String DEPRECATION_MESSAGE = 
         "Ordered Index has been deprecated since Oak 1.1.8. " +
-        "Please replace the index definitions with Lucene Property index. " + 
+        "Please replace the index definitions with Lucene Property index " +
+        "and remove the index providers from the repository. " + 
         "See docs at http://jackrabbit.apache.org/oak/docs";
 
     /**
