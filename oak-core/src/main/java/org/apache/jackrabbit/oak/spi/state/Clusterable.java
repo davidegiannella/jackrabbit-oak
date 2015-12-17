@@ -19,16 +19,13 @@ package org.apache.jackrabbit.oak.spi.state;
 import javax.annotation.Nonnull;
 
 /**
- * Defines a clusterable persistence implementation. Normally associated with a {@link NodeStore}.
+ * Interface for bearing cluster node specific information.
  */
 public interface Clusterable {
     /**
      * <p>
      * Will return a unique number per instance across the cluster. It will only make its best
      * effort to preserve the same number across restarts but it must be unique across the cluster.
-     * </p>
-     * <p>
-     *  It may be the same as a cluster id. See {@link RevisionContext#getClusterId()}.
      * </p>
      * 
      * @return Cannot be null or empty.
