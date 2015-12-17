@@ -348,6 +348,36 @@ public class DocumentNodeStoreTest {
         ns2.merge(b2, EmptyHook.INSTANCE, CommitInfo.EMPTY);
     }
 
+    // OAK-3798
+    @Test
+    public void getNewestRevision2() throws Exception {
+        DocumentStore docStore = new MemoryDocumentStore();
+        DocumentNodeStore ns1 = builderProvider.newBuilder()
+                .setDocumentStore(docStore).setAsyncDelay(0)
+                .setClusterId(1).getNodeStore();
+        ns1.getRoot();
+        Revision r1 = ns1.getHeadRevision();
+        ns1.runBackgroundOperations();
+        DocumentNodeStore ns2 = builderProvider.newBuilder()
+                .setDocumentStore(docStore).setAsyncDelay(0)
+                .setClusterId(2).getNodeStore();
+        ns2.getRoot();
+
+        NodeBuilder b1 = ns1.getRoot().builder();
+        for (int i = 0; i < NodeDocument.NUM_REVS_THRESHOLD; i++) {
+            b1.setProperty("p", String.valueOf(i));
+            ns1.merge(b1, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+        }
+        ns1.runBackgroundOperations();
+
+        NodeDocument doc = docStore.find(NODES, Utils.getIdFromPath("/"));
+        assertNotNull(doc);
+        Revision newest = doc.getNewestRevision(ns2, ns2.getHeadRevision(),
+                Revision.newRevision(ns2.getClusterId()),
+                null, Sets.<Revision>newHashSet());
+        assertEquals(r1, newest);
+    }
+
     @Test
     public void commitHookChangesOnBranch() throws Exception {
         final int NUM_NODES = DocumentRootBuilder.UPDATE_LIMIT / 2;
@@ -645,9 +675,11 @@ public class DocumentNodeStoreTest {
     public void updateClusterState() {
         DocumentStore docStore = new MemoryDocumentStore();
         DocumentNodeStore ns1 = builderProvider.newBuilder().setAsyncDelay(0)
-                .setDocumentStore(docStore).getNodeStore();
+                .setClusterId(1).setDocumentStore(docStore)
+                .getNodeStore();
         DocumentNodeStore ns2 = builderProvider.newBuilder().setAsyncDelay(0)
-                .setDocumentStore(docStore).getNodeStore();
+                .setClusterId(2).setDocumentStore(docStore)
+                .getNodeStore();
 
         ns1.updateClusterState();
         ns2.updateClusterState();
@@ -712,7 +744,8 @@ public class DocumentNodeStoreTest {
 
         DocumentNodeStore store1 = builderProvider.newBuilder()
                 .setDocumentStore(docStore)
-                .setAsyncDelay(0).clock(clock).getNodeStore();
+                .setAsyncDelay(0).clock(clock).setClusterId(1)
+                .getNodeStore();
 
         NodeBuilder builder = store1.getRoot().builder();
         builder.child("test");
@@ -740,7 +773,8 @@ public class DocumentNodeStoreTest {
         // start a second store
         DocumentNodeStore store2 = builderProvider.newBuilder()
                 .setDocumentStore(docStore)
-                .setAsyncDelay(0).clock(clock).getNodeStore();
+                .setAsyncDelay(0).clock(clock).setClusterId(2)
+                .getNodeStore();
         // must see /test/node
         assertTrue(store2.getRoot().getChildNode("test").getChildNode("node").exists());
     }
@@ -1113,7 +1147,8 @@ public class DocumentNodeStoreTest {
         c1.waitUntil(now);
         Revision.setClock(c1);
         DocumentNodeStore ns1 = builderProvider.newBuilder().clock(c1)
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0).setClusterId(1)
+                .getNodeStore();
         NodeBuilder b1 = ns1.getRoot().builder();
         b1.child("node");
         merge(ns1, b1);
@@ -1127,7 +1162,8 @@ public class DocumentNodeStoreTest {
         Revision.setClock(c2);
 
         DocumentNodeStore ns2 = builderProvider.newBuilder().clock(c2)
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0).setClusterId(2)
+                .getNodeStore();
         // ns2 sees /node
         assertTrue(ns2.getRoot().hasChildNode("node"));
 
@@ -1508,7 +1544,8 @@ public class DocumentNodeStoreTest {
         c1.waitUntil(now);
         Revision.setClock(c1);
         DocumentNodeStore ns1 = builderProvider.newBuilder().clock(c1)
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(1).getNodeStore();
         NodeBuilder b1 = ns1.getRoot().builder();
         b1.child("node");
         merge(ns1, b1);
@@ -1522,7 +1559,8 @@ public class DocumentNodeStoreTest {
         Revision.setClock(c2);
 
         DocumentNodeStore ns2 = builderProvider.newBuilder().clock(c2)
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(2).getNodeStore();
         // ns2 sees /node
         assertTrue(ns2.getRoot().hasChildNode("node"));
 
@@ -1559,7 +1597,8 @@ public class DocumentNodeStoreTest {
         c1.waitUntil(now);
         Revision.setClock(c1);
         DocumentNodeStore ns1 = builderProvider.newBuilder().clock(c1)
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(1).getNodeStore();
         NodeBuilder b1 = ns1.getRoot().builder();
         b1.child("node").setProperty("p", 1);
         merge(ns1, b1);
@@ -1573,7 +1612,8 @@ public class DocumentNodeStoreTest {
         Revision.setClock(c2);
 
         DocumentNodeStore ns2 = builderProvider.newBuilder().clock(c2)
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(2).getNodeStore();
         // ns2 sees /node
         assertTrue(ns2.getRoot().hasChildNode("node"));
         assertEquals(1, ns2.getRoot().getChildNode("node").getProperty("p").getValue(Type.LONG).longValue());
@@ -1607,9 +1647,11 @@ public class DocumentNodeStoreTest {
     public void notYetVisibleExceptionMessage() throws Exception {
         MemoryDocumentStore store = new MemoryDocumentStore();
         DocumentNodeStore ns1 = builderProvider.newBuilder()
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(1).getNodeStore();
         DocumentNodeStore ns2 = builderProvider.newBuilder()
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(2).getNodeStore();
         ns2.setMaxBackOffMillis(0);
 
         NodeBuilder b1 = ns1.getRoot().builder();
@@ -1665,10 +1707,12 @@ public class DocumentNodeStoreTest {
         MemoryDocumentStore store = new MemoryDocumentStore();
         DocumentNodeStore ns1 = builderProvider.newBuilder()
                 .setAsyncDelay(0).clock(clock)
-                .setDocumentStore(store).getNodeStore();
+                .setDocumentStore(store)
+                .setClusterId(1).getNodeStore();
         DocumentNodeStore ns2 = builderProvider.newBuilder()
                 .setAsyncDelay(0).clock(clock)
-                .setDocumentStore(store).getNodeStore();
+                .setDocumentStore(store)
+                .setClusterId(2).getNodeStore();
 
         // create some children under /foo/bar
         NodeBuilder b1 = ns1.getRoot().builder();
@@ -2453,9 +2497,11 @@ public class DocumentNodeStoreTest {
     public void sameSeenAtRevision() throws Exception {
         MemoryDocumentStore store = new MemoryDocumentStore();
         DocumentNodeStore ns1 = builderProvider.newBuilder()
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(1).getNodeStore();
         DocumentNodeStore ns2 = builderProvider.newBuilder()
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(2).getNodeStore();
 
         NodeBuilder b2 = ns2.getRoot().builder();
         b2.child("test");
@@ -2470,7 +2516,8 @@ public class DocumentNodeStoreTest {
         ns1.runBackgroundOperations();
 
         DocumentNodeStore ns3 = builderProvider.newBuilder()
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(3).getNodeStore();
         ns3.setMaxBackOffMillis(0);
         NodeBuilder b3 = ns3.getRoot().builder();
         assertFalse(b3.hasChildNode("test"));
@@ -2483,9 +2530,11 @@ public class DocumentNodeStoreTest {
     public void sameSeenAtRevision2() throws Exception {
         MemoryDocumentStore store = new MemoryDocumentStore();
         DocumentNodeStore ns1 = builderProvider.newBuilder()
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(1).getNodeStore();
         DocumentNodeStore ns2 = builderProvider.newBuilder()
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(2).getNodeStore();
 
         NodeBuilder b2 = ns2.getRoot().builder();
         b2.child("test");
@@ -2503,7 +2552,8 @@ public class DocumentNodeStoreTest {
         ns1.runBackgroundOperations();
 
         DocumentNodeStore ns3 = builderProvider.newBuilder()
-                .setDocumentStore(store).setAsyncDelay(0).getNodeStore();
+                .setDocumentStore(store).setAsyncDelay(0)
+                .setClusterId(3).getNodeStore();
         ns3.setMaxBackOffMillis(0);
         NodeBuilder b3 = ns3.getRoot().builder();
         assertTrue(b3.hasChildNode("test"));
