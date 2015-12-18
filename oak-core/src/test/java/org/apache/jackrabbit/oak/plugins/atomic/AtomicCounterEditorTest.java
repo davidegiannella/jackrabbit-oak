@@ -69,10 +69,40 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.amazonaws.services.sqs.model.UnsupportedOperationException;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 
 public class AtomicCounterEditorTest {
+    /**
+     * convenience class to ease construction during tests
+     */
+    private static class TestableACEProvider extends AtomicCounterEditorProvider {
+        public TestableACEProvider(final Clusterable c, final ScheduledExecutorService e,
+                                   final NodeStore s, final Whiteboard b) {
+            super(new Supplier<Clusterable>() {
+                @Override
+                public Clusterable get() {
+                    return c;
+                };
+            }, new Supplier<ScheduledExecutorService>() {
+                @Override
+                public ScheduledExecutorService get() {
+                    return e;
+                };
+            }, new Supplier<NodeStore>() {
+                @Override
+                public NodeStore get() {
+                    return s;
+                }
+            }, new Supplier<Whiteboard>() {
+                @Override
+                public Whiteboard get() {
+                    return b;
+                };
+            });
+        }
+    }
     private static final Clusterable CLUSTER_1 = new Clusterable() {
         @Override
         public String getInstanceId() {
@@ -86,11 +116,11 @@ public class AtomicCounterEditorTest {
         }
     };
     private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
-        new AtomicCounterEditorProvider(null, null, null, null));
+        new TestableACEProvider(null, null, null, null));
     private static final EditorHook HOOK_1_SYNC = new EditorHook(
-        new AtomicCounterEditorProvider(CLUSTER_1, null, null, null));
+        new TestableACEProvider(CLUSTER_1, null, null, null));
     private static final EditorHook HOOK_2_SYNC = new EditorHook(
-        new AtomicCounterEditorProvider(CLUSTER_2, null, null, null));
+        new TestableACEProvider(CLUSTER_2, null, null, null));
 
     private static final PropertyState INCREMENT_BY_1 = PropertyStates.createProperty(
         PROP_INCREMENT, 1L);
@@ -299,7 +329,7 @@ public class AtomicCounterEditorTest {
         NodeStore store = NodeStoreFixture.MEMORY_NS.createNodeStore();
         MyExecutor exec1 = new MyExecutor();
         Whiteboard board = new DefaultWhiteboard();
-        EditorHook hook1 = new EditorHook(new AtomicCounterEditorProvider(CLUSTER_1, exec1, store, board));
+        EditorHook hook1 = new EditorHook(new TestableACEProvider(CLUSTER_1, exec1, store, board));
         NodeBuilder builder, root;
         PropertyState p;
         
@@ -525,5 +555,37 @@ public class AtomicCounterEditorTest {
         assertTrue(AtomicCounterEditor.ConsolidatorTask
             .isTimedOut(AtomicCounterEditor.ConsolidatorTask.MAX_TIMEOUT + 1)); // any number > 32
         assertTrue(AtomicCounterEditor.ConsolidatorTask.isTimedOut(Long.MAX_VALUE));
+    }
+    
+    @Test
+    public void isConsolidate() {
+        NodeBuilder b = EMPTY_NODE.builder();
+        PropertyState counter, hidden1, hidden2;
+        String hidden1Name = PREFIX_PROP_COUNTER + "1";
+        String hidden2Name = PREFIX_PROP_COUNTER + "2";
+        
+        assertFalse(AtomicCounterEditor.isConsolidate(b));
+        
+        counter = LongPropertyState.createLongProperty(PROP_COUNTER, 0);
+        hidden1 = LongPropertyState.createLongProperty(hidden1Name, 1);
+        b.setProperty(counter);
+        b.setProperty(hidden1);
+        assertTrue(AtomicCounterEditor.isConsolidate(b));
+
+        counter = LongPropertyState.createLongProperty(PROP_COUNTER, 1);
+        hidden1 = LongPropertyState.createLongProperty(hidden1Name, 1);
+        hidden2 = LongPropertyState.createLongProperty(hidden2Name, 1);
+        b.setProperty(counter);
+        b.setProperty(hidden1);
+        b.setProperty(hidden2);
+        assertTrue(AtomicCounterEditor.isConsolidate(b));
+
+        counter = LongPropertyState.createLongProperty(PROP_COUNTER, 2);
+        hidden1 = LongPropertyState.createLongProperty(hidden1Name, 1);
+        hidden2 = LongPropertyState.createLongProperty(hidden2Name, 1);
+        b.setProperty(counter);
+        b.setProperty(hidden1);
+        b.setProperty(hidden2);
+        assertFalse(AtomicCounterEditor.isConsolidate(b));
     }
 }

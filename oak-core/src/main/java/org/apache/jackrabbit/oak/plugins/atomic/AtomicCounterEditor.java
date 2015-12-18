@@ -33,6 +33,7 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
+import org.apache.jackrabbit.oak.plugins.memory.LongPropertyState;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.DefaultEditor;
@@ -41,7 +42,6 @@ import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
-import org.apache.jackrabbit.oak.spi.whiteboard.Tracker;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils;
 import org.slf4j.Logger;
@@ -363,19 +363,23 @@ public class AtomicCounterEditor extends DefaultEditor {
                 NodeBuilder b = builderFromPath(root, p);
                 
                 if (!b.exists()) {
-                    LOG.debug("Builder for '{}' from NodeStore not available. Rescheduling.", p);
+                    LOG.trace("Builder for '{}' from NodeStore not available. Rescheduling.", p);
                     reschedule();
                     return null;
                 }
                 
                 if (!checkRevision(b, rev)) {
-                    LOG.debug("Not yet a valid revision for '{}'. Rescheduling.", p);
+                    LOG.trace("Not yet a valid revision for '{}'. Rescheduling.", p);
                     reschedule();
                     return null;
                 }
 
-                consolidateCount(b);
-                s.merge(root, hook, CommitInfo.EMPTY);
+                if (isConsolidate(b)) {
+                    consolidateCount(b);
+                    s.merge(root, hook, CommitInfo.EMPTY);                    
+                } else {
+                    LOG.trace("Someone else consolidated. Skipping any operation.");
+                }
             } catch (Exception e) {
                 LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
                 if (LOG.isTraceEnabled()) {
@@ -458,5 +462,30 @@ public class AtomicCounterEditor extends DefaultEditor {
             b = b.getChildNode(name);
         }
         return b;
+    }
+    
+    /**
+     * check whether the provided builder has to be consolidated or not. A node has to be
+     * consolidate if the sum of all the hidden counter does not match the exposed one. It could
+     * happen that some other nodes previously saw our change and already consolidated it.
+     * 
+     * @param b the builde to check. Canno be null.
+     * @return true if the sum of the hidden counters does not match the exposed one.
+     */
+    static boolean isConsolidate(@Nonnull NodeBuilder b) {
+        checkNotNull(b);
+        PropertyState counter = b.getProperty(PROP_COUNTER);
+        if (counter == null) {
+            counter = LongPropertyState.createLongProperty(PROP_COUNTER, 0);
+        }
+        
+        long hiddensum = 0;
+        for (PropertyState p : b.getProperties()) {
+            if (p.getName().startsWith(PREFIX_PROP_COUNTER)) {
+                hiddensum += p.getValue(LONG).longValue();
+            }
+        }
+        
+        return counter.getValue(LONG).longValue() != hiddensum;
     }
 }
