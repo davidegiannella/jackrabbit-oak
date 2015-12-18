@@ -29,7 +29,6 @@ import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
-import org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditorProvider;
 import org.junit.Test;
 
 public class AtomicCounterTest extends AbstractRepositoryTest {        
@@ -127,7 +126,6 @@ public class AtomicCounterTest extends AbstractRepositoryTest {
 
     @Override
     protected Jcr initJcr(Jcr jcr) {
-        return super.initJcr(jcr)
-            .with(new AtomicCounterEditorProvider(null, null, null, null));
+        return super.initJcr(jcr).withAtomicCounter();
     }
 }

@@ -37,7 +37,6 @@ import javax.jcr.Session;
 
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
-import org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditorProvider;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -121,7 +120,6 @@ public class AtomicCounterIT extends AbstractRepositoryTest {
 
     @Override
     protected Jcr initJcr(Jcr jcr) {
-        return super.initJcr(jcr)
-            .with(new AtomicCounterEditorProvider(null, null, null, null));
+        return super.initJcr(jcr).withAtomicCounter();
     }
 }
