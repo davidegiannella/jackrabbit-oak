@@ -50,7 +50,6 @@ import javax.management.StandardMBean;
 import javax.security.auth.login.LoginException;
 
 import com.google.common.base.Function;
-import com.google.common.base.Supplier;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.io.Closer;
