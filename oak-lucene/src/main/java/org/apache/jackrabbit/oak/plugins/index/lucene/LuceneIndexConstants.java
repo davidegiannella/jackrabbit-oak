@@ -16,6 +16,7 @@
  */
 package org.apache.jackrabbit.oak.plugins.index.lucene;
 
+import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
@@ -286,8 +287,19 @@ public interface LuceneIndexConstants {
     String INDEX_PATH = "indexPath";
 
     /**
+     * Optional property definition subnode holding configuration for facets.
+     */
+    String PROP_FACET = "facets";
+
+    /**
      * Optional property to set the suggest field to be analyzed and therefore allow more fine
      * grained and flexible suggestions.
      */
     String SUGGEST_ANALYZED = "suggestAnalyzed";
+
+    /**
+     * Optional (index definition) property indicating whether facets should be ACL checked.
+     * Default is true
+     */
+    String PROP_SECURE_FACETS = "secureFacets";
 }

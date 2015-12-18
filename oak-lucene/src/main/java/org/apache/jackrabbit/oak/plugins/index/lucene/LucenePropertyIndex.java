@@ -24,10 +24,14 @@ import javax.annotation.Nullable;
 import javax.jcr.PropertyType;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -43,6 +47,7 @@ import org.apache.jackrabbit.oak.plugins.index.aggregate.NodeAggregator;
 import org.apache.jackrabbit.oak.plugins.index.lucene.IndexDefinition.IndexingRule;
 import org.apache.jackrabbit.oak.plugins.index.lucene.IndexPlanner.PlanResult;
 import org.apache.jackrabbit.oak.plugins.index.lucene.score.ScorerProviderFactory;
+import org.apache.jackrabbit.oak.plugins.index.lucene.util.FacetHelper;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.MoreLikeThisHelper;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.SpellcheckHelper;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.SuggestHelper;
@@ -69,11 +74,21 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.CachingTokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.facet.FacetResult;
+import org.apache.lucene.facet.Facets;
+import org.apache.lucene.facet.FacetsCollector;
+import org.apache.lucene.facet.FacetsConfig;
+import org.apache.lucene.facet.LabelAndValue;
+import org.apache.lucene.facet.MultiFacets;
+import org.apache.lucene.facet.sortedset.DefaultSortedSetDocValuesReaderState;
+import org.apache.lucene.facet.sortedset.SortedSetDocValuesFacetCounts;
+import org.apache.lucene.facet.sortedset.SortedSetDocValuesReaderState;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.MultiFields;
+import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queries.CustomScoreQuery;
@@ -105,6 +120,7 @@ import org.apache.lucene.search.highlight.SimpleHTMLFormatter;
 import org.apache.lucene.search.highlight.TextFragment;
 import org.apache.lucene.search.spell.SuggestWord;
 import org.apache.lucene.search.suggest.Lookup;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -299,7 +315,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
                 return endOfData();
             }
 
-            private LuceneResultRow convertToRow(ScoreDoc doc, IndexSearcher searcher, String excerpt,
+            private LuceneResultRow convertToRow(ScoreDoc doc, IndexSearcher searcher, String excerpt,  Facets facets,
                                                  String explanation) throws IOException {
                 IndexReader reader = searcher.getIndexReader();
                 //TODO Look into usage of field cache for retrieving the path
@@ -329,7 +345,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
                     }
 
                     LOG.trace("Matched path {}", path);
-                    return new LuceneResultRow(path, doc.score, excerpt, explanation);
+                    return new LuceneResultRow(path, doc.score, excerpt, facets, explanation);
                 }
                 return null;
             }
@@ -383,6 +399,10 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
                             PERF_LOGGER.end(start, -1, "{} ...", docs.scoreDocs.length);
                             nextBatchSize = (int) Math.min(nextBatchSize * 2L, 100000);
 
+                            long f = PERF_LOGGER.start();
+                            Facets facets = FacetHelper.getFacets(searcher, query, docs, plan, indexNode.getDefinition().isSecureFacets());
+                            PERF_LOGGER.end(f, -1, "facets retrieved");
+
                             PropertyRestriction restriction = filter.getPropertyRestriction(QueryImpl.REP_EXCERPT);
                             boolean addExcerpt = restriction != null && restriction.isNotNullRestriction();
 
@@ -400,7 +420,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
                                     explanation = searcher.explain(query, doc.doc).toString();
                                 }
 
-                                LuceneResultRow row = convertToRow(doc, searcher, excerpt, explanation);
+                                LuceneResultRow row = convertToRow(doc, searcher, excerpt, facets, explanation);
                                 if (row != null) {
                                     queue.add(row);
                                 }
@@ -475,6 +495,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
 
                 return !queue.isEmpty();
             }
+
 
             private void checkForIndexVersionChange(IndexSearcher searcher) {
                 long currentVersion = getVersion(searcher);
@@ -842,7 +863,8 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
         for (PropertyRestriction pr : filter.getPropertyRestrictions()) {
             String name = pr.propertyName;
 
-            if (QueryImpl.REP_EXCERPT.equals(name) || QueryImpl.OAK_SCORE_EXPLANATION.equals(name)) {
+            if (QueryImpl.REP_EXCERPT.equals(name) || QueryImpl.OAK_SCORE_EXPLANATION.equals(name)
+                    || QueryImpl.REP_FACET.equals(name)) {
                 continue;
             }
 
@@ -1336,10 +1358,12 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
         final boolean isVirutal;
         final String excerpt;
         final String explanation;
+        final Facets facets;
 
-        LuceneResultRow(String path, double score, String excerpt, String explanation) {
+        LuceneResultRow(String path, double score, String excerpt, Facets facets, String explanation) {
             this.explanation = explanation;
             this.excerpt = excerpt;
+            this.facets = facets;
             this.isVirutal = false;
             this.path = path;
             this.score = score;
@@ -1352,6 +1376,7 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
             this.score = weight;
             this.suggestion = suggestion;
             this.excerpt = null;
+            this.facets = null;
             this.explanation = null;
         }
 
@@ -1447,6 +1472,22 @@ public class LucenePropertyIndex implements AdvancedQueryIndex, QueryIndex, Nati
                     }
                     if (QueryImpl.REP_EXCERPT.equals(columnName)) {
                         return PropertyValues.newString(currentRow.excerpt);
+                    }
+                    if (columnName.startsWith(QueryImpl.REP_FACET)) {
+                        String facetFieldName = FacetHelper.parseFacetField(columnName);
+                        Facets facets = currentRow.facets;
+                        try {
+                            if (facets != null) {
+                                FacetResult topChildren = facets.getTopChildren(10, facetFieldName);
+                                if (topChildren != null) {
+                                    return PropertyValues.newString(facetFieldName + ":" + Arrays.toString(topChildren.labelValues));
+                                } else {
+                                    return null;
+                                }
+                            }
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
                     }
                     return pathRow.getValue(columnName);
                 }

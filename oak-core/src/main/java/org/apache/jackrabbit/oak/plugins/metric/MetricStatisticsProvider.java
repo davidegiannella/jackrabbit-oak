@@ -40,9 +40,11 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import org.apache.jackrabbit.api.stats.RepositoryStatistics;
 import org.apache.jackrabbit.api.stats.RepositoryStatistics.Type;
+import org.apache.jackrabbit.oak.commons.jmx.JmxUtil;
 import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils;
 import org.apache.jackrabbit.oak.stats.Clock;
 import org.apache.jackrabbit.oak.stats.CounterStats;
+import org.apache.jackrabbit.oak.stats.HistogramStats;
 import org.apache.jackrabbit.oak.stats.MeterStats;
 import org.apache.jackrabbit.oak.stats.SimpleStats;
 import org.apache.jackrabbit.oak.stats.StatisticsProvider;
@@ -119,6 +121,11 @@ public class MetricStatisticsProvider implements StatisticsProvider, Closeable {
     @Override
     public TimerStats getTimer(String name) {
         return getStats(name, StatsBuilder.TIMERS);
+    }
+
+    @Override
+    public HistogramStats getHistogram(String name) {
+        return getStats(name, StatsBuilder.HISTOGRAMS);
     }
 
     public MetricRegistry getRegistry() {
@@ -212,6 +219,19 @@ public class MetricStatisticsProvider implements StatisticsProvider, Closeable {
             }
         };
 
+        StatsBuilder<HistogramStats> HISTOGRAMS = new StatsBuilder<HistogramStats>() {
+
+            @Override
+            public CompositeStats newComposite(SimpleStats delegate, MetricStatisticsProvider provider,String name) {
+                return new CompositeStats(delegate, provider.registry.histogram(name));
+            }
+
+            @Override
+            public boolean isInstance(Stats metric) {
+                return HistogramStats.class.isInstance(metric);
+            }
+        };
+
         CompositeStats newComposite(SimpleStats delegate, MetricStatisticsProvider provider,String name);
 
         boolean isInstance(Stats stats);
@@ -239,7 +259,7 @@ public class MetricStatisticsProvider implements StatisticsProvider, Closeable {
         public ObjectName createName(String type, String domain, String name) {
             Hashtable<String, String> table = new Hashtable<String, String>();
             table.put("type", JMX_TYPE_METRICS);
-            table.put("name", quoteIfRequired(name));
+            table.put("name", JmxUtil.quoteValueIfRequired(name));
             try {
                 return new ObjectName(domain, table);
             } catch (MalformedObjectNameException e) {
@@ -262,12 +282,5 @@ public class MetricStatisticsProvider implements StatisticsProvider, Closeable {
         }
     }
 
-    static String quoteIfRequired(String text) {
-        String quoted = ObjectName.quote(text);
-        if (quoted.substring(1, quoted.length() - 1).equals(text)) {
-            return text;
-        }
-        return quoted;
-    }
 
 }
