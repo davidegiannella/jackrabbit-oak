@@ -72,9 +72,16 @@ public class AtomicCounterEditorProvider implements EditorProvider {
     }
 
     /**
+     * <p>
      * Plain Java oriented constructor. Refer to
      * {@link AtomicCounterEditor#AtomicCounterEditor(NodeBuilder, String, ScheduledExecutorService, NodeStore)}
      * for constructions details of the actual editor.
+     * </p>
+     * 
+     * <p>
+     * Based on the use case this may need an already set of the constructor parameters during the
+     * repository construction. Please ensure they're registered before this provider is registered.
+     * </p>
      * 
      * @param clusterInfo cluster node information
      * @param executor the executor for running asynchronously.

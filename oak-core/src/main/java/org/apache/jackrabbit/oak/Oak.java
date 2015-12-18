@@ -552,31 +552,8 @@ public class Oak {
     }
 
     public Oak withAtomicCounter() {
-        return with(new AtomicCounterEditorProvider(
-            new Supplier<Clusterable>() {
-                @Override
-                public Clusterable get() {
-                    return clusterable;
-                }
-            },
-            new Supplier<ScheduledExecutorService>() {
-                @Override
-                public ScheduledExecutorService get() {
-                    return scheduledExecutor;
-                }
-            }, 
-            new Supplier<NodeStore>() {
-                @Override
-                public NodeStore get() {
-                    return store;
-                }
-            }, 
-            new Supplier<Whiteboard>() {
-                @Override
-                public Whiteboard get() {
-                    return whiteboard;
-                }
-            }));
+        return with(new AtomicCounterEditorProvider(clusterable, scheduledExecutor, store,
+            whiteboard));
     }
     
     /**

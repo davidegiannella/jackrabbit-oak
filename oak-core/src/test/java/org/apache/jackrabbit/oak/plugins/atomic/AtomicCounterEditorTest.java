@@ -69,44 +69,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.amazonaws.services.sqs.model.UnsupportedOperationException;
-import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 
 public class AtomicCounterEditorTest {
-    
-    /**
-     * convenience class for workign around {@link Supplier}.
-     */
-    private static class TestableACEProvider extends AtomicCounterEditorProvider {
-        public TestableACEProvider(final Clusterable c, final ScheduledExecutorService e, final NodeStore s, final Whiteboard w) {
-            super(new Supplier<Clusterable>() {
-                @Override
-                public Clusterable get() {
-                    return c;
-                }
-            },
-            new Supplier<ScheduledExecutorService>() {
-                @Override
-                public ScheduledExecutorService get() {
-                    return e;
-                }
-            },
-            new Supplier<NodeStore>() {
-                @Override
-                public NodeStore get() {
-                    return s;
-                }
-            },
-            new Supplier<Whiteboard>() {
-                @Override
-                public Whiteboard get() {
-                    return w;
-                }
-            });
-        }
-    }
-    
     private static final Clusterable CLUSTER_1 = new Clusterable() {
         @Override
         public String getInstanceId() {
@@ -120,11 +86,11 @@ public class AtomicCounterEditorTest {
         }
     };
     private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
-        new TestableACEProvider(null, null, null, null));
+        new AtomicCounterEditorProvider(null, null, null, null));
     private static final EditorHook HOOK_1_SYNC = new EditorHook(
-        new TestableACEProvider(CLUSTER_1, null, null, null));
+        new AtomicCounterEditorProvider(CLUSTER_1, null, null, null));
     private static final EditorHook HOOK_2_SYNC = new EditorHook(
-        new TestableACEProvider(CLUSTER_2, null, null, null));
+        new AtomicCounterEditorProvider(CLUSTER_2, null, null, null));
 
     private static final PropertyState INCREMENT_BY_1 = PropertyStates.createProperty(
         PROP_INCREMENT, 1L);
@@ -333,7 +299,7 @@ public class AtomicCounterEditorTest {
         NodeStore store = NodeStoreFixture.MEMORY_NS.createNodeStore();
         MyExecutor exec1 = new MyExecutor();
         Whiteboard board = new DefaultWhiteboard();
-        EditorHook hook1 = new EditorHook(new TestableACEProvider(CLUSTER_1, exec1, store, board));
+        EditorHook hook1 = new EditorHook(new AtomicCounterEditorProvider(CLUSTER_1, exec1, store, board));
         NodeBuilder builder, root;
         PropertyState p;
         
