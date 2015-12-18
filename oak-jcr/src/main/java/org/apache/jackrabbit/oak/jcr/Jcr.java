@@ -41,7 +41,6 @@ import org.apache.jackrabbit.oak.plugins.index.property.PropertyIndexProvider;
 import org.apache.jackrabbit.oak.plugins.index.reference.ReferenceEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.reference.ReferenceIndexProvider;
 import org.apache.jackrabbit.oak.plugins.itemsave.ItemSaveValidatorProvider;
-import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.plugins.name.NameValidatorProvider;
 import org.apache.jackrabbit.oak.plugins.name.NamespaceEditorProvider;
 import org.apache.jackrabbit.oak.plugins.nodetype.TypeEditorProvider;
@@ -106,7 +105,6 @@ public class Jcr {
     private Repository repository;
     
     private Clusterable clusterable;
-    private NodeStore store;
     
     public Jcr(Oak oak) {
         this.oak = oak;
@@ -122,7 +120,7 @@ public class Jcr {
         with(new NamespaceEditorProvider());
         with(new TypeEditorProvider());
         with(new ConflictValidatorProvider());
-                
+        
         with(new ReferenceEditorProvider());
         with(new ReferenceIndexProvider());
 
@@ -136,12 +134,11 @@ public class Jcr {
     }
 
     public Jcr() {
-        this(new MemoryNodeStore());
+        this(new Oak());
     }
 
     public Jcr(NodeStore store) {
         this(new Oak(store));
-        this.store = store;
     }
 
     @Nonnull
@@ -158,6 +155,12 @@ public class Jcr {
         return this;
     }
 
+    public Jcr withAtomicCounter() {
+        ensureRepositoryIsNotCreated();
+        oak.withAtomicCounter();
+        return this;
+    }
+    
     private void ensureRepositoryIsNotCreated() {
         checkState(repository == null && contentRepository == null,
                 "Repository was already created");
