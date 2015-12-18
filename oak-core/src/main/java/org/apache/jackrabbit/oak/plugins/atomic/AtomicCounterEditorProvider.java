@@ -43,6 +43,8 @@ import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.osgi.framework.BundleContext;
 
+import com.google.common.base.Supplier;
+
 /**
  * Provide an instance of {@link AtomicCounterEditor}. See {@link AtomicCounterEditor} for
  * behavioural details.
@@ -65,10 +67,39 @@ public class AtomicCounterEditorProvider implements EditorProvider {
     @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY, referenceInterface = NodeStore.class)
     private volatile AtomicReference<Whiteboard> whiteboard = new AtomicReference<Whiteboard>();
     
+    private final Supplier<Clusterable> clusterSupplier;
+    private final Supplier<ScheduledExecutorService> schedulerSupplier;
+    private final Supplier<NodeStore> storeSupplier;
+    private final Supplier<Whiteboard> wbSupplier;
+    
     /**
      * OSGi oriented constructor where all the required dependencies will be taken care of.
      */
     public AtomicCounterEditorProvider() {
+        clusterSupplier = new Supplier<Clusterable>() {
+            @Override
+            public Clusterable get() {
+                return cluster.get();
+            }
+        };
+        schedulerSupplier = new Supplier<ScheduledExecutorService>() {
+            @Override
+            public ScheduledExecutorService get() {
+                return scheduler.get();
+            }
+        };
+        storeSupplier = new Supplier<NodeStore>() {
+            @Override
+            public NodeStore get() {
+                return store.get();
+            }
+        };
+        wbSupplier = new Supplier<Whiteboard>() {
+            @Override
+            public Whiteboard get() {
+                return whiteboard.get();
+            }
+        };
     }
 
     /**
@@ -88,14 +119,14 @@ public class AtomicCounterEditorProvider implements EditorProvider {
      * @param store reference to the NodeStore.
      * @param whiteboard the underlying board for picking up the registered {@link CommitHook}
      */
-    public AtomicCounterEditorProvider(@Nullable Clusterable clusterInfo, 
-                                       @Nullable ScheduledExecutorService executor,
-                                       @Nullable NodeStore store,
-                                       @Nullable Whiteboard whiteboard) {
-        this.scheduler.set(executor);
-        this.store.set(store);
-        this.whiteboard.set(whiteboard);
-        this.cluster.set(clusterInfo);
+    public AtomicCounterEditorProvider(@Nullable Supplier<Clusterable> clusterInfo, 
+                                       @Nullable Supplier<ScheduledExecutorService> executor,
+                                       @Nullable Supplier<NodeStore> store,
+                                       @Nullable Supplier<Whiteboard> whiteboard) {
+        this.clusterSupplier = clusterInfo;
+        this.schedulerSupplier = executor;
+        this.storeSupplier = store;
+        this.wbSupplier = whiteboard;
     }
     
     /**
@@ -104,7 +135,7 @@ public class AtomicCounterEditorProvider implements EditorProvider {
      * @return
      */
     private String getInstanceId() {
-        Clusterable c = cluster.get();
+        Clusterable c = clusterSupplier.get();
         if (c == null) {
             return null;
         } else {
@@ -118,7 +149,7 @@ public class AtomicCounterEditorProvider implements EditorProvider {
      * @return
      */
     private ScheduledExecutorService getScheduler() {
-        return scheduler.get();
+        return schedulerSupplier.get();
     }
     
     /**
@@ -127,7 +158,7 @@ public class AtomicCounterEditorProvider implements EditorProvider {
      * @return
      */
     private NodeStore getStore() {
-        return store.get();
+        return storeSupplier.get();
     }
     
     /**
@@ -136,7 +167,7 @@ public class AtomicCounterEditorProvider implements EditorProvider {
      * @return
      */
     private Whiteboard getBoard() {
-        return whiteboard.get();
+        return wbSupplier.get();
     }
     
     @Activate

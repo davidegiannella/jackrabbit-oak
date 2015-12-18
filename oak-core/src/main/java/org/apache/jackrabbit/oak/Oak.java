@@ -50,6 +50,7 @@ import javax.management.StandardMBean;
 import javax.security.auth.login.LoginException;
 
 import com.google.common.base.Function;
+import com.google.common.base.Supplier;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.io.Closer;
@@ -551,8 +552,31 @@ public class Oak {
     }
 
     public Oak withAtomicCounter() {
-        return with(new AtomicCounterEditorProvider(clusterable, scheduledExecutor, store,
-            whiteboard));
+        return with(new AtomicCounterEditorProvider(
+            new Supplier<Clusterable>() {
+                @Override
+                public Clusterable get() {
+                    return clusterable;
+                }
+            },
+            new Supplier<ScheduledExecutorService>() {
+                @Override
+                public ScheduledExecutorService get() {
+                    return scheduledExecutor;
+                }
+            }, 
+            new Supplier<NodeStore>() {
+                @Override
+                public NodeStore get() {
+                    return store;
+                }
+            },
+            new Supplier<Whiteboard>() {
+                @Override
+                public Whiteboard get() {
+                    return whiteboard;
+                }
+            }));
     }
     
     /**
