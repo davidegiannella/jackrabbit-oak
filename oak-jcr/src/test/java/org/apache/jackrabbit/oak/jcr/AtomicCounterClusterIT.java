@@ -167,12 +167,10 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
     }
     
     @Override
-    protected Jcr getContentRepository(NodeStore store) {
-        return super.getContentRepository(store)
+    protected Jcr getJcr(NodeStore store) {
+        return super.getJcr(store)
             .with(new AtomicCounterEditorProvider(
-                // TODO replace with OAK-3529
-                UUID.randomUUID().toString(), 
-                new ScheduledThreadPoolExecutor(5)
+                    
                 ));
     }
 

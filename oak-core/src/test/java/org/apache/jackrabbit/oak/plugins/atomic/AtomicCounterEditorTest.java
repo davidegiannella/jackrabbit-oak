@@ -58,6 +58,7 @@ import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
+import org.apache.jackrabbit.oak.spi.state.Clusterable;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -68,16 +69,62 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.amazonaws.services.sqs.model.UnsupportedOperationException;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 
 public class AtomicCounterEditorTest {
+    
+    /**
+     * convenience class for workign around {@link Supplier}.
+     */
+    private static class TestableACEProvider extends AtomicCounterEditorProvider {
+        public TestableACEProvider(final Clusterable c, final ScheduledExecutorService e, final NodeStore s, final Whiteboard w) {
+            super(new Supplier<Clusterable>() {
+                @Override
+                public Clusterable get() {
+                    return c;
+                }
+            },
+            new Supplier<ScheduledExecutorService>() {
+                @Override
+                public ScheduledExecutorService get() {
+                    return e;
+                }
+            },
+            new Supplier<NodeStore>() {
+                @Override
+                public NodeStore get() {
+                    return s;
+                }
+            },
+            new Supplier<Whiteboard>() {
+                @Override
+                public Whiteboard get() {
+                    return w;
+                }
+            });
+        }
+    }
+    
+    private static final Clusterable CLUSTER_1 = new Clusterable() {
+        @Override
+        public String getInstanceId() {
+            return "1";
+        }
+    };
+    private static final Clusterable CLUSTER_2 = new Clusterable() {
+        @Override
+        public String getInstanceId() {
+            return "2";
+        }
+    };
     private static final EditorHook HOOK_NO_CLUSTER = new EditorHook(
-        new AtomicCounterEditorProvider(null, null, null, null));
+        new TestableACEProvider(null, null, null, null));
     private static final EditorHook HOOK_1_SYNC = new EditorHook(
-        new AtomicCounterEditorProvider("1", null, null, null));
+        new TestableACEProvider(CLUSTER_1, null, null, null));
     private static final EditorHook HOOK_2_SYNC = new EditorHook(
-        new AtomicCounterEditorProvider("2", null, null, null));
+        new TestableACEProvider(CLUSTER_2, null, null, null));
 
     private static final PropertyState INCREMENT_BY_1 = PropertyStates.createProperty(
         PROP_INCREMENT, 1L);
@@ -284,10 +331,9 @@ public class AtomicCounterEditorTest {
     @Test
     public void singleNodeAsync() throws CommitFailedException, InterruptedException, ExecutionException {
         NodeStore store = NodeStoreFixture.MEMORY_NS.createNodeStore();
-        String instanceId1 = "1";
         MyExecutor exec1 = new MyExecutor();
         Whiteboard board = new DefaultWhiteboard();
-        EditorHook hook1 = new EditorHook(new AtomicCounterEditorProvider(instanceId1, exec1, store, board));
+        EditorHook hook1 = new EditorHook(new TestableACEProvider(CLUSTER_1, exec1, store, board));
         NodeBuilder builder, root;
         PropertyState p;
         
@@ -301,10 +347,10 @@ public class AtomicCounterEditorTest {
         // as long as the scheduled process has run
         builder = store.getRoot().builder().getChildNode("c");
         assertTrue(builder.exists());
-        p = builder.getProperty(PREFIX_PROP_REVISION + instanceId1);
+        p = builder.getProperty(PREFIX_PROP_REVISION + CLUSTER_1.getInstanceId());
         assertNotNull(p);
         assertEquals(1, p.getValue(LONG).longValue());
-        p = builder.getProperty(PREFIX_PROP_COUNTER + instanceId1);
+        p = builder.getProperty(PREFIX_PROP_COUNTER + CLUSTER_1.getInstanceId());
         assertNotNull(p);
         assertEquals(1, p.getValue(LONG).longValue());
         p = builder.getProperty(PROP_COUNTER);
@@ -316,9 +362,10 @@ public class AtomicCounterEditorTest {
         // fetching the latest store state to see the changes
         builder = store.getRoot().builder().getChildNode("c");
         assertTrue("the counter node should exists", builder.exists());
-        assertCounterNodeState(builder,
-            ImmutableSet.of(PREFIX_PROP_COUNTER + instanceId1, PREFIX_PROP_REVISION + instanceId1),
-            1);        
+        assertCounterNodeState(
+            builder,
+            ImmutableSet.of(PREFIX_PROP_COUNTER + CLUSTER_1.getInstanceId(),
+                PREFIX_PROP_REVISION + CLUSTER_1.getInstanceId()), 1);
     }
     
     /**

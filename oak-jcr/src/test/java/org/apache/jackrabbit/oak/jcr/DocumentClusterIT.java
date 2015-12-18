@@ -34,6 +34,7 @@ import javax.jcr.SimpleCredentials;
 import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
 import org.apache.jackrabbit.oak.plugins.document.util.MongoConnection;
 import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
+import org.apache.jackrabbit.oak.spi.state.Clusterable;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.junit.After;
 import org.junit.Before;
@@ -186,7 +187,7 @@ public abstract class DocumentClusterIT {
         builder.setClusterId(clusterId);
         
         DocumentMK mk = builder.open();
-        Jcr j = getContentRepository(mk.getNodeStore());
+        Jcr j = getJcr(mk.getNodeStore());
         
         Set<IndexEditorProvider> ieps = additionalIndexEditorProviders();
         if (ieps != null) {
@@ -205,8 +206,12 @@ public abstract class DocumentClusterIT {
         checkNotNull(mks).add(mk);
     }
     
-    protected Jcr getContentRepository(@Nonnull NodeStore store) {
-        return new Jcr(checkNotNull(store));
+    protected Jcr getJcr(@Nonnull NodeStore store) {
+        Jcr j = new Jcr(checkNotNull(store));
+        if (store instanceof Clusterable) {
+            j.with((Clusterable) store);
+        }
+        return j;
     }
     
     /**
