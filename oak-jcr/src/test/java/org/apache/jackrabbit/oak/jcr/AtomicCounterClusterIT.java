@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.jcr.Node;
@@ -165,7 +166,9 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
     
     @Override
     protected Jcr getJcr(NodeStore store) {
-        return super.getJcr(store).withAtomicCounter();
+        return super.getJcr(store)
+            .with(new ScheduledThreadPoolExecutor(5))
+            .withAtomicCounter();
     }
 
     @Test @Ignore("louncher to inspect logging. Don't enable")
