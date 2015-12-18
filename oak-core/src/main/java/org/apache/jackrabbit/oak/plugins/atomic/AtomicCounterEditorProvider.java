@@ -36,6 +36,7 @@ import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
+import org.apache.jackrabbit.oak.spi.state.Clusterable;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -51,10 +52,8 @@ import org.osgi.framework.BundleContext;
 @Service(EditorProvider.class)
 public class AtomicCounterEditorProvider implements EditorProvider {
 
-    //TODO uncomment once OAK-3529 will be in place
-    private String instanceId;
-//    @Reference(policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_UNARY, referenceInterface = Clusterable.class)
-//    private AtomicReference<Clusterable> store = new AtomicReference<Clusterable>();
+    @Reference(policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_UNARY, referenceInterface = Clusterable.class)
+    private AtomicReference<Clusterable> cluster = new AtomicReference<Clusterable>();
 
     @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY,
                referenceInterface = ScheduledExecutorService.class)
@@ -77,29 +76,19 @@ public class AtomicCounterEditorProvider implements EditorProvider {
      * {@link AtomicCounterEditor#AtomicCounterEditor(NodeBuilder, String, ScheduledExecutorService, NodeStore)}
      * for constructions details of the actual editor.
      * 
-     * @param instanceId the current Oak instanceId.
+     * @param clusterInfo cluster node information
      * @param executor the executor for running asynchronously.
      * @param store reference to the NodeStore.
+     * @param whiteboard the underlying board for picking up the registered {@link CommitHook}
      */
-    public AtomicCounterEditorProvider(@Nullable final String instanceId, 
+    public AtomicCounterEditorProvider(@Nullable Clusterable clusterInfo, 
                                        @Nullable ScheduledExecutorService executor,
                                        @Nullable NodeStore store,
                                        @Nullable Whiteboard whiteboard) {
         this.scheduler.set(executor);
         this.store.set(store);
         this.whiteboard.set(whiteboard);
-        //TODO uncomment once OAK-3529 is in place
-//        if (instanceId == null) {
-//            store.set(null);
-//        } else {
-//            store.set(new Clusterable() {
-//                @Override
-//                public String getInstanceId() {
-//                    return instanceId;
-//                }
-//            });
-//        }
-        this.instanceId = instanceId;
+        this.cluster.set(clusterInfo);
     }
     
     /**
@@ -108,14 +97,12 @@ public class AtomicCounterEditorProvider implements EditorProvider {
      * @return
      */
     private String getInstanceId() {
-        return instanceId;
-        //TODO un-comment after OAK-3529
-//        Clusterable c = store.get();
-//        if (c == null) {
-//            return null;
-//        } else {
-//            return c.getInstanceId();
-//        }
+        Clusterable c = cluster.get();
+        if (c == null) {
+            return null;
+        } else {
+            return c.getInstanceId();
+        }
     }
     
     /**
@@ -153,14 +140,13 @@ public class AtomicCounterEditorProvider implements EditorProvider {
     public void deactivate() {
     }
 
-    //TODO uncomment once OAK-3529 is in place
-//    protected void bindStore(Clusterable store) {
-//        this.store.set(store);
-//    }
-//
-//    protected void unbindStore(Clusterable store) {
-//        this.store.compareAndSet(store, null);
-//    }
+    protected void bindStore(Clusterable store) {
+        this.cluster.set(store);
+    }
+
+    protected void unbindStore(Clusterable store) {
+        this.cluster.compareAndSet(store, null);
+    }
 
     protected void bindScheduler(ScheduledExecutorService scheduler) {
         this.scheduler.set(scheduler);
