@@ -317,17 +317,16 @@ public class AtomicCounterEditor extends DefaultEditor {
                     hook = new EmptyHook();
                 }
                 
-                LOG.trace("Scheduling process");
                 long delay = 0;
-                executor.schedule(
-                    new ConsolidatorTask(
-                        path, 
-                        builder.getProperty(revisionName), 
-                        store, 
-                        executor, 
-                        delay, 
-                        hook), 
-                    delay, TimeUnit.SECONDS);
+                ConsolidatorTask t = new ConsolidatorTask(
+                    path, 
+                    builder.getProperty(revisionName), 
+                    store, 
+                    executor, 
+                    delay, 
+                    hook);
+                LOG.trace("[{}] Scheduling process", t.getName()); 
+                executor.schedule(t, delay, TimeUnit.SECONDS);
             }
         }
     }
@@ -453,6 +452,10 @@ public class AtomicCounterEditor extends DefaultEditor {
                 return true;
             }
             return false;
+        }
+        
+        public String getName() {
+            return name;
         }
     }
     
