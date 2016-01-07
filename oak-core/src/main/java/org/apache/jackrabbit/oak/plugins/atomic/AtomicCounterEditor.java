@@ -413,7 +413,8 @@ public class AtomicCounterEditor extends DefaultEditor {
             } catch (Exception e) {
                 LOG.debug("[{}] caught Exception. Rescheduling. {}", name, e.getMessage());
                 if (LOG.isTraceEnabled()) {
-                    LOG.trace("{}", e);
+                    // duplicating message in logs; but avoiding unnecessary stacktrace generation
+                    LOG.trace("[{}] caught Exception. Rescheduling. {}", name, e);
                 }
                 reschedule();
             }
