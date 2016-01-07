@@ -26,7 +26,7 @@ import aQute.bnd.annotation.ProviderType;
  * A metric which calculates the distribution of a value.
  */
 @ProviderType
-public interface HistogramStats extends Stats{
+public interface HistogramStats extends Stats, Counting{
 
     /**
      * Adds a recorded value.

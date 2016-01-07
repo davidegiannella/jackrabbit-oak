@@ -542,7 +542,7 @@ public class Oak {
      * <p>
      * Please note that when enabling the background indexer, you need to take
      * care of calling
-     * <code>#shutdown<code> on the <code>executor<code> provided for this Oak instance.
+     * <code>#shutdown</code> on the <code>executor</code> provided for this Oak instance.
      * </p>
      * @deprecated Use {@link Oak#withAsyncIndexing(String, long)} instead
      */
@@ -587,7 +587,7 @@ public class Oak {
      * <p>
      * Please note that when enabling the background indexer, you need to take
      * care of calling
-     * <code>#shutdown<code> on the <code>executor<code> provided for this Oak instance.
+     * <code>#shutdown</code> on the <code>executor</code> provided for this Oak instance.
      * </p>
      */
     public Oak withAsyncIndexing(@Nonnull String name, long delayInSeconds) {

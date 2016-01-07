@@ -1707,7 +1707,8 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
 
         Tree prop1 = props.addChild(TestUtil.unique("prop"));
         prop1.setProperty(LuceneIndexConstants.PROP_NAME, "original/jcr:content/type");
-        prop1.setProperty(LuceneIndexConstants.PROP_INDEX, false);
+        prop1.setProperty(LuceneIndexConstants.PROP_NODE_SCOPE_INDEX, false);
+        prop1.setProperty(LuceneIndexConstants.PROP_PROPERTY_INDEX, true);
 
         newNodeAggregator(idx)
                 .newRuleWithName(NT_FILE, newArrayList(JCR_CONTENT, JCR_CONTENT + "/*"))
@@ -1727,6 +1728,10 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         assertQuery("select [jcr:path] from [oak:TestNode] where contains(*, 'hello')", asList("/test/a"));
         assertQuery("select [jcr:path] from [oak:TestNode] where contains(*, 'image')", asList("/test/a"));
         assertQuery("select [jcr:path] from [oak:TestNode] where contains(*, 'jpg')", Collections.<String>emptyList());
+
+        //Check that property index is being used
+        assertThat(explain("select [jcr:path] from [oak:TestNode] where [original/jcr:content/type] = 'foo'"),
+                containsString("original/jcr:content/type:foo"));
     }
 
     @Test
@@ -1835,6 +1840,26 @@ public class LucenePropertyIndexTest extends AbstractQueryTest {
         String propabQuery = "select [jcr:path] from [mix:title] where [jcr:content/type] = 'foo-a'";
         assertThat(explain(propabQuery), containsString("lucene:test1(/oak:index/test1)"));
         assertQuery(propabQuery, asList("/test/a"));
+    }
+
+    @Test
+    public void fulltextQueryWithSpecialChars() throws Exception{
+        Tree idx = createIndex("test1", of("propa", "propb"));
+        Tree props = TestUtil.newRulePropTree(idx, "nt:base");
+        Tree prop1 = props.addChild(TestUtil.unique("prop"));
+        prop1.setProperty(LuceneIndexConstants.PROP_NAME, "tag");
+        prop1.setProperty(LuceneIndexConstants.PROP_ANALYZED, true);
+        root.commit();
+
+        Tree test = root.getTree("/").addChild("test");
+        test.setProperty("tag", "stockphotography:business/business_abstract");
+        root.commit();
+
+        String propabQuery = "select * from [nt:base] where CONTAINS(tag, " +
+                "'stockphotography:business/business_abstract')";
+        assertThat(explain(propabQuery), containsString("lucene:test1(/oak:index/test1)"));
+        assertQuery(propabQuery, asList("/test"));
+
     }
 
     private static Tree createNodeWithMixinType(Tree t, String nodeName, String typeName){

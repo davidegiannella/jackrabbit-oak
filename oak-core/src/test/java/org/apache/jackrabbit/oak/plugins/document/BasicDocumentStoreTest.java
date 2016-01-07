@@ -181,7 +181,7 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
     }
 
     @Test
-    public void testConditionalupdateForbidden() {
+    public void testConditionalUpdateForbidden() {
         String id = this.getClass().getName() + ".testConditionalupdateForbidden";
 
         // remove if present
@@ -211,6 +211,17 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
             up.set("_id", id);
             up.equals("foo", "bar");
             super.ds.createOrUpdate(Collection.NODES, up);
+            fail("conditional createOrUpdate should fail");
+        }
+        catch (IllegalArgumentException expected) {
+            // reported by DocumentStore
+        }
+
+        try {
+            UpdateOp up = new UpdateOp(id, false);
+            up.set("_id", id);
+            up.equals("foo", "bar");
+            super.ds.createOrUpdate(Collection.NODES, Collections.singletonList(up));
             fail("conditional createOrUpdate should fail");
         }
         catch (IllegalArgumentException expected) {
@@ -400,6 +411,35 @@ public class BasicDocumentStoreTest extends AbstractDocumentStoreTest {
         String endId = this.getClass().getName() + ".testModifiedMaxUpdatf";
         List<NodeDocument> results = super.ds.query(Collection.NODES, startId, endId, "_modified", 1000, 1);
         assertEquals("document not found, maybe indexed _modified property not properly updated", 1, results.size());
+    }
+
+    @Test
+    public void testModifyModified() {
+        // https://issues.apache.org/jira/browse/OAK-2940
+        String id = this.getClass().getName() + ".testModifyModified";
+        // create a test node
+        UpdateOp up = new UpdateOp(id, true);
+        up.set("_id", id);
+        up.set("_modified", 1000L);
+        boolean success = super.ds.create(Collection.NODES, Collections.singletonList(up));
+        assertTrue(success);
+        removeMe.add(id);
+
+        // update with "max" operation
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.max("_modified", 2000L);
+        super.ds.update(Collection.NODES, Collections.singletonList(id), up);
+        NodeDocument nd = super.ds.find(Collection.NODES, id, 0);
+        assertEquals(((Number)nd.get("_modified")).longValue(), 2000L);
+
+        // update with "set" operation
+        up = new UpdateOp(id, false);
+        up.set("_id", id);
+        up.set("_modified", 1500L);
+        super.ds.update(Collection.NODES, Collections.singletonList(id), up);
+        nd = super.ds.find(Collection.NODES, id, 0);
+        assertEquals(((Number)nd.get("_modified")).longValue(), 1500L);
     }
 
     @Test
