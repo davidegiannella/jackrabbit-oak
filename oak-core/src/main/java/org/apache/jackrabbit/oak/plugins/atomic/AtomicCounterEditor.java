@@ -334,6 +334,7 @@ public class AtomicCounterEditor extends DefaultEditor {
     
     public static class ConsolidatorTask implements Callable<Void> {
         public static final long MAX_TIMEOUT = 32;
+        private final String name;
         private final String p;
         private final PropertyState rev;
         private final NodeStore s;
@@ -353,42 +354,72 @@ public class AtomicCounterEditor extends DefaultEditor {
             this.exec = checkNotNull(exec);
             this.delay = delay;
             this.hook = checkNotNull(hook);
+            this.name = parseForName();
+        }
+
+        private ConsolidatorTask(@Nonnull String name,
+                                 @Nonnull String path, 
+                                @Nullable PropertyState revision, 
+                                @Nonnull NodeStore store,
+                                @Nonnull ScheduledExecutorService exec,
+                                long delay,
+                                @Nonnull CommitHook hook) {
+            this.name = checkNotNull(name);
+            p = checkNotNull(path);
+            rev = revision;
+            s = checkNotNull(store);
+            this.exec = checkNotNull(exec);
+            this.delay = delay;
+            this.hook = checkNotNull(hook);
+        }
+
+        private String parseForName() {
+            String n = p;
+            if (n.startsWith("/")) {
+                n = n.substring(1);
+            }
+            n = n.replaceAll("/", "-");
+            n += rev.getName() + "-" + rev.getValue(Type.LONG).longValue();
+                
+            return n;
         }
         
         @Override
         public Void call() throws Exception {            
             try {
-                LOG.trace("Async consolidation running: path: {}, revision: {}", p, rev);
+                LOG.trace("[{}] Async consolidation running: path: {}, revision: {}", name, p, rev);
                 NodeBuilder root = s.getRoot().builder();
                 NodeBuilder b = builderFromPath(root, p);
                 
                 if (!b.exists()) {
-                    LOG.trace("Builder for '{}' from NodeStore not available. Rescheduling.", p);
+                    LOG.trace("[{}] Builder for '{}' from NodeStore not available. Rescheduling.",
+                        name, p);
                     reschedule();
                     return null;
                 }
                 
                 if (!checkRevision(b, rev)) {
-                    LOG.trace("Not yet a valid revision for '{}'. Rescheduling.", p);
+                    LOG.trace("[{}] Not yet a valid revision for '{}'. Rescheduling.", name, p);
                     reschedule();
                     return null;
                 }
 
                 if (isConsolidate(b)) {
+                    LOG.trace("[{}] consolidating.", name);
                     consolidateCount(b);
                     s.merge(root, hook, CommitInfo.EMPTY);                    
                 } else {
-                    LOG.trace("Someone else consolidated. Skipping any operation.");
+                    LOG.trace("[{}] Someone else consolidated. Skipping any operation.", name);
                 }
             } catch (Exception e) {
-                LOG.debug("caught Exception. Re-scheduling. {}", e.getMessage());
+                LOG.debug("[{}] caught Exception. Re-scheduling. {}", name, e.getMessage());
                 if (LOG.isTraceEnabled()) {
                     LOG.trace("{}", e);
                 }
                 reschedule();
             }
             
-            LOG.debug("Consolidation for '{}', '{}' completed", p, rev);
+            LOG.debug("[{}] Consolidation for '{}', '{}' completed", name, p, rev);
             return null;
         }
         
@@ -399,7 +430,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                 return;
             }
             
-            ConsolidatorTask task = new ConsolidatorTask(p, rev, s, exec, d, hook);
+            ConsolidatorTask task = new ConsolidatorTask(name, p, rev, s, exec, d, hook);
             LOG.trace("Re-scheduling '{}' by {}sec", p, d);
             exec.schedule(task, d, TimeUnit.SECONDS);
         }
