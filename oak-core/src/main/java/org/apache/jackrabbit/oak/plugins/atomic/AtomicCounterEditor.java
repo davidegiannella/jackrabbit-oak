@@ -411,7 +411,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                     LOG.trace("[{}] Someone else consolidated. Skipping any operation.", name);
                 }
             } catch (Exception e) {
-                LOG.debug("[{}] caught Exception. Re-scheduling. {}", name, e.getMessage());
+                LOG.debug("[{}] caught Exception. Rescheduling. {}", name, e.getMessage());
                 if (LOG.isTraceEnabled()) {
                     LOG.trace("{}", e);
                 }
@@ -430,7 +430,7 @@ public class AtomicCounterEditor extends DefaultEditor {
             }
             
             ConsolidatorTask task = new ConsolidatorTask(name, p, rev, s, exec, d, hook);
-            LOG.trace("Re-scheduling '{}' by {}sec", p, d);
+            LOG.trace("[{}] Rescheduling '{}' by {}sec", task.getName(), p, d);
             exec.schedule(task, d, TimeUnit.SECONDS);
         }
         
