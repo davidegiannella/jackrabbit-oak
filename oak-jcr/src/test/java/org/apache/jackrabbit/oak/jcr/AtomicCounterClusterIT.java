@@ -31,7 +31,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.jcr.Node;
@@ -118,6 +117,7 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
             numIncrements, repos.size(), numIncrements * repos.size());
         
         // for each cluster node, `numIncrements` sessions pushing random increments
+        long start = LOG_PERF.start("Firing the threads");
         List<ListenableFutureTask<Void>> tasks = Lists.newArrayList();
         for (Repository rep : repos) {
             final Repository r = rep;
@@ -147,12 +147,13 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
                 tasks.add(task);
             }
         }
-        long start = LOG_PERF.start("Firing the threads");
-        Futures.allAsList(tasks).get();
         LOG_PERF.end(start, -1, "Firing threads completed", "");
-
+        start = LOG_PERF.start("waiting for Futures");
+        Futures.allAsList(tasks).get();
+        LOG_PERF.end(start, -1, "Futures completed", "");
+        
         // let the time for the async process to kick in and run.
-        Thread.sleep(TimeUnit.SECONDS.toMillis(20));
+        Thread.sleep(2000);
         
         raiseExceptions(exceptions, LOG);
         
