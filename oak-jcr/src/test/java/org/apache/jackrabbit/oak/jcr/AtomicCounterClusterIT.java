@@ -178,7 +178,7 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
     @Override
     protected Jcr getJcr(NodeStore store) {
         return super.getJcr(store)
-            .with(new ScheduledThreadPoolExecutor(5))
+            .with(new ScheduledThreadPoolExecutor(10))
             .withAtomicCounter();
     }
 

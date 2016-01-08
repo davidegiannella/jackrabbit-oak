@@ -381,14 +381,14 @@ public class AtomicCounterEditor extends DefaultEditor {
                 dumpNode(b, p);
                 
                 if (!b.exists()) {
-                    LOG.trace("[{}] Builder for '{}' from NodeStore not available. Rescheduling.",
+                    LOG.debug("[{}] Builder for '{}' from NodeStore not available. Rescheduling.",
                         name, p);
                     reschedule();
                     return null;
                 }
                 
                 if (!checkRevision(b, rev)) {
-                    LOG.trace("[{}] Missing or not yet a valid revision for '{}'. Rescheduling.",
+                    LOG.debug("[{}] Missing or not yet a valid revision for '{}'. Rescheduling.",
                         name, p);
                     reschedule();
                     return null;
@@ -399,7 +399,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                     consolidateCount(b);
                     s.merge(root, hook, CommitInfo.EMPTY);                    
                 } else {
-                    LOG.trace("[{}] Someone else consolidated. Skipping any operation.", name);
+                    LOG.debug("[{}] Someone else consolidated. Skipping any operation.", name);
                 }
             } catch (Exception e) {
                 LOG.debug("[{}] caught Exception. Rescheduling. {}", name, e.getMessage());
