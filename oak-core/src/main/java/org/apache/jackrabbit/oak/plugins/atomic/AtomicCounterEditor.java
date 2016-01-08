@@ -318,7 +318,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                     hook = new EmptyHook();
                 }
                 
-                long delay = 0;
+                long delay = 1;
                 ConsolidatorTask t = new ConsolidatorTask(
                     path, 
                     builder.getProperty(revisionName), 
@@ -326,7 +326,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                     executor, 
                     delay, 
                     hook);
-                LOG.trace("[{}] Scheduling process", t.getName()); 
+                LOG.trace("[{}] Scheduling process by {}secs", t.getName(), delay); 
                 executor.schedule(t, delay, TimeUnit.SECONDS);
             }
         }

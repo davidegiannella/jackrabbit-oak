@@ -31,6 +31,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.jcr.Node;
@@ -151,7 +152,7 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
 
         // let the time for the async process to kick in and run.
         alignCluster(mks);
-        Thread.sleep(10000);
+        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
         alignCluster(mks);
         
         raiseExceptions(exceptions, LOG);
