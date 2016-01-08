@@ -40,6 +40,7 @@ import javax.jcr.Session;
 import org.apache.jackrabbit.oak.commons.FixturesHelper;
 import org.apache.jackrabbit.oak.commons.FixturesHelper.Fixture;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.apache.jackrabbit.oak.util.PerfLogger;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -54,6 +55,7 @@ import com.google.common.util.concurrent.ListenableFutureTask;
 public class AtomicCounterClusterIT  extends DocumentClusterIT {
     private static final Set<Fixture> FIXTURES = FixturesHelper.getFixtures();
     private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterClusterIT.class);
+    private static final PerfLogger LOG_PERF = new PerfLogger(LOG);
     
     @BeforeClass
     public static void assumtions() {
@@ -106,9 +108,14 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
             
         }
         
-        final int numIncrements = 100;
+        // number of threads per cluster node
+        final int numIncrements = Integer.getInteger("oak.test.it.atomiccounter.threads", 100);
         
-        // for each cluster node, 100 sessions pushing random increments
+        LOG.debug(
+            "pushing {} increments per each of the {} cluster nodes for a total of {} concurrent updates",
+            numIncrements, repos.size(), numIncrements * repos.size());
+        
+        // for each cluster node, `numIncrements` sessions pushing random increments
         List<ListenableFutureTask<Void>> tasks = Lists.newArrayList();
         for (Repository rep : repos) {
             final Repository r = rep;
@@ -138,7 +145,9 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
                 tasks.add(task);
             }
         }
+        long start = LOG_PERF.start("Firing the threads");
         Futures.allAsList(tasks).get();
+        LOG_PERF.end(start, -1, "Firing threads completed", "");
 
         // let the time for the async process to kick in and run.
         alignCluster(mks);
