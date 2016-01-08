@@ -22,6 +22,7 @@ import static org.apache.jackrabbit.oak.api.Type.LONG;
 import static org.apache.jackrabbit.oak.api.Type.NAMES;
 import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_ATOMIC_COUNTER;
 
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -348,14 +349,14 @@ public class AtomicCounterEditor extends DefaultEditor {
                                 @Nonnull ScheduledExecutorService exec,
                                 long delay,
                                 @Nonnull CommitHook hook) {
+            this.start = System.currentTimeMillis();
             p = checkNotNull(path);
             rev = revision;
             s = checkNotNull(store);
             this.exec = checkNotNull(exec);
             this.delay = delay;
             this.hook = checkNotNull(hook);
-            this.name = parseForName();
-            this.start = System.currentTimeMillis();
+            this.name = UUID.randomUUID().toString();
         }
 
         private ConsolidatorTask(@Nonnull ConsolidatorTask task, long delay) {
@@ -368,17 +369,6 @@ public class AtomicCounterEditor extends DefaultEditor {
             this.hook = task.hook;
             this.name = task.name;
             this.start = task.start;
-        }
-
-        private String parseForName() {
-            String n = p;
-            if (n.startsWith("/")) {
-                n = n.substring(1);
-            }
-            n = n.replaceAll("/", "-");
-            n += rev.getName() + "-" + rev.getValue(Type.LONG).longValue();
-                
-            return n;
         }
         
         @Override
