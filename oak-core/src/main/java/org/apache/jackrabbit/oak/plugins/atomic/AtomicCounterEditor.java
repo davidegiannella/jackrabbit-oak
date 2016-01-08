@@ -339,6 +339,7 @@ public class AtomicCounterEditor extends DefaultEditor {
         private final NodeStore s;
         private final ScheduledExecutorService exec;
         private final long delay;
+        private final long start;
         private final CommitHook hook;
         
         public ConsolidatorTask(@Nonnull String path, 
@@ -354,22 +355,19 @@ public class AtomicCounterEditor extends DefaultEditor {
             this.delay = delay;
             this.hook = checkNotNull(hook);
             this.name = parseForName();
+            this.start = System.currentTimeMillis();
         }
 
-        private ConsolidatorTask(@Nonnull String name,
-                                 @Nonnull String path, 
-                                @Nullable PropertyState revision, 
-                                @Nonnull NodeStore store,
-                                @Nonnull ScheduledExecutorService exec,
-                                long delay,
-                                @Nonnull CommitHook hook) {
-            this.name = checkNotNull(name);
-            p = checkNotNull(path);
-            rev = revision;
-            s = checkNotNull(store);
-            this.exec = checkNotNull(exec);
+        private ConsolidatorTask(@Nonnull ConsolidatorTask task, long delay) {
+            checkNotNull(task);
+            this.p = task.p;
+            this.rev = task.rev;
+            this.s = task.s;
+            this.exec = task.exec;
             this.delay = delay;
-            this.hook = checkNotNull(hook);
+            this.hook = task.hook;
+            this.name = task.name;
+            this.start = task.start;
         }
 
         private String parseForName() {
@@ -417,20 +415,23 @@ public class AtomicCounterEditor extends DefaultEditor {
                     LOG.trace("[{}] caught Exception. Rescheduling.", name, e);
                 }
                 reschedule();
+                return null;
             }
             
-            LOG.debug("[{}] Consolidation for '{}', '{}' completed", name, p, rev);
+            LOG.debug("[{}] Consolidation for '{}', '{}' completed in {}ms", name, p, rev,
+                System.currentTimeMillis() - start);
             return null;
         }
         
         private void reschedule() {
             long d = nextDelay(delay);
             if (isTimedOut(d)) {
-                LOG.warn("The consolidator task for '{}' time out. Cancelling the retry.", p);
+                LOG.warn("[{}] The consolidator task for '{}' time out. Cancelling the retry.",
+                    name, p);
                 return;
             }
             
-            ConsolidatorTask task = new ConsolidatorTask(name, p, rev, s, exec, d, hook);
+            ConsolidatorTask task = new ConsolidatorTask(this, d);
             LOG.trace("[{}] Rescheduling '{}' by {}sec", task.getName(), p, d);
             exec.schedule(task, d, TimeUnit.SECONDS);
         }
