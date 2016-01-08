@@ -516,7 +516,7 @@ public class AtomicCounterEditorTest {
         PropertyState r = LongPropertyState.createLongProperty("r", 10L);
         
         assertTrue(AtomicCounterEditor.checkRevision(b, null));
-        assertTrue(AtomicCounterEditor.checkRevision(b, r));
+        assertFalse(AtomicCounterEditor.checkRevision(b, r));
         
         b.setProperty(LongPropertyState.createLongProperty(r.getName(), 1L));
         assertFalse(AtomicCounterEditor.checkRevision(b, r));

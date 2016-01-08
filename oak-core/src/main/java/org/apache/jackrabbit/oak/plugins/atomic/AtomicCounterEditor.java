@@ -318,7 +318,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                     hook = new EmptyHook();
                 }
                 
-                long delay = 1;
+                long delay = 0;
                 ConsolidatorTask t = new ConsolidatorTask(
                     path, 
                     builder.getProperty(revisionName), 
@@ -386,7 +386,8 @@ public class AtomicCounterEditor extends DefaultEditor {
                 }
                 
                 if (!checkRevision(b, rev)) {
-                    LOG.trace("[{}] Not yet a valid revision for '{}'. Rescheduling.", name, p);
+                    LOG.trace("[{}] Missing or not yet a valid revision for '{}'. Rescheduling.",
+                        name, p);
                     reschedule();
                     return null;
                 }
@@ -457,7 +458,7 @@ public class AtomicCounterEditor extends DefaultEditor {
      * 
      * if {@code revision} is null it will always be {@code true}.
      * 
-     * If {@code builder} does not contain the property it will always return true.
+     * If {@code builder} does not contain the property it will always return false.
      * 
      * @param builder
      * @param revision
@@ -470,7 +471,7 @@ public class AtomicCounterEditor extends DefaultEditor {
         String pName = revision.getName();
         PropertyState builderRev = builder.getProperty(pName);
         if (builderRev == null) {
-            return true;
+            return false;
         }
         
         long brValue = builderRev.getValue(Type.LONG).longValue();
