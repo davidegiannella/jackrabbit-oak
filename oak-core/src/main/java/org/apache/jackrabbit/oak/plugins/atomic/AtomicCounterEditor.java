@@ -374,9 +374,11 @@ public class AtomicCounterEditor extends DefaultEditor {
         @Override
         public Void call() throws Exception {            
             try {
-                LOG.trace("[{}] Async consolidation running: path: {}, revision: {}", name, p, rev);
+                LOG.debug("[{}] Async consolidation running: path: {}, revision: {}", name, p, rev);
                 NodeBuilder root = s.getRoot().builder();
                 NodeBuilder b = builderFromPath(root, p);
+                
+                dumpNode(b, p);
                 
                 if (!b.exists()) {
                     LOG.trace("[{}] Builder for '{}' from NodeStore not available. Rescheduling.",
@@ -414,6 +416,17 @@ public class AtomicCounterEditor extends DefaultEditor {
             return null;
         }
         
+        private void dumpNode(@Nonnull NodeBuilder b, String path) {
+            if (LOG.isTraceEnabled()) {
+                checkNotNull(b);
+                StringBuilder s = new StringBuilder();
+                for (PropertyState p : b.getProperties()) {
+                    s.append(p).append("\n");
+                }
+                LOG.trace("[{}] Node status for {}:\n{}", this.name, path, s);
+            }
+        }
+        
         private void reschedule() {
             long d = nextDelay(delay);
             if (isTimedOut(d)) {
@@ -423,7 +436,7 @@ public class AtomicCounterEditor extends DefaultEditor {
             }
             
             ConsolidatorTask task = new ConsolidatorTask(this, d);
-            LOG.trace("[{}] Rescheduling '{}' by {}sec", task.getName(), p, d);
+            LOG.debug("[{}] Rescheduling '{}' by {}sec", task.getName(), p, d);
             exec.schedule(task, d, TimeUnit.SECONDS);
         }
         

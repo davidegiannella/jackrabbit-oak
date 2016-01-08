@@ -128,7 +128,8 @@ public abstract class DocumentClusterIT {
     }
     
     /**
-     * set up the cluster connections
+     * set up the cluster connections. Same as {@link #setUpCluster(Class, List, List, int)}
+     * providing {@link #NOT_PROVIDED} as {@code asyncDelay}
      * 
      * @param clazz class used for logging into Mongo itself
      * @param mks the list of mks to work on.
@@ -141,6 +142,17 @@ public abstract class DocumentClusterIT {
         setUpCluster(clazz, mks, repos, NOT_PROVIDED);
     }
 
+    /**
+     * set up the cluster connections
+     * 
+     * @param clazz class used for logging into Mongo itself
+     * @param mks the list of mks to work on
+     * @param repos list of {@link Repository} created on each {@code mks}
+     * @param asyncDelay the maximum delay for the cluster to sync with last revision. Use
+     *            {@link #NOT_PROVIDED} for implementation default. Use {@code 0} for switching to
+     *            manual and sync with {@link #alignCluster(List)}.
+     * @throws Exception
+     */
     void setUpCluster(@Nonnull final Class<?> clazz, 
                              @Nonnull final List<DocumentMK> mks,
                              @Nonnull final List<Repository> repos,

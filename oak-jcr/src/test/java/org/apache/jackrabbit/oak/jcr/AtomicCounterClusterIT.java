@@ -66,7 +66,7 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
     
     @Test
     public void increments() throws Exception {
-        setUpCluster(this.getClass(), mks, repos, 0);
+        setUpCluster(this.getClass(), mks, repos, NOT_PROVIDED);
 
         final String counterPath;
         final Random rnd = new Random(14);
@@ -89,7 +89,8 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
             session.logout();
         }
         
-        alignCluster(mks);
+        // allow the cluster to align
+        Thread.sleep(1500);
                 
         // asserting the initial state
         assertFalse("Path to the counter node should be set", Strings.isNullOrEmpty(counterPath));
@@ -151,9 +152,7 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
         LOG_PERF.end(start, -1, "Firing threads completed", "");
 
         // let the time for the async process to kick in and run.
-        alignCluster(mks);
-        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
-        alignCluster(mks);
+        Thread.sleep(TimeUnit.SECONDS.toMillis(20));
         
         raiseExceptions(exceptions, LOG);
         
@@ -163,6 +162,8 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
             try {
                 session = r.login(ADMIN);
                 counter = session.getNode(counterPath);
+                LOG.debug("Cluster node: {}, actual counter: {}, expected counter: {}", i + 1,
+                    expected.get(), counter.getProperty(PROP_COUNTER).getLong());
                 assertEquals(
                     "Wrong counter on node " + (i + 1), 
                     expected.get(), 
