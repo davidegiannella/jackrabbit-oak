@@ -326,7 +326,7 @@ public class AtomicCounterEditor extends DefaultEditor {
                     executor, 
                     delay, 
                     hook);
-                LOG.trace("[{}] Scheduling process by {}secs", t.getName(), delay); 
+                LOG.debug("[{}] Scheduling process by {}secs", t.getName(), delay); 
                 executor.schedule(t, delay, TimeUnit.SECONDS);
             }
         }
