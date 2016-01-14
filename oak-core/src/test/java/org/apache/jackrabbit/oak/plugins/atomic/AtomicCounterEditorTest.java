@@ -55,9 +55,11 @@ import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.fixture.NodeStoreFixture;
 import org.apache.jackrabbit.oak.plugins.memory.LongPropertyState;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
+import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
+import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.state.Clusterable;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -333,6 +335,8 @@ public class AtomicCounterEditorTest {
         NodeBuilder builder, root;
         PropertyState p;
         
+        board.register(CommitHook.class, EmptyHook.INSTANCE, null);
+        
         root = store.getRoot().builder();
         builder = root.child("c");
         builder = setMixin(builder);
@@ -354,6 +358,46 @@ public class AtomicCounterEditorTest {
         
         // executing the consolidation
         exec1.execute();
+        
+        // fetching the latest store state to see the changes
+        builder = store.getRoot().builder().getChildNode("c");
+        assertTrue("the counter node should exists", builder.exists());
+        assertCounterNodeState(
+            builder,
+            ImmutableSet.of(PREFIX_PROP_COUNTER + CLUSTER_1.getInstanceId(),
+                PREFIX_PROP_REVISION + CLUSTER_1.getInstanceId()), 1);
+    }
+    
+    @Test
+    public void noHookInWhiteboard() throws CommitFailedException, InterruptedException, ExecutionException {
+        NodeStore store = NodeStoreFixture.MEMORY_NS.createNodeStore();
+        MyExecutor exec1 = new MyExecutor();
+        Whiteboard board = new DefaultWhiteboard();
+        EditorHook hook1 = new EditorHook(new TestableACEProvider(CLUSTER_1, exec1, store, board));
+        NodeBuilder builder, root;
+        PropertyState p;
+        
+        
+        root = store.getRoot().builder();
+        builder = root.child("c");
+        builder = setMixin(builder);
+        builder = incrementBy(builder, INCREMENT_BY_1);
+        store.merge(root, hook1, CommitInfo.EMPTY);
+        
+        // as we're providing all the information we expect the counter not to be consolidated for
+        // as long as the scheduled process has run
+        builder = store.getRoot().builder().getChildNode("c");
+        assertTrue(builder.exists());
+        p = builder.getProperty(PREFIX_PROP_REVISION + CLUSTER_1.getInstanceId());
+        assertNotNull(p);
+        assertEquals(1, p.getValue(LONG).longValue());
+        p = builder.getProperty(PREFIX_PROP_COUNTER + CLUSTER_1.getInstanceId());
+        assertNotNull(p);
+        assertEquals(1, p.getValue(LONG).longValue());
+        p = builder.getProperty(PROP_COUNTER);
+        assertEquals(1, p.getValue(LONG).longValue());
+        
+        assertTrue("without a registered hook it should have fell to sync", exec1.isEmpty());
         
         // fetching the latest store state to see the changes
         builder = store.getRoot().builder().getChildNode("c");
@@ -410,6 +454,15 @@ public class AtomicCounterEditorTest {
 
         private synchronized void addToQueue(@SuppressWarnings("rawtypes") @Nonnull ScheduledFuture future) {
             fifo.add(future);
+        }
+        
+        /**
+         * return true whether the underlying queue is empty or not
+         * 
+         * @return
+         */
+        public boolean isEmpty() {
+            return fifo.isEmpty();
         }
         
         @SuppressWarnings("rawtypes")

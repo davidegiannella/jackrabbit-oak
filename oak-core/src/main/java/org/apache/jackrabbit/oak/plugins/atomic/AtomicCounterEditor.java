@@ -39,7 +39,6 @@ import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.DefaultEditor;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
-import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
@@ -311,23 +310,23 @@ public class AtomicCounterEditor extends DefaultEditor {
                     "Executing synchronously. instanceId: {}, store: {}, executor: {}, board: {}",
                     new Object[] { instanceId, store, executor, board });
                 consolidateCount(builder);
-            } else {
+            } else {                
                 CommitHook hook = WhiteboardUtils.getService(board, CommitHook.class);
                 if (hook == null) {
-                    LOG.trace("CommitHook not found in the Whiteboard. Defaulting to EmptyHook");
-                    hook = new EmptyHook();
+                    LOG.trace("CommitHook not registered with Whiteboard. Falling back to sync.");
+                    consolidateCount(builder);
+                } else {
+                    long delay = 0;
+                    ConsolidatorTask t = new ConsolidatorTask(
+                        path, 
+                        builder.getProperty(revisionName), 
+                        store, 
+                        executor, 
+                        delay, 
+                        hook);
+                    LOG.debug("[{}] Scheduling process by {}secs", t.getName(), delay); 
+                    executor.schedule(t, delay, TimeUnit.SECONDS);                    
                 }
-                
-                long delay = 0;
-                ConsolidatorTask t = new ConsolidatorTask(
-                    path, 
-                    builder.getProperty(revisionName), 
-                    store, 
-                    executor, 
-                    delay, 
-                    hook);
-                LOG.debug("[{}] Scheduling process by {}secs", t.getName(), delay); 
-                executor.schedule(t, delay, TimeUnit.SECONDS);
             }
         }
     }
