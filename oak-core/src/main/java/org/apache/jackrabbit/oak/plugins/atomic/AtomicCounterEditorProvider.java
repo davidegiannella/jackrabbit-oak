@@ -33,6 +33,7 @@ import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
+import org.apache.jackrabbit.oak.osgi.OsgiWhiteboard;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
@@ -64,7 +65,6 @@ public class AtomicCounterEditorProvider implements EditorProvider {
     @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY, referenceInterface = NodeStore.class)
     private volatile AtomicReference<NodeStore> store = new AtomicReference<NodeStore>();    
     
-    @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY, referenceInterface = NodeStore.class)
     private volatile AtomicReference<Whiteboard> whiteboard = new AtomicReference<Whiteboard>();
     
     private final Supplier<Clusterable> clusterSupplier;
@@ -172,6 +172,7 @@ public class AtomicCounterEditorProvider implements EditorProvider {
     
     @Activate
     public void activate(BundleContext context) {
+        whiteboard.set(new OsgiWhiteboard(context));
     }
     
     @Deactivate
