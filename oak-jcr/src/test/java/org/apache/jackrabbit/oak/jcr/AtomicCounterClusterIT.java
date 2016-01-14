@@ -148,7 +148,6 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
             }
         }
         LOG_PERF.end(start, -1, "Firing threads completed", "");
-        start = LOG_PERF.start("waiting for Futures");
         Futures.allAsList(tasks).get();
         LOG_PERF.end(start, -1, "Futures completed", "");
         
@@ -181,11 +180,5 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
         return super.getJcr(store)
             .with(new ScheduledThreadPoolExecutor(10))
             .withAtomicCounter();
-    }
-
-    @Test @Ignore("louncher to inspect logging. Don't enable")
-    public void longRunning() throws Exception {
-        setUpCluster(getClass(), mks, repos);
-        Thread.sleep(20000);
     }
 }
