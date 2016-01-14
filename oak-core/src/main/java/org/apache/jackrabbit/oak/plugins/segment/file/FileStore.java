@@ -76,7 +76,6 @@ import org.apache.jackrabbit.oak.plugins.segment.SegmentNotFoundException;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentStore;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentTracker;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentVersion;
-import org.apache.jackrabbit.oak.plugins.segment.SegmentWriter;
 import org.apache.jackrabbit.oak.plugins.segment.compaction.CompactionStrategy;
 import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.spi.gc.GCMonitor;
@@ -875,11 +874,11 @@ public class FileStore implements SegmentStore {
 
         // Do actual cleanup outside of the lock to prevent blocking
         // concurrent writers for a long time
-        CompactionMap cm = tracker.getCompactionMap();
+        includeForwardReferences(cleaned.keySet(), referencedIds);
         LinkedList<File> toRemove = newLinkedList();
         Set<UUID> cleanedIds = newHashSet();
         for (TarReader reader : cleaned.keySet()) {
-            cleaned.put(reader, reader.cleanup(referencedIds, cm, cleanedIds));
+            cleaned.put(reader, reader.cleanup(referencedIds, cleanedIds));
             if (shutdown) {
                 gcMonitor.info("TarMK GC #{}: cleanup interrupted", gcCount);
                 break;
@@ -919,6 +918,7 @@ public class FileStore implements SegmentStore {
             toRemove.addLast(file);
         }
 
+        CompactionMap cm = tracker.getCompactionMap();
         cm.remove(cleanedIds);
         long finalSize = size();
         approximateSize.set(finalSize);
@@ -935,10 +935,25 @@ public class FileStore implements SegmentStore {
     }
 
     /**
-     * @return  a new {@link SegmentWriter} instance for writing to this store.
+     * Include the ids of all segments transitively reachable through forward references from
+     * {@code referencedIds}. See OAK-3864.
      */
-    public SegmentWriter createSegmentWriter(String wid) {
-        return new SegmentWriter(this, getVersion(), wid);
+    private void includeForwardReferences(Iterable<TarReader> readers, Set<UUID> referencedIds)
+            throws IOException {
+        Set<UUID> fRefs = newHashSet(referencedIds);
+        do {
+            // Add direct forward references
+            for (TarReader reader : readers) {
+                reader.calculateForwardReferences(fRefs);
+                if (fRefs.isEmpty()) {
+                    break;  // Optimisation: bail out if no references left
+                }
+            }
+            if (!fRefs.isEmpty()) {
+                gcMonitor.info("TarMK GC #{}: cleanup found forward references to {}", gcCount, fRefs);
+            }
+            // ... as long as new forward references are found.
+        } while (referencedIds.addAll(fRefs));
     }
 
     /**
@@ -1009,7 +1024,7 @@ public class FileStore implements SegmentStore {
         gcMonitor.info("TarMK GC #{}: compaction started, strategy={}", gcCount, compactionStrategy);
         Stopwatch watch = Stopwatch.createStarted();
         Supplier<Boolean> compactionCanceled = newCancelCompactionCondition();
-        Compactor compactor = new Compactor(this, compactionStrategy, compactionCanceled);
+        Compactor compactor = new Compactor(tracker, compactionStrategy, compactionCanceled);
         SegmentNodeState before = getHead();
         long existing = before.getChildNode(SegmentNodeStore.CHECKPOINTS)
                 .getChildNodeCount(Long.MAX_VALUE);
