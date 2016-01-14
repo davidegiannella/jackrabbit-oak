@@ -17,7 +17,6 @@
 package org.apache.jackrabbit.oak.jcr;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static org.apache.jackrabbit.oak.jcr.AbstractRepositoryTest.dispose;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -78,6 +77,10 @@ public abstract class DocumentClusterIT {
         mk.dispose(); // closes connection as well
     }
 
+    protected void dispose(@Nonnull Repository repo) {
+        AbstractRepositoryTest.dispose(checkNotNull(repo));
+    }
+    
     @After
     public void after() throws Exception {
         for (Repository repo : repos) {
