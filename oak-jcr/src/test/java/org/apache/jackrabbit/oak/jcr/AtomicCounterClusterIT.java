@@ -153,7 +153,7 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
         LOG_PERF.end(start, -1, "Futures completed", "");
         
         // let the time for the async process to kick in and run.
-        Thread.sleep(2000);
+        Thread.sleep(10000);
         
         raiseExceptions(exceptions, LOG);
         
