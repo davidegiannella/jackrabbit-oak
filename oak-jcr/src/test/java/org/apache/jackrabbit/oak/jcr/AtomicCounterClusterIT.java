@@ -167,6 +167,7 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
         LOG_PERF.end(start, -1, "Futures completed", "");
         
         waitForTaskCompletion();
+        LOG_PERF.end(start, -1, "All tasks completed", "");
         
         // let the time for the async process to kick in and run.
         Thread.sleep(5000);
