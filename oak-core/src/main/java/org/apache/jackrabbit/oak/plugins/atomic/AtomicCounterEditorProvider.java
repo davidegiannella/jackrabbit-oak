@@ -179,11 +179,11 @@ public class AtomicCounterEditorProvider implements EditorProvider {
     public void deactivate() {
     }
 
-    protected void bindStore(Clusterable store) {
+    protected void bindCluster(Clusterable store) {
         this.cluster.set(store);
     }
 
-    protected void unbindStore(Clusterable store) {
+    protected void unbindCluster(Clusterable store) {
         this.cluster.compareAndSet(store, null);
     }
 
