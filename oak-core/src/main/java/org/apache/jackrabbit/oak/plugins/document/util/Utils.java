@@ -37,7 +37,6 @@ import javax.annotation.Nullable;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.AbstractIterator;
-import com.mongodb.BasicDBObject;
 
 import org.apache.commons.codec.binary.Hex;
 import org.apache.jackrabbit.oak.commons.PathUtils;
@@ -157,17 +156,12 @@ public class Utils {
             }
         }
 
-        if (map instanceof BasicDBObject) {
-            // Based on empirical testing using JAMM
-            size += 176;
-            size += map.size() * 136;
-        } else {
-            // overhead for some other kind of map
-            // TreeMap (80) + unmodifiable wrapper (32)
-            size += 112;
-            // 64 bytes per entry
-            size += map.size() * 64;
-        }
+        // overhead for map object
+        // TreeMap (80) + unmodifiable wrapper (32)
+        size += 112;
+        // 64 bytes per entry
+        size += map.size() * 64;
+
         return size;
     }
 
@@ -342,6 +336,20 @@ public class Utils {
 
     public static String getPreviousIdFor(String path, Revision r, int height) {
         return getIdFromPath(getPreviousPathFor(path, r, height));
+    }
+
+    /**
+     * Determines if the passed id belongs to a previous doc
+     *
+     * @param id id to check
+     * @return true if the id belongs to a previous doc
+     */
+    public static boolean isPreviousDocId(String id){
+        int indexOfColon = id.indexOf(':');
+        if (indexOfColon > 0 && indexOfColon < id.length() - 1){
+            return id.charAt(indexOfColon + 1) == 'p';
+        }
+        return false;
     }
 
     /**
