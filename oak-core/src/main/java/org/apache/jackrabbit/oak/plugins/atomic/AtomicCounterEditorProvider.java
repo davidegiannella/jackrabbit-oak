@@ -19,7 +19,10 @@ package org.apache.jackrabbit.oak.plugins.atomic;
 import static org.apache.felix.scr.annotations.ReferenceCardinality.OPTIONAL_UNARY;
 import static org.apache.felix.scr.annotations.ReferencePolicy.DYNAMIC;
 
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.Nullable;
@@ -43,8 +46,11 @@ import org.apache.jackrabbit.oak.spi.state.NodeState;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.osgi.framework.BundleContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Supplier;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
  * Provide an instance of {@link AtomicCounterEditor}. See {@link AtomicCounterEditor} for
@@ -54,17 +60,15 @@ import com.google.common.base.Supplier;
 @Property(name = "type", value = "atomicCounter", propertyPrivate = true)
 @Service(EditorProvider.class)
 public class AtomicCounterEditorProvider implements EditorProvider {
+    private static final Logger LOG = LoggerFactory.getLogger(AtomicCounterEditorProvider.class);
 
     @Reference(policy = ReferencePolicy.DYNAMIC, cardinality = ReferenceCardinality.OPTIONAL_UNARY, referenceInterface = Clusterable.class)
     private AtomicReference<Clusterable> cluster = new AtomicReference<Clusterable>();
 
-    @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY,
-               referenceInterface = ScheduledExecutorService.class)
-    private volatile AtomicReference<ScheduledExecutorService> scheduler = new AtomicReference<ScheduledExecutorService>();
-
     @Reference(policy = DYNAMIC, cardinality = OPTIONAL_UNARY, referenceInterface = NodeStore.class)
     private volatile AtomicReference<NodeStore> store = new AtomicReference<NodeStore>();    
-    
+
+    private volatile AtomicReference<ScheduledExecutorService> scheduler = new AtomicReference<ScheduledExecutorService>();
     private volatile AtomicReference<Whiteboard> whiteboard = new AtomicReference<Whiteboard>();
     
     private final Supplier<Clusterable> clusterSupplier;
@@ -173,10 +177,29 @@ public class AtomicCounterEditorProvider implements EditorProvider {
     @Activate
     public void activate(BundleContext context) {
         whiteboard.set(new OsgiWhiteboard(context));
+        ThreadFactory tf = new ThreadFactoryBuilder().setNameFormat("atomic-counter-%d").build();
+        scheduler.set(Executors.newScheduledThreadPool(10, tf));
     }
     
     @Deactivate
     public void deactivate() {
+        ScheduledExecutorService ses = getScheduler();
+        if (ses == null) {
+            LOG.debug("No ScheduledExecutorService found");
+        } else {
+            LOG.debug("Shutting down ScheduledExecutorService");
+            try {
+                ses.shutdown();
+                ses.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                LOG.error("InterruptedException white shutting down ScheduledExecutorService", e);
+            } finally {
+                if (!ses.isTerminated()) {
+                    LOG.debug("ScheduledExecutorService not yet shutdown. Cancelling tasks and forcing quit.");
+                }
+                ses.shutdownNow();
+            }
+        }
     }
 
     protected void bindCluster(Clusterable store) {
@@ -187,14 +210,6 @@ public class AtomicCounterEditorProvider implements EditorProvider {
         this.cluster.compareAndSet(store, null);
     }
 
-    protected void bindScheduler(ScheduledExecutorService scheduler) {
-        this.scheduler.set(scheduler);
-    }
-
-    protected void unbindScheduler(ScheduledExecutorService scheduler) {
-        this.scheduler.compareAndSet(scheduler, null);
-    }
-
     protected void bindStore(NodeStore store) {
         this.store.set(store);
     }
@@ -202,15 +217,7 @@ public class AtomicCounterEditorProvider implements EditorProvider {
     protected void unbindStore(NodeStore store) {
         this.store.compareAndSet(store, null);
     }
-    
-    protected void bindWhiteboard(Whiteboard board) {
-        this.whiteboard.set(board);
-    }
-    
-    protected void unbindWhiteboard(Whiteboard board) {
-        this.whiteboard.compareAndSet(board, null);
-    }
-    
+
     @Override
     public Editor getRootEditor(final NodeState before, final NodeState after,
                                 final NodeBuilder builder, final CommitInfo info)
