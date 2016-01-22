@@ -17,11 +17,12 @@
  * under the License.
  */
 
-package org.apache.jackrabbit.oak.plugins.blob.migration;
+package org.apache.jackrabbit.oak.plugins.segment.migration;
 
 import java.io.File;
 import java.io.IOException;
 
+import org.apache.jackrabbit.oak.plugins.blob.migration.AbstractMigratorTest;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentNodeStore;
 import org.apache.jackrabbit.oak.plugins.segment.SegmentStore;
 import org.apache.jackrabbit.oak.plugins.segment.file.FileStore;
@@ -29,18 +30,14 @@ import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.spi.blob.FileBlobStore;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 
-public class SegmentToExternalMigrationTest extends AbstractMigratorTest {
+public class ExternalToExternalMigrationTest extends AbstractMigratorTest {
 
     private SegmentStore segmentStore;
 
     @Override
     protected NodeStore createNodeStore(BlobStore blobStore, File repository) throws IOException {
         File segmentDir = new File(repository, "segmentstore");
-        FileStore.Builder builder = FileStore.newFileStore(segmentDir);
-        if (blobStore != null) {
-            builder.withBlobStore(blobStore);
-        }
-        segmentStore = builder.create();
+        segmentStore = FileStore.newFileStore(segmentDir).withBlobStore(blobStore).create();
         return SegmentNodeStore.newSegmentNodeStore(segmentStore).create();
     }
 
@@ -51,7 +48,7 @@ public class SegmentToExternalMigrationTest extends AbstractMigratorTest {
 
     @Override
     protected BlobStore createOldBlobStore(File repository) {
-        return null;
+        return new FileBlobStore(repository.getPath() + "/old");
     }
 
     @Override
