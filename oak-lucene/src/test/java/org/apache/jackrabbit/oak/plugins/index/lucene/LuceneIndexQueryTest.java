@@ -17,17 +17,22 @@
 package org.apache.jackrabbit.oak.plugins.index.lucene;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 
 import org.apache.jackrabbit.oak.Oak;
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.InitialContent;
 import org.apache.jackrabbit.oak.query.AbstractQueryTest;
+import org.apache.jackrabbit.oak.query.QueryEngineImpl.QuerySelectionMode;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
@@ -43,6 +48,7 @@ import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.api.Type.STRINGS;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.TestUtil.useV2;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -452,6 +458,82 @@ public class LuceneIndexQueryTest extends AbstractQueryTest {
             "SELECT * FROM [nt:unstructured] WHERE ISDESCENDANTNODE('/test') AND NOT CONTAINS(foo, 'bar cat')",
             of("/test/c"));
 
+        setTraversalEnabled(true);
+    }
+    
+    @Test
+    public void oak3991() throws Exception {
+        Tree index, props, test, n;
+        List<String> expected = Lists.newArrayList();
+        String base = "/jcr:root/test//element(*, nt:unstructured)[ "
+            +   "("
+            +       "jcr:contains(., 'cinema') "
+            +       "or %s "
+            +       "or %s "
+            +   ") "
+            +   "and @status = 'amber' "
+            +   "and ( "
+            +       "not(@id) "
+            +       "and ( "
+            +           "not(@types) "
+            +           "or ("
+            +               "not(@types = 'published') "
+            +               "and not(@types = 'page') "
+            +               "and not(@types = 'asset') "
+            +           ") "
+            +       ")"
+            +   ")"
+            + "]";
+            
+        String equality = String.format(base, "@tags = 'architecture-keywords:building/cinema'",
+            "@tags = '/tags/architecture-keywords/building/cinema'");
+
+        String contains = String.format(base,
+            "jcr:contains(@tags, 'architecture-keywords:building/cinema')",
+            "jcr:contains(@tags, '/tags/architecture-keywords/building/cinema')");
+        
+        setTraversalEnabled(false);
+        
+        // redefining the index
+        index = root.getTree("/oak:index/" + TEST_INDEX_NAME);
+        assertTrue(index.exists());
+        index.remove();
+        root.commit();
+
+        index = root.getTree("/oak:index/" + TEST_INDEX_NAME);
+        assertFalse(index.exists());
+        
+        index = createTestIndexNode(root.getTree("/"), LuceneIndexConstants.TYPE_LUCENE);
+        useV2(index);
+        index.setProperty(LuceneIndexConstants.TEST_MODE, true);
+        index.setProperty(LuceneIndexConstants.EVALUATE_PATH_RESTRICTION, true);
+
+        props = TestUtil.newRulePropTree(index, NT_UNSTRUCTURED);
+        TestUtil.enableForFullText(props, "title");
+        TestUtil.enablePropertyIndex(props, "tags", false);
+        
+        root.commit();
+
+        // create the data
+        test = root.getTree("/").addChild("test");
+        n = child(test, "Alice", NT_UNSTRUCTURED);
+        n.setProperty("title", "cinema");
+        n.setProperty("status", "amber");
+        expected.add(n.getPath());
+
+        n = child(test, "BobTheLizard", NT_UNSTRUCTURED);
+        n.setProperty("title", "Alice's adventures in wonderland");
+        n.setProperty("tags", of("architecture-keywords:building/cinema"), Type.STRINGS);
+        n.setProperty("status", "red");
+
+        n = child(test, "Pat", NT_UNSTRUCTURED);
+        n.setProperty("status", "amber");
+        
+        root.commit();
+        
+        assertQuery(contains, XPATH, expected);
+        assertQuery(equality, XPATH, expected);
+        
         setTraversalEnabled(true);
     }
 }
