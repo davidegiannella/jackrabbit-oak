@@ -36,6 +36,7 @@ import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
+import org.apache.jackrabbit.oak.commons.concurrent.ExecutorUtils;
 import org.apache.jackrabbit.oak.osgi.OsgiWhiteboard;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
@@ -188,17 +189,7 @@ public class AtomicCounterEditorProvider implements EditorProvider {
             LOG.debug("No ScheduledExecutorService found");
         } else {
             LOG.debug("Shutting down ScheduledExecutorService");
-            try {
-                ses.shutdown();
-                ses.awaitTermination(5, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                LOG.error("InterruptedException white shutting down ScheduledExecutorService", e);
-            } finally {
-                if (!ses.isTerminated()) {
-                    LOG.debug("ScheduledExecutorService not yet shutdown. Cancelling tasks and forcing quit.");
-                }
-                ses.shutdownNow();
-            }
+            ExecutorUtils.shutdown(ses, TimeUnit.SECONDS, 5);
         }
     }
 

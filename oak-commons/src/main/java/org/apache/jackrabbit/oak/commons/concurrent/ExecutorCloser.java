@@ -25,15 +25,11 @@ import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * Utility class to properly close any ExecutorService. It ensures
  * that executor is properly closed once the call from close is returned
  */
 public final class ExecutorCloser implements Closeable {
-    private final Logger log = LoggerFactory.getLogger(getClass());
     private final ExecutorService executorService;
     private final int timeout;
     private final TimeUnit timeUnit;
@@ -53,17 +49,6 @@ public final class ExecutorCloser implements Closeable {
         if (executorService == null) {
             return;
         }
-        try {
-            executorService.shutdown();
-            executorService.awaitTermination(timeout, timeUnit);
-        } catch (InterruptedException e) {
-            log.error("Error while shutting down the executorService", e);
-            Thread.currentThread().interrupt();
-        } finally {
-            if (!executorService.isTerminated()) {
-                log.warn("ExecutorService didn't shutdown properly. Will be forced now.");
-            }
-            executorService.shutdownNow();
-        }
+        ExecutorUtils.shutdown(executorService, timeUnit, timeout);
     }
 }
