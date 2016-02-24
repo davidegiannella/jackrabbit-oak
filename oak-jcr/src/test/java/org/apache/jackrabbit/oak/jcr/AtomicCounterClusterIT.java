@@ -81,7 +81,7 @@ public class AtomicCounterClusterIT  extends DocumentClusterIT {
     public void after() throws Exception {
         super.after();
         for (CustomScheduledExecutor exec : executors) {
-            new ExecutorCloser(exec, 10, TimeUnit.SECONDS);
+            new ExecutorCloser(exec, 10, TimeUnit.SECONDS).close();
         }
     }
 
