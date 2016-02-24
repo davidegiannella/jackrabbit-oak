@@ -25,19 +25,42 @@ import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
- * Utility class to properly close any ExecutorService. It ensures
- * that executor is properly closed once the call from close is returned
+ * <p>
+ * Utility class to properly close any ExecutorService.
+ * </p>
+ * 
+ * <p>
+ * It will attempt a graceful close within the provided timeout. If after such any of the contained
+ * tasks are not terminated yet, it will force a shutdown and track a warning in the logs.
+ * </p>
+ * 
  */
 public final class ExecutorCloser implements Closeable {
+    private static final Logger LOG = LoggerFactory.getLogger(ExecutorCloser.class);
     private final ExecutorService executorService;
     private final int timeout;
     private final TimeUnit timeUnit;
 
+    /**
+     * will attempt a graceful close in 5 seconds
+     * 
+     * @param executorService
+     */
     public ExecutorCloser(@Nullable ExecutorService executorService) {
         this(executorService, 5, TimeUnit.SECONDS);
     }
 
+    /**
+     * will attempt a graceful close by the provided time.
+     * 
+     * @param executorService the executor to close
+     * @param timeout the time to wait for
+     * @param unit the unit of time
+     */
     public ExecutorCloser(@Nullable ExecutorService executorService, int timeout, TimeUnit unit) {
         this.executorService = executorService;
         this.timeout = timeout;
@@ -49,6 +72,19 @@ public final class ExecutorCloser implements Closeable {
         if (executorService == null) {
             return;
         }
-        ExecutorUtils.shutdown(executorService, timeUnit, timeout);
+        try {
+            executorService.shutdown();
+            executorService.awaitTermination(timeout, timeUnit);
+        } catch (InterruptedException e) {
+            LOG.error("Error while shutting down the ExecutorService", e);
+            Thread.currentThread().interrupt();
+        } finally {
+            if (!executorService.isShutdown()) {
+                LOG.warn("ExecutorService `{}` didn't shutdown property. Will be forced now.",
+                    executorService);
+            }
+            executorService.shutdownNow();
+        }
+
     }
 }

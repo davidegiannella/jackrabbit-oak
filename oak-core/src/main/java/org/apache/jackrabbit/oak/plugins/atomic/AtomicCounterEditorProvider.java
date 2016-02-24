@@ -22,7 +22,6 @@ import static org.apache.felix.scr.annotations.ReferencePolicy.DYNAMIC;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.Nullable;
@@ -36,7 +35,7 @@ import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.apache.felix.scr.annotations.ReferencePolicy;
 import org.apache.felix.scr.annotations.Service;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
-import org.apache.jackrabbit.oak.commons.concurrent.ExecutorUtils;
+import org.apache.jackrabbit.oak.commons.concurrent.ExecutorCloser;
 import org.apache.jackrabbit.oak.osgi.OsgiWhiteboard;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
@@ -189,7 +188,7 @@ public class AtomicCounterEditorProvider implements EditorProvider {
             LOG.debug("No ScheduledExecutorService found");
         } else {
             LOG.debug("Shutting down ScheduledExecutorService");
-            ExecutorUtils.shutdown(ses, TimeUnit.SECONDS, 5);
+            new ExecutorCloser(ses).close();
         }
     }
 
