@@ -17,6 +17,9 @@
 package org.apache.jackrabbit.oak.plugins.nodetype.write;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
+import static org.apache.jackrabbit.JcrConstants.NT_FOLDER;
+import static org.apache.jackrabbit.oak.api.Type.NAME;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -27,9 +30,12 @@ import javax.jcr.NoSuchWorkspaceException;
 import javax.security.auth.login.LoginException;
 
 import org.apache.jackrabbit.oak.Oak;
+import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.ContentSession;
 import org.apache.jackrabbit.oak.api.Root;
+import org.apache.jackrabbit.oak.api.Tree;
+import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,22 +58,29 @@ public class NodeTypeRegistryTest {
     }
     
     @Test
-    public void oakIndexable() throws IOException, LoginException, NoSuchWorkspaceException {
+    public void oakIndexable() throws IOException, LoginException, NoSuchWorkspaceException, CommitFailedException {
         ContentRepository repository = null;
         Root root;
         ContentSession session = null;
-
+        InputStream stream = null;
+        
         try {
-            repository = new Oak().with(new InitialContent())
+            repository = new Oak().with(new InitialContent()).with(new OpenSecurityProvider())
                 .createContentRepository();
             session = repository.login(null, null);
             root = session.getLatestRoot();
 
-            InputStream stream = NodeTypeRegistryTest.class.getResourceAsStream("oak3725-1.cnd");
+            stream = NodeTypeRegistryTest.class.getResourceAsStream("oak3725-1.cnd");
             
-            System.out.println(stream);
-
+            NodeTypeRegistry.register(root, stream, "oak3625-1");
+            
+            Tree test = root.getTree("/").addChild("test");
+            test.setProperty(JCR_PRIMARYTYPE, NT_FOLDER, NAME);
+            root.commit();
         } finally {
+            if (stream != null) {
+                stream.close();
+            }
             if (session != null) {
                 session.close();
             }
