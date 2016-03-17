@@ -17,8 +17,10 @@
 package org.apache.jackrabbit.oak.plugins.nodetype.write;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.NT_FOLDER;
+import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 import static org.apache.jackrabbit.oak.api.Type.NAME;
 
 import java.io.Closeable;
@@ -35,6 +37,7 @@ import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.ContentSession;
 import org.apache.jackrabbit.oak.api.Root;
 import org.apache.jackrabbit.oak.api.Tree;
+import org.apache.jackrabbit.oak.plugins.nodetype.TypeEditorProvider;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.junit.After;
 import org.junit.Before;
@@ -43,52 +46,62 @@ import org.junit.Test;
 import com.google.common.base.Strings;
 
 public class NodeTypeRegistryTest {
+    private ContentRepository repository = null;
+    private Root root;
+    private ContentSession session = null;
     
-    static void registerNodeType(@Nonnull String resourceName) {
+    static void registerNodeType(@Nonnull Root root, @Nonnull String resourceName) throws IOException {
         checkArgument(!Strings.isNullOrEmpty(resourceName));
-        
-    }
-    
-    @Before
-    public void setUp() throws LoginException, NoSuchWorkspaceException {
-    }
-    
-    @After
-    public void tearDown() throws IOException {
-    }
-    
-    @Test
-    public void oakIndexable() throws IOException, LoginException, NoSuchWorkspaceException, CommitFailedException {
-        ContentRepository repository = null;
-        Root root;
-        ContentSession session = null;
-        InputStream stream = null;
-        
-        try {
-            repository = new Oak().with(new InitialContent()).with(new OpenSecurityProvider())
-                .createContentRepository();
-            session = repository.login(null, null);
-            root = session.getLatestRoot();
+        checkNotNull(root);
 
+        InputStream stream = null;
+
+        try {
             stream = NodeTypeRegistryTest.class.getResourceAsStream("oak3725-1.cnd");
-            
-            NodeTypeRegistry.register(root, stream, "oak3625-1");
-            
-            Tree test = root.getTree("/").addChild("test");
-            test.setProperty(JCR_PRIMARYTYPE, NT_FOLDER, NAME);
-            root.commit();
+            NodeTypeRegistry.register(root, stream, NodeTypeRegistryTest.class.getName());            
         } finally {
             if (stream != null) {
                 stream.close();
             }
-            if (session != null) {
-                session.close();
-            }
-            if (repository instanceof Closeable) {
-                ((Closeable) repository).close();
-            }
-            repository = null;
+            
         }
-
+    }
+    
+    @Before
+    public void setUp() throws LoginException, NoSuchWorkspaceException {
+        repository = new Oak().with(new InitialContent()).with(new OpenSecurityProvider())
+            .with(new TypeEditorProvider()).createContentRepository();
+        session = repository.login(null, null);
+        root = session.getLatestRoot();
+    }
+    
+    @After
+    public void tearDown() throws IOException {
+        if (session != null) {
+            session.close();
+        }
+        if (repository instanceof Closeable) {
+            ((Closeable) repository).close();
+        }
+        repository = null;
+    }
+    
+    @Test(expected = CommitFailedException.class)
+    public void oakIndexableFailing() throws IOException, LoginException, NoSuchWorkspaceException, CommitFailedException {
+        
+        try {
+            registerNodeType(root, "oak3725-1.cnd");
+            
+            Tree test = root.getTree("/").addChild("test");
+            test.setProperty(JCR_PRIMARYTYPE, NT_FOLDER, NAME);            
+            test.addChild("oak:index").setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+            root.commit();
+        } finally {
+        }
+    }
+    
+    @Test
+    public void oakIndexableSuccessful() {
+        
     }
 }
