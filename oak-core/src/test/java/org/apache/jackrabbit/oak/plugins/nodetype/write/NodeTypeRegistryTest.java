@@ -64,7 +64,7 @@ public class NodeTypeRegistryTest {
         InputStream stream = null;
 
         try {
-            stream = NodeTypeRegistryTest.class.getResourceAsStream("oak3725-1.cnd");
+            stream = NodeTypeRegistryTest.class.getResourceAsStream(resourceName);
             NodeTypeRegistry.register(root, stream, NodeTypeRegistryTest.class.getName());            
         } finally {
             if (stream != null) {
