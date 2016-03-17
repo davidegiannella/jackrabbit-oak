@@ -18,10 +18,13 @@ package org.apache.jackrabbit.oak.plugins.nodetype.write;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.ImmutableList.of;
+import static org.apache.jackrabbit.JcrConstants.JCR_MIXINTYPES;
 import static org.apache.jackrabbit.JcrConstants.JCR_PRIMARYTYPE;
 import static org.apache.jackrabbit.JcrConstants.NT_FOLDER;
 import static org.apache.jackrabbit.JcrConstants.NT_UNSTRUCTURED;
 import static org.apache.jackrabbit.oak.api.Type.NAME;
+import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.MIX_INDEXABLE;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -31,12 +34,15 @@ import javax.annotation.Nonnull;
 import javax.jcr.NoSuchWorkspaceException;
 import javax.security.auth.login.LoginException;
 
+import org.apache.jackrabbit.JcrConstants;
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.ContentRepository;
 import org.apache.jackrabbit.oak.api.ContentSession;
 import org.apache.jackrabbit.oak.api.Root;
 import org.apache.jackrabbit.oak.api.Tree;
+import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
 import org.apache.jackrabbit.oak.plugins.nodetype.TypeEditorProvider;
 import org.apache.jackrabbit.oak.spi.security.OpenSecurityProvider;
 import org.junit.After;
@@ -44,6 +50,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 
 public class NodeTypeRegistryTest {
     private ContentRepository repository = null;
@@ -87,21 +94,23 @@ public class NodeTypeRegistryTest {
     }
     
     @Test(expected = CommitFailedException.class)
-    public void oakIndexableFailing() throws IOException, LoginException, NoSuchWorkspaceException, CommitFailedException {
+    public void oakIndexableFailing() throws IOException, CommitFailedException {
+        registerNodeType(root, "oak3725-1.cnd");
         
-        try {
-            registerNodeType(root, "oak3725-1.cnd");
-            
-            Tree test = root.getTree("/").addChild("test");
-            test.setProperty(JCR_PRIMARYTYPE, NT_FOLDER, NAME);            
-            test.addChild("oak:index").setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
-            root.commit();
-        } finally {
-        }
+        Tree test = root.getTree("/").addChild("test");
+        test.setProperty(JCR_PRIMARYTYPE, NT_FOLDER, NAME);            
+        test.addChild("oak:index").setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+        root.commit();
     }
     
     @Test
-    public void oakIndexableSuccessful() {
+    public void oakIndexableSuccessful() throws IOException, CommitFailedException {
+        registerNodeType(root, "oak3725-2.cnd");
         
+        Tree test = root.getTree("/").addChild("test");
+        test.setProperty(JCR_PRIMARYTYPE, NT_FOLDER, NAME);
+        test.setProperty(JCR_MIXINTYPES, of(MIX_INDEXABLE), Type.NAMES);
+        test.addChild("oak:index").setProperty(JCR_PRIMARYTYPE, NT_UNSTRUCTURED, NAME);
+        root.commit();
     }
 }
