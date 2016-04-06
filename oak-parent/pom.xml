@@ -589,7 +589,7 @@
       </build>
     </profile>
 
-    <!--  - - - - - - - - - - - - - - - - - -  will run all the required tests before a release -->
+   <!--  - - - - - - - - - - - - - - - - - - - will run all the required tests before a release -->
    <profile>
       <id>release</id>
       <properties>
@@ -612,9 +612,50 @@
                   </execution>
                </executions>
             </plugin>
+            <plugin>
+               <groupId>org.apache.rat</groupId>
+               <artifactId>apache-rat-plugin</artifactId>
+               <executions>
+                  <execution>
+                     <phase>verify</phase>
+                     <goals>
+                        <goal>check</goal>
+                     </goals>
+                  </execution>
+               </executions>
+            </plugin>
+            <plugin>
+               <artifactId>maven-checkstyle-plugin</artifactId>
+               <configuration>
+                  <failOnViolation>false</failOnViolation>
+               </configuration>
+               <executions>
+                  <execution>
+                     <goals>
+                        <goal>check</goal>
+                     </goals>
+                  </execution>
+               </executions>
+            </plugin>
+            <plugin>
+               <groupId>org.codehaus.mojo</groupId>
+               <artifactId>findbugs-maven-plugin</artifactId>
+               <version>${findbugs.version}</version>
+               <configuration>
+                  <failOnError>false</failOnError>
+               </configuration>
+               <executions>
+                  <execution>
+                     <goals>
+                        <goal>check</goal>
+                     </goals>
+                  </execution>
+               </executions>
+            </plugin>
          </plugins>
       </build>
    </profile>
+   
     <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - other profiles -->
 
    <profile>
