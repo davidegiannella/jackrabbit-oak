@@ -61,7 +61,8 @@
     <logback.version>1.1.0</logback.version>
     <h2.version>1.4.190</h2.version>
     <findbugs.version>3.0.0</findbugs.version>
-
+    <derby.version>10.12.1.1</derby.version>
+    
    <!-- specifies on which fixture to run the integration testing tests. 
       override in profiles or provide from command line to change behaviour. Provide 
       more fixtures space separated. See org.apache.jackrabbit.oak.jcr.FixturesHelper#AVAILABLE_FIXTURES 
@@ -654,6 +655,13 @@
             </plugin>
          </plugins>
       </build>
+      <dependencies>
+         <dependency>
+            <groupId>org.apache.derby</groupId>
+            <artifactId>derby</artifactId>
+            <version>${derby.version}</version>
+         </dependency>
+      </dependencies>
    </profile>
    
     <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - other profiles -->
@@ -774,7 +782,7 @@
         <dependency>
           <groupId>org.apache.derby</groupId>
           <artifactId>derby</artifactId>
-          <version>10.12.1.1</version>
+          <version>${derby.version}</version>
         </dependency>
       </dependencies>
     </profile>
