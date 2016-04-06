@@ -589,6 +589,16 @@
       </build>
     </profile>
 
+    <!--  - - - - - - - - - - - - - - - - - -  will run all the required tests before a release -->
+    <profile>
+        <id>release</id>
+        <properties>
+            <nsfixtures />
+            <rdb.jdbc-url>jdbc:derby:./target/derby-release-test;create=true</rdb.jdbc-url>
+        </properties>
+        <build>
+        </build>
+    </profile>
     <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - other profiles -->
 
    <profile>
