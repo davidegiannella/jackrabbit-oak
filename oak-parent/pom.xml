@@ -597,6 +597,11 @@
             <rdb.jdbc-url>jdbc:derby:./target/derby-release-test;create=true</rdb.jdbc-url>
         </properties>
         <build>
+            <plugins>
+              <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+              </plugin>
+            </plugins>
         </build>
     </profile>
     <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - other profiles -->
