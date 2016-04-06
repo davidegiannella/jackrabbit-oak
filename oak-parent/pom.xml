@@ -590,20 +590,31 @@
     </profile>
 
     <!--  - - - - - - - - - - - - - - - - - -  will run all the required tests before a release -->
-    <profile>
-        <id>release</id>
-        <properties>
-            <nsfixtures />
-            <rdb.jdbc-url>jdbc:derby:./target/derby-release-test;create=true</rdb.jdbc-url>
-        </properties>
-        <build>
-            <plugins>
-              <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-              </plugin>
-            </plugins>
-        </build>
-    </profile>
+   <profile>
+      <id>release</id>
+      <properties>
+         <nsfixtures />
+         <rdb.jdbc-url>jdbc:derby:./target/derby-release-test;create=true</rdb.jdbc-url>
+      </properties>
+      <build>
+         <plugins>
+            <plugin>
+               <artifactId>maven-surefire-plugin</artifactId>
+            </plugin>
+            <plugin>
+               <artifactId>maven-failsafe-plugin</artifactId>
+               <executions>
+                  <execution>
+                     <goals>
+                        <goal>integration-test</goal>
+                        <goal>verify</goal>
+                     </goals>
+                  </execution>
+               </executions>
+            </plugin>
+         </plugins>
+      </build>
+   </profile>
     <!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - other profiles -->
 
    <profile>
