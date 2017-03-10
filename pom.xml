@@ -58,6 +58,7 @@
     <module>oak-examples</module>
     <module>oak-it</module>
     <module>oak-segment-tar</module>
+    <module>oak-benchmarks</module>
   </modules>
 
   <scm>
