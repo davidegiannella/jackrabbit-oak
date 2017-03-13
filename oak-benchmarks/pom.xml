@@ -69,6 +69,30 @@
       <artifactId>oak-commons</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>javax.jcr</groupId>
+      <artifactId>jcr</artifactId>
+      <version>2.0</version>
+    </dependency>
+      <dependency>
+          <groupId>org.apache.jackrabbit</groupId>
+          <artifactId>jackrabbit-core</artifactId>
+          <version>${jackrabbit.version}</version>
+          <exclusions>
+              <exclusion>
+                  <groupId>org.apache.lucene</groupId>
+                  <artifactId>lucene-core</artifactId>
+              </exclusion>
+          </exclusions>
+      </dependency>
+      <dependency>
+          <groupId>org.apache.jackrabbit</groupId>
+          <artifactId>oak-jcr</artifactId>
+          <version>${project.version}</version>
+      </dependency>
+
+      <!--
+      -->
   </dependencies>
 
   <profiles>
