@@ -30,6 +30,7 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 import org.apache.jackrabbit.oak.Oak;
+import org.apache.jackrabbit.oak.commons.run.Command;
 import org.apache.jackrabbit.oak.fixture.OakFixture;
 
 class ServerCommand implements Command {

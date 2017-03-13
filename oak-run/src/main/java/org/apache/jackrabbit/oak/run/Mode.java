@@ -17,11 +17,12 @@
 
 package org.apache.jackrabbit.oak.run;
 
+import org.apache.jackrabbit.oak.commons.run.Command;
+
 enum Mode {
 
     BACKUP("backup", new BackupCommand()),
     RESTORE("restore", new RestoreCommand()),
-    BENCHMARK("benchmark", new BenchmarkCommand()),
     CONSOLE("console", new ConsoleCommand()),
     DEBUG("debug", new DebugCommand()),
     GRAPH("graph", new GraphCommand()),
@@ -30,7 +31,6 @@ enum Mode {
     COMPACT("compact", new CompactCommand()),
     SERVER("server", new ServerCommand()),
     UPGRADE("upgrade", new UpgradeCommand()),
-    SCALABILITY("scalability", new ScalabilityCommand()),
     EXPLORE("explore", new ExploreCommand()),
     CHECKPOINTS("checkpoints", new CheckpointsCommand()),
     RECOVERY("recovery", new RecoveryCommand()),

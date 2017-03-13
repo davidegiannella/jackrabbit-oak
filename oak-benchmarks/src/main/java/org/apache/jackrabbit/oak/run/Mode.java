@@ -17,13 +17,29 @@
 
 package org.apache.jackrabbit.oak.run;
 
-import org.apache.jackrabbit.oak.scalability.ScalabilityRunner;
+import org.apache.jackrabbit.oak.commons.run.Command;
 
-class ScalabilityCommand implements Command {
+enum Mode {
+
+    BENCHMARK("benchmark", new BenchmarkCommand()),
+    SCALABILITY("scalability", new ScalabilityCommand());
+
+    private final String name;
+
+    private final Command command;
+
+    Mode(String name, Command command) {
+        this.name = name;
+        this.command = command;
+    }
 
     @Override
+    public String toString() {
+        return name;
+    }
+
     public void execute(String... args) throws Exception {
-        ScalabilityRunner.main(args);
+        command.execute(args);
     }
 
 }

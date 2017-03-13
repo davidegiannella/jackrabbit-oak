@@ -21,6 +21,7 @@ import java.io.File;
 import java.sql.Timestamp;
 
 import org.apache.jackrabbit.oak.checkpoint.Checkpoints;
+import org.apache.jackrabbit.oak.commons.run.Command;
 import org.apache.jackrabbit.oak.plugins.document.DocumentMK;
 import org.apache.jackrabbit.oak.plugins.document.DocumentNodeStore;
 

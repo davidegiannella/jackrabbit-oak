@@ -15,16 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.jackrabbit.oak.run;
+package org.apache.jackrabbit.oak.commons.run;
 
-import org.apache.jackrabbit.oak.commons.run.Command;
-import org.apache.jackrabbit.oak.explorer.Explorer;
+public interface Command {
 
-class ExploreCommand implements Command {
-
-    @Override
-    public void execute(String... args) throws Exception {
-        Explorer.main(args);
-    }
+    void execute(String... args) throws Exception;
 
 }
