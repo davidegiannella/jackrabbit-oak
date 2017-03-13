@@ -34,7 +34,7 @@ public final class Main {
     public static void main(String[] args) throws Exception {
         printProductInfo(args);
 
-        Mode mode = Mode.SERVER;
+        Mode mode = Mode.HELP;
 
         if (args.length > 0) {
             mode = getMode(args[0]);

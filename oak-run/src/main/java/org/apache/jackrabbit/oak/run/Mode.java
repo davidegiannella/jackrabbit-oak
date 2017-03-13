@@ -29,7 +29,6 @@ enum Mode {
     HISTORY("history", new HistoryCommand()),
     CHECK("check", new CheckCommand()),
     COMPACT("compact", new CompactCommand()),
-    SERVER("server", new ServerCommand()),
     UPGRADE("upgrade", new UpgradeCommand()),
     EXPLORE("explore", new ExploreCommand()),
     CHECKPOINTS("checkpoints", new CheckpointsCommand()),
