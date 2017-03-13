@@ -305,7 +305,14 @@ public class RepositorySidegrade {
             LOG.info("Custom paths have been specified, checkpoints won't be migrated");
             isRemoveCheckpointReferences = true;
         } else {
-            boolean checkpointsCopied = copyCheckpoints(targetRoot);
+            boolean checkpointsCopied;
+            try {
+                checkpointsCopied = copyCheckpoints(targetRoot);
+            } catch(UnsupportedOperationException e) {
+                removeCheckpoints();
+                checkpointsCopied = false;
+                LOG.warn("Checkpoints won't be copied, because no external datastore has been specified. This will result in the full repository reindexing on the first start. See https://jackrabbit.apache.org/oak/docs/migration.html#Checkpoints_migration for more info.");
+            }
             if (!checkpointsCopied) {
                 LOG.info("Copying checkpoints is not supported for this combination of node stores");
                 isRemoveCheckpointReferences = true;
@@ -408,6 +415,16 @@ public class RepositorySidegrade {
         targetTarNS.setSuperRoot(targetSuperRoot);
         return true;
    }
+
+    private void removeCheckpoints() {
+        if (!(target instanceof TarNodeStore)) {
+            return;
+        }
+        TarNodeStore targetTarNS = (TarNodeStore) target;
+        NodeBuilder targetSuperRoot = ((TarNodeStore) target).getSuperRoot().builder();
+        targetSuperRoot.setChildNode("checkpoints");
+        targetTarNS.setSuperRoot(targetSuperRoot);
+    }
 
     /**
      * Return all checkpoint paths, sorted by their "created" property, descending.
