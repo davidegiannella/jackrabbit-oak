@@ -30,6 +30,10 @@
   <artifactId>oak-benchmarks</artifactId>
   <name>Oak Benchmarks Runner</name>
 
+  <properties>
+    <skip.deployment>true</skip.deployment>
+  </properties>
+
   <build>
     <plugins>
       <plugin>
