@@ -64,11 +64,16 @@
   </build>
 
   <dependencies>
-    <dependency>
-      <groupId>org.apache.jackrabbit</groupId>
-      <artifactId>oak-commons</artifactId>
-      <version>${project.version}</version>
-    </dependency>
+      <dependency>
+          <groupId>org.apache.jackrabbit</groupId>
+          <artifactId>oak-commons</artifactId>
+          <version>${project.version}</version>
+      </dependency>
+      <dependency>
+          <groupId>org.apache.jackrabbit</groupId>
+          <artifactId>oak-commons-run</artifactId>
+          <version>${project.version}</version>
+      </dependency>
     <dependency>
       <groupId>javax.jcr</groupId>
       <artifactId>jcr</artifactId>
