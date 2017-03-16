@@ -49,7 +49,7 @@
     <module>oak-solr-osgi</module>
     <module>oak-auth-external</module>
     <module>oak-auth-ldap</module>
-    <modile>oak-commons-run</module>
+    <module>oak-commons-run</module>
     <module>oak-run</module>
     <module>oak-it-osgi</module>
     <module>oak-pojosr</module>
