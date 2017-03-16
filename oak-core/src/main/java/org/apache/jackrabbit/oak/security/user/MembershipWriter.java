@@ -43,14 +43,12 @@ import static org.apache.jackrabbit.oak.api.Type.NAME;
  */
 public class MembershipWriter {
 
+    static final int DEFAULT_MEMBERSHIP_THRESHHOLD = 100;
+
     /**
      * size of the membership threshold after which a new overflow node is created.
      */
-    private int membershipSizeThreshold = 100;
-
-    public int getMembershipSizeThreshold() {
-        return membershipSizeThreshold;
-    }
+    private int membershipSizeThreshold = DEFAULT_MEMBERSHIP_THRESHHOLD;
 
     public void setMembershipSizeThreshold(int membershipSizeThreshold) {
         this.membershipSizeThreshold = membershipSizeThreshold;
@@ -216,22 +214,22 @@ public class MembershipWriter {
             PropertyState refs = t.getProperty(UserConstants.REP_MEMBERS);
             if (refs != null) {
                 PropertyBuilder<String> prop = PropertyBuilder.copy(Type.WEAKREFERENCE, refs);
-                Iterator<Map.Entry<String,String>> memberEntries = memberIds.entrySet().iterator();
-                while (memberEntries.hasNext()) {
-                    String memberContentId = memberEntries.next().getKey();
+                Iterator<Map.Entry<String,String>> it = memberIds.entrySet().iterator();
+                while (it.hasNext() && !prop.isEmpty()) {
+                    String memberContentId = it.next().getKey();
                     if (prop.hasValue(memberContentId)) {
                         prop.removeValue(memberContentId);
-                        if (prop.isEmpty()) {
-                            if (t == groupTree) {
-                                t.removeProperty(UserConstants.REP_MEMBERS);
-                            } else {
-                                t.remove();
-                            }
-                        } else {
-                            t.setProperty(prop.getPropertyState());
-                        }
-                        memberEntries.remove();
+                        it.remove();
                     }
+                }
+                if (prop.isEmpty()) {
+                    if (t == groupTree) {
+                        t.removeProperty(UserConstants.REP_MEMBERS);
+                    } else {
+                        t.remove();
+                    }
+                } else {
+                    t.setProperty(prop.getPropertyState());
                 }
             }
         }

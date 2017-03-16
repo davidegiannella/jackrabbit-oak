@@ -103,6 +103,8 @@ public class RepositorySidegrade {
      */
     private Set<String> mergePaths = DEFAULT_MERGE_PATHS;
 
+    private boolean skipCheckpoints = false;
+
     private boolean includeIndex = false;
 
     private boolean filterLongNames = true;
@@ -233,6 +235,10 @@ public class RepositorySidegrade {
         this.onlyVerify = onlyVerify;
     }
 
+    public void setSkipCheckpoints(boolean skipCheckpoints) {
+        this.skipCheckpoints = skipCheckpoints;
+    }
+
     /**
      * Same as {@link #copy(RepositoryInitializer)}, but with no custom initializer.
      *
@@ -304,14 +310,16 @@ public class RepositorySidegrade {
         if (!isCompleteMigration()) {
             LOG.info("Custom paths have been specified, checkpoints won't be migrated");
             isRemoveCheckpointReferences = true;
+        } else if (skipCheckpoints) {
+            LOG.info("Checkpoints won't be migrated because of the --skip-checkpoints option");
+            isRemoveCheckpointReferences = true;
         } else {
             boolean checkpointsCopied;
             try {
                 checkpointsCopied = copyCheckpoints(targetRoot);
             } catch(UnsupportedOperationException e) {
                 removeCheckpoints();
-                checkpointsCopied = false;
-                LOG.warn("Checkpoints won't be copied, because no external datastore has been specified. This will result in the full repository reindexing on the first start. See https://jackrabbit.apache.org/oak/docs/migration.html#Checkpoints_migration for more info.");
+                throw new RepositoryException("Checkpoints won't be copied, because no external datastore has been specified. This will result in the full repository reindexing on the first start. Use --skip-checkpoints to force the migration or see https://jackrabbit.apache.org/oak/docs/migration.html#Checkpoints_migration for more info.");
             }
             if (!checkpointsCopied) {
                 LOG.info("Copying checkpoints is not supported for this combination of node stores");
@@ -438,7 +446,7 @@ public class RepositorySidegrade {
             @Override
             public int compare(ChildNodeEntry o1, ChildNodeEntry o2) {
                 long c1 = o1.getNodeState().getLong("created");
-                long c2 = o1.getNodeState().getLong("created");
+                long c2 = o2.getNodeState().getLong("created");
                 return -Long.compare(c1, c2);
             }
         });
