@@ -19,16 +19,25 @@
 
 package org.apache.jackrabbit.oak.commons.run;
 
+import com.google.common.base.Preconditions;
+
+import java.util.Map;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+
 /**
  * represent an individual Mode for running a COMMAND. It's a substitution for the old Mode enum we
  * used in order to allow reuse of logic.
  */
-public final class Mode {
-    public final String NAME;
-    public final Command COMMAND;
+public final class Modes {
+    private final Map<String, Command> MODES;
 
-    public Mode(String name, Command command) {
-        this.NAME = name;
-        this.COMMAND = command;
+    public Modes(Map<String, Command> modes) {
+        this.MODES = checkNotNull(modes, "Provided map of Modes cannot be null");
+    }
+
+    public Command getCommand(String name) {
+        // as the Map already return null in case of not found we don't have to do anything here.
+        return MODES.get(name);
     }
 }
