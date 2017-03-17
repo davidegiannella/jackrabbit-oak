@@ -23,15 +23,9 @@ package org.apache.jackrabbit.oak.commons.run;
  * represent an individual Mode for running a COMMAND. It's a substitution for the old Mode enum we
  * used in order to allow reuse of logic.
  */
-public abstract class Mode {
+public final class Mode {
     public final String NAME;
     public final Command COMMAND;
-
-    private Mode(){
-        // should prevent this initialisation from extending classes
-        this.NAME = null;
-        this.COMMAND = null;
-    }
 
     public Mode(String name, Command command) {
         this.NAME = name;
