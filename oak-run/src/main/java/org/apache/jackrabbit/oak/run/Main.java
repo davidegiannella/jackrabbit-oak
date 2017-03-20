@@ -16,8 +16,13 @@
  */
 package org.apache.jackrabbit.oak.run;
 
+import com.google.common.collect.ImmutableMap;
+import org.apache.jackrabbit.oak.commons.run.Command;
+import org.apache.jackrabbit.oak.commons.run.Modes;
+
 import static java.util.Arrays.copyOfRange;
 import static org.apache.jackrabbit.oak.commons.IOUtils.closeQuietly;
+import static org.apache.jackrabbit.oak.run.AvailableModes.MODES;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,7 +31,6 @@ import java.util.Locale;
 import java.util.Properties;
 
 public final class Main {
-
     private Main() {
         // Prevent instantiation.
     }
@@ -34,19 +38,19 @@ public final class Main {
     public static void main(String[] args) throws Exception {
         printProductInfo(args);
 
-        Mode mode = Mode.HELP;
+        Command command = MODES.getCommand("help");
 
         if (args.length > 0) {
-            mode = getMode(args[0]);
+            command = MODES.getCommand(args[0].toLowerCase(Locale.ENGLISH));
 
-            if (mode == null) {
-                mode = Mode.HELP;
+            if (command == null) {
+                command = MODES.getCommand("help");
             }
 
             args = copyOfRange(args, 1, args.length);
         }
 
-        mode.execute(args);
+        command.execute(args);
     }
 
     public static String getProductInfo(){
@@ -90,13 +94,4 @@ public final class Main {
             System.out.println(getProductInfo());
         }
     }
-
-    private static Mode getMode(String name) {
-        try {
-            return Mode.valueOf(name.toUpperCase(Locale.ENGLISH));
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
-
 }

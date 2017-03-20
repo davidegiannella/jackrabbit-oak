@@ -60,6 +60,7 @@ import org.apache.jackrabbit.oak.console.NodeStoreOpener;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
 
 public class IndexCommand implements Command {
+    public static final String INDEX = "index";
 
     PrintStream output = System.out;
     Session session;
@@ -79,7 +80,7 @@ public class IndexCommand implements Command {
         OptionSet options = parser.parse(args);
         if (options.has(helpSpec)
                 || options.nonOptionArguments().isEmpty()) {
-            System.out.println("Mode: " + Mode.INDEX);
+            System.out.println("Mode: " + INDEX);
             System.out.println();
             parser.printHelpOn(System.out);
             return;

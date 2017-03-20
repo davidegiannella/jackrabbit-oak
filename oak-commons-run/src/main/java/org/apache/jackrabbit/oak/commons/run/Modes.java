@@ -40,4 +40,8 @@ public final class Modes {
         // as the Map already return null in case of not found we don't have to do anything here.
         return MODES.get(name);
     }
+
+    public Iterable<String> getModes() {
+        return MODES.keySet();
+    }
 }
