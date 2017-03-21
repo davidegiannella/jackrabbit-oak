@@ -66,6 +66,7 @@ public class PriorityCache<K, V> {
     private long hitCount;
     private long missCount;
     private long loadCount;
+    private long loadExceptionCount;
     private long evictionCount;
     private long size;
 
@@ -208,6 +209,7 @@ public class PriorityCache<K, V> {
             if (entry == Entry.NULL) {
                 // Empty slot -> use this index
                 index = i;
+                eviction = false;
                 break;
             } else if (entry.generation <= generation && key.equals(entry.key)) {
                 // Key exists and generation is greater or equal -> use this index and boost the cost
@@ -216,10 +218,12 @@ public class PriorityCache<K, V> {
                 if (initialCost < Byte.MAX_VALUE) {
                     initialCost++;
                 }
+                eviction = false;
                 break;
             } else if (entry.generation < generation) {
                 // Old generation -> use this index
                 index = i;
+                eviction = false;
                 break;
             } else if (entry.cost < cheapest) {
                 // Candidate slot, keep on searching for even cheaper slots
@@ -248,6 +252,7 @@ public class PriorityCache<K, V> {
             weight += weighEntry(newE);
             return true;
         } else {
+            loadExceptionCount++;
             return false;
         }
     }
@@ -325,7 +330,7 @@ public class PriorityCache<K, V> {
      */
     @Nonnull
     public CacheStats getStats() {
-        return new CacheStats(hitCount, missCount, loadCount, 0, 0, evictionCount);
+        return new CacheStats(hitCount, missCount, loadCount, loadExceptionCount, 0, evictionCount);
     }
 
     public long estimateCurrentWeight() {
