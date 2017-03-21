@@ -16,6 +16,10 @@
  */
 package org.apache.jackrabbit.oak.run;
 
+import com.google.common.collect.ImmutableMap;
+import org.apache.jackrabbit.oak.commons.run.Command;
+import org.apache.jackrabbit.oak.commons.run.Modes;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
@@ -26,6 +30,10 @@ import static java.util.Arrays.copyOfRange;
 import static org.apache.jackrabbit.oak.commons.IOUtils.closeQuietly;
 
 public final class Main {
+    private static final Modes MODES = new Modes(ImmutableMap.<String, Command>of(
+        "benchmark", new BenchmarkCommand(),
+        "scalability", new ScalabilityCommand()
+    ));
 
     private Main() {
         // Prevent instantiation.
@@ -34,19 +42,18 @@ public final class Main {
     public static void main(String[] args) throws Exception {
         printProductInfo(args);
 
-//        Mode mode = Mode.SERVER;
-//
-//        if (args.length > 0) {
-//            mode = getMode(args[0]);
-//
-//            if (mode == null) {
-//                mode = Mode.HELP;
-//            }
-//
-//            args = copyOfRange(args, 1, args.length);
-//        }
-//
-//        mode.execute(args);
+        Command c = MODES.getCommand("benchmark");
+        if (args.length > 0) {
+            c = MODES.getCommand(args[0]);
+
+            if (c == null) {
+                c = MODES.getCommand("benchmark");
+            }
+
+            args = copyOfRange(args, 1, args.length);
+        }
+
+        c.execute(args);
     }
 
     public static String getProductInfo(){
