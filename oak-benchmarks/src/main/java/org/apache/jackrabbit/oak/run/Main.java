@@ -19,6 +19,7 @@ package org.apache.jackrabbit.oak.run;
 import com.google.common.collect.ImmutableMap;
 import org.apache.jackrabbit.oak.commons.run.Command;
 import org.apache.jackrabbit.oak.commons.run.Modes;
+import org.apache.jackrabbit.oak.commons.run.Utils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,7 +41,10 @@ public final class Main {
     }
 
     public static void main(String[] args) throws Exception {
-        printProductInfo(args);
+        Utils.printProductInfo(
+            args,
+            Main.class.getResourceAsStream("/META-INF/maven/org.apache.jackrabbit/oak-benchmarks/pom.properties")
+        );
 
         Command c = MODES.getCommand("benchmark");
         if (args.length > 0) {
@@ -55,55 +59,4 @@ public final class Main {
 
         c.execute(args);
     }
-
-    public static String getProductInfo(){
-        String version = getProductVersion();
-
-        if (version == null) {
-            return "Apache Jackrabbit Oak";
-        }
-
-        return "Apache Jackrabbit Oak " + version;
-    }
-
-    private static String getProductVersion() {
-        InputStream stream = Main.class.getResourceAsStream("/META-INF/maven/org.apache.jackrabbit/oak-benchmarks/pom.properties");
-
-        try {
-            if (stream == null) {
-                return null;
-            } else {
-                return getProductVersion(stream);
-            }
-        } finally {
-            closeQuietly(stream);
-        }
-    }
-
-    private static String getProductVersion(InputStream stream) {
-        Properties properties = new Properties();
-
-        try {
-            properties.load(stream);
-        } catch (IOException e) {
-            return null;
-        }
-
-        return properties.getProperty("version");
-    }
-
-    private static void printProductInfo(String[] args) {
-        if(!Arrays.asList(args).contains("--quiet")) {
-            System.out.println(getProductInfo());
-        }
-    }
-
-//    private static Mode getMode(String name) {
-//        try {
-//            return Mode.valueOf(name.toUpperCase(Locale.ENGLISH));
-//        } catch (IllegalArgumentException e) {
-//            return null;
-//        }
-//    }
-
 }
