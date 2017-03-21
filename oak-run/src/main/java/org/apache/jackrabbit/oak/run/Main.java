@@ -16,19 +16,13 @@
  */
 package org.apache.jackrabbit.oak.run;
 
-import com.google.common.collect.ImmutableMap;
 import org.apache.jackrabbit.oak.commons.run.Command;
-import org.apache.jackrabbit.oak.commons.run.Modes;
+import org.apache.jackrabbit.oak.commons.run.Utils;
+
+import java.util.Locale;
 
 import static java.util.Arrays.copyOfRange;
-import static org.apache.jackrabbit.oak.commons.IOUtils.closeQuietly;
 import static org.apache.jackrabbit.oak.run.AvailableModes.MODES;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Locale;
-import java.util.Properties;
 
 public final class Main {
     private Main() {
@@ -36,7 +30,9 @@ public final class Main {
     }
 
     public static void main(String[] args) throws Exception {
-        printProductInfo(args);
+        Utils.printProductInfo(
+            args,
+            Main.class.getResourceAsStream("/META-INF/maven/org.apache.jackrabbit/oak-run/pom.properties"));
 
         Command command = MODES.getCommand("help");
 
@@ -51,47 +47,5 @@ public final class Main {
         }
 
         command.execute(args);
-    }
-
-    public static String getProductInfo(){
-        String version = getProductVersion();
-
-        if (version == null) {
-            return "Apache Jackrabbit Oak";
-        }
-
-        return "Apache Jackrabbit Oak " + version;
-    }
-
-    private static String getProductVersion() {
-        InputStream stream = Main.class.getResourceAsStream("/META-INF/maven/org.apache.jackrabbit/oak-run/pom.properties");
-
-        try {
-            if (stream == null) {
-                return null;
-            } else {
-                return getProductVersion(stream);
-            }
-        } finally {
-            closeQuietly(stream);
-        }
-    }
-
-    private static String getProductVersion(InputStream stream) {
-        Properties properties = new Properties();
-
-        try {
-            properties.load(stream);
-        } catch (IOException e) {
-            return null;
-        }
-
-        return properties.getProperty("version");
-    }
-
-    private static void printProductInfo(String[] args) {
-        if(!Arrays.asList(args).contains("--quiet")) {
-            System.out.println(getProductInfo());
-        }
     }
 }
