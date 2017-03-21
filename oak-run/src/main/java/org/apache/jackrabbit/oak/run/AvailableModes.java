@@ -50,5 +50,6 @@ public final class AvailableModes {
             .put(ThreadDumpCommand.THREADDUMP, new ThreadDumpCommand())
             .put("tika", new TikaCommand())
             .put("upgrade", new UpgradeCommand())
+            .put("unlockupgrade", new UnlockUpgradeCommand())
             .build());
 }
