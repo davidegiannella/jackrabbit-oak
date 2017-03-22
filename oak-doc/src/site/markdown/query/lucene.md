@@ -32,6 +32,8 @@
     * [Codec](#codec)
     * [Boost and Search Relevancy](#boost)
     * [Effective Index Definition](#stored-index-definition)
+    * [Generating Index Definition](#generate-index-definition)
+* [Near Real Time Indexing](#nrt-indexing)
 * [LuceneIndexProvider Configuration](#osgi-config)
 * [Tika Config](#tika-config)
     * [Mime type usage](#mime-type-usage)
@@ -119,6 +121,7 @@ The Lucene index needs to be configured to index all properties
 
 Following are the new features in 1.6 release
 
+* [Near Real Time Indexing](#nrt-indexing)
 * [Effective Index Definition](#stored-index-definition)
 
 ### <a name="index-definition"></a> Index Definition
@@ -873,6 +876,21 @@ to true. Once disable any change in index definition would start effecting the q
 
 Refer to [OAK-4400][OAK-4400] for more details.
 
+#### <a name="generate-index-definition"></a> Generating Index Definition 
+
+To simplify generating index definition suitable for evaluating certain set of queries you can make use of 
+http://oakutils.appspot.com/generate/index. Here you can provide a set of queries and then it would generate the
+suitable index definitions for those queries.
+
+Note that you would still need to tweak the definition for aggregation, path include exclude etc as that data cannot
+be inferred from the query
+
+### <a name="nrt-indexing"></a> Near Real Time Indexing
+
+`@since Oak 1.6`
+
+Refer to [Near realtime indexing](indexing.html#nrt-indexing) for more details
+
 ### <a name="osgi-config"></a>LuceneIndexProvider Configuration
 
 Some of the runtime aspects of the Oak Lucene support can be configured via OSGi
@@ -1378,12 +1396,17 @@ from property index in following aspects
     are always synchronous and upto date.
 
     So if in your usecase you need the latest result then prefer _Property Indexes_ over
-    _Lucene Index_
+    _Lucene Index_. Oak 1.6 supports [Near Realtime Indexing](indexing.html#nrt-indexing)
+    which reduce the lag considerably. With this you should be able to use lucene indexing
+    for most cases
 
 2.  Lucene index cannot enforce uniqueness constraint - By virtue of it being asynchronous
     it cannot enforce uniqueness constraint.
 
 ### <a name="examples"></a>Examples
+
+Have a look at [generating index definition](#generate-index-definition) for some tooling details 
+which simplify generating index definition for given set of queries
 
 #### <a name="simple-queries"></a>A - Simple queries
 

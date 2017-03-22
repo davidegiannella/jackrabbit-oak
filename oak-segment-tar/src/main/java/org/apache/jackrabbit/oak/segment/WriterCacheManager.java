@@ -39,6 +39,9 @@ import com.google.common.base.Supplier;
 import com.google.common.cache.CacheStats;
 import org.apache.jackrabbit.oak.api.jmx.CacheStatsMBean;
 import org.apache.jackrabbit.oak.segment.file.PriorityCache;
+import org.apache.jackrabbit.oak.stats.CounterStats;
+import org.apache.jackrabbit.oak.stats.StatisticsProvider;
+import org.apache.jackrabbit.oak.stats.StatsOptions;
 
 /**
  * Instances of this class manage the deduplication caches used
@@ -48,6 +51,16 @@ import org.apache.jackrabbit.oak.segment.file.PriorityCache;
  * generations being reused.
  */
 public abstract class WriterCacheManager {
+    /**
+     * The type of operation a cache acquired through this manager is used for.
+     * This type is used to determine against which monitoring endpoint to report
+     * access statistics.
+     *
+     * @see #getStringCache(int, Operation)
+     * @see #getTemplateCache(int, Operation)
+     * @see #getNodeCache(int, Operation)
+     */
+    public enum Operation {WRITE, COMPACT}
 
     /**
      * Default size of the string cache, used as default for OSGi config.
@@ -56,7 +69,7 @@ public abstract class WriterCacheManager {
 
     /**
      * Default size of the string cache.
-     * @see #getStringCache(int)
+     * @see #getStringCache(int, Operation)
      */
     public static final int DEFAULT_STRING_CACHE_SIZE = getInteger(
             "oak.tar.stringsCacheSize", DEFAULT_STRING_CACHE_SIZE_OSGi);
@@ -68,7 +81,7 @@ public abstract class WriterCacheManager {
 
     /**
      * Default size of the template cache.
-     * @see #getTemplateCache(int)
+     * @see #getTemplateCache(int, Operation)
      */
     public static final int DEFAULT_TEMPLATE_CACHE_SIZE = getInteger(
             "oak.tar.templatesCacheSize", DEFAULT_TEMPLATE_CACHE_SIZE_OSGi);
@@ -81,31 +94,29 @@ public abstract class WriterCacheManager {
 
     /**
      * Default size of the node deduplication cache.
-     * @see #getNodeCache(int)
+     * @see #getNodeCache(int, Operation)
      */
     public static final int DEFAULT_NODE_CACHE_SIZE = getInteger(
             "oak.tar.nodeCacheSize", DEFAULT_NODE_CACHE_SIZE_OSGi);
 
     /**
-     * @param generation
-     * @return  cache for string records of the given {@code generation}.
+     * @return  cache for string records of the given {@code generation} and {@code operation}.
      */
     @Nonnull
-    public abstract RecordCache<String> getStringCache(int generation);
+    public abstract Cache<String, RecordId> getStringCache(int generation, Operation operation);
 
     /**
      * @param generation
-     * @return  cache for template records of the given {@code generation}.
+     * @return  cache for template records of the given {@code generation} and {@code operation}.
      */
     @Nonnull
-    public abstract RecordCache<Template> getTemplateCache(int generation);
+    public abstract Cache<Template, RecordId> getTemplateCache(int generation, Operation operation);
 
     /**
-     * @param generation
-     * @return  cache for node records of the given {@code generation}.
+     * @return  cache for node records of the given {@code generation} and {@code operation}.
      */
     @Nonnull
-    public abstract NodeCache getNodeCache(int generation);
+    public abstract Cache<String, RecordId> getNodeCache(int generation, Operation operation);
 
     /**
      * @return  statistics for the string cache or {@code null} if not available.
@@ -161,7 +172,7 @@ public abstract class WriterCacheManager {
          */
         @Nonnull
         @Override
-        public RecordCache<String> getStringCache(int generation) {
+        public RecordCache<String> getStringCache(int generation, Operation operation) {
             return stringCache;
         }
 
@@ -170,19 +181,24 @@ public abstract class WriterCacheManager {
          */
         @Nonnull
         @Override
-        public RecordCache<Template> getTemplateCache(int generation) {
+        public RecordCache<Template> getTemplateCache(int generation, Operation operation) {
             return templateCache;
         }
 
         /**
-         * @return  a {@code NodeCache} cache that is always empty
+         * @return  a {@code Cache} cache that is always empty
          */
         @Nonnull
         @Override
-        public NodeCache getNodeCache(int generation) {
-            return new NodeCache() {
+        public Cache<String, RecordId> getNodeCache(int generation, Operation operation) {
+            return new Cache<String, RecordId>() {
                 @Override
                 public void put(@Nonnull String stableId, @Nonnull RecordId recordId, byte cost) { }
+
+                @Override
+                public void put(@Nonnull String key, @Nonnull RecordId value) {
+                    throw new UnsupportedOperationException();
+                }
 
                 @CheckForNull
                 @Override
@@ -194,7 +210,7 @@ public abstract class WriterCacheManager {
     /**
      * This implementation of {@link WriterCacheManager} returns
      * {@link RecordCache} instances for the string and template cache
-     * and {@link NodeCache} instance for the node cache.
+     * and {@link Cache} instance for the node cache.
      */
     public static class Default extends WriterCacheManager {
         /**
@@ -216,6 +232,13 @@ public abstract class WriterCacheManager {
         private final Supplier<PriorityCache<String, RecordId>> nodeCache;
 
         /**
+         * The {@code StatisticsProvider} instance used to expose statistics of
+         * the caches managed by this instance.
+         */
+        @Nonnull
+        private final StatisticsProvider statisticsProvider;
+
+        /**
          * New instance using the passed factories for creating cache instances.
          * The factories will be invoked exactly once when a generation of a
          * cache is requested that has not been requested before.
@@ -223,14 +246,18 @@ public abstract class WriterCacheManager {
          * @param stringCacheFactory       factory for the string cache
          * @param templateCacheFactory     factory for the template cache
          * @param nodeCacheFactory         factory for the node cache
+         * @param statisticsProvider       The {@code StatisticsProvider} instance to expose
+         *                                 statistics of the caches managed by this instance.
          */
         public Default(
                 @Nonnull Supplier<RecordCache<String>> stringCacheFactory,
                 @Nonnull Supplier<RecordCache<Template>> templateCacheFactory,
-                @Nonnull Supplier<PriorityCache<String, RecordId>> nodeCacheFactory) {
+                @Nonnull Supplier<PriorityCache<String, RecordId>> nodeCacheFactory,
+                @Nonnull StatisticsProvider statisticsProvider) {
             this.stringCaches = new Generations<>(stringCacheFactory);
             this.templateCaches = new Generations<>(templateCacheFactory);
             this.nodeCache = memoize(nodeCacheFactory);
+            this.statisticsProvider = checkNotNull(statisticsProvider);
         }
 
         /**
@@ -242,7 +269,8 @@ public abstract class WriterCacheManager {
         public Default() {
             this(RecordCache.<String>factory(DEFAULT_STRING_CACHE_SIZE),
                  RecordCache.<Template>factory(DEFAULT_TEMPLATE_CACHE_SIZE),
-                 PriorityCache.<String, RecordId>factory(DEFAULT_NODE_CACHE_SIZE));
+                 PriorityCache.<String, RecordId>factory(DEFAULT_NODE_CACHE_SIZE),
+                 StatisticsProvider.NOOP);
         }
 
         private static class Generations<T> implements Iterable<T> {
@@ -261,6 +289,7 @@ public abstract class WriterCacheManager {
                 return generations.get(generation).get();
             }
 
+            @Nonnull
             @Override
             public Iterator<T> iterator() {
                 return transform(generations.values().iterator(), new Function<Supplier<T>, T>() {
@@ -283,31 +312,43 @@ public abstract class WriterCacheManager {
 
         @Nonnull
         @Override
-        public RecordCache<String> getStringCache(int generation) {
-            return stringCaches.getGeneration(generation);
+        public Cache<String, RecordId> getStringCache(int generation, Operation operation) {
+            return new AccessTrackingCache<>("oak.segment.string-deduplication-cache-" + operation,
+                    stringCaches.getGeneration(generation));
         }
 
         @Nonnull
         @Override
-        public RecordCache<Template> getTemplateCache(int generation) {
-            return templateCaches.getGeneration(generation);
+        public Cache<Template, RecordId> getTemplateCache(int generation, Operation operation) {
+            return new AccessTrackingCache<>("oak.segment.template-deduplication-cache-" + operation,
+                    templateCaches.getGeneration(generation));
+        }
+
+        private PriorityCache<String, RecordId> nodeCache() {
+            return nodeCache.get();
         }
 
         @Override
         @Nonnull
-        public NodeCache getNodeCache(final int generation) {
-            return new NodeCache() {
+        public Cache<String, RecordId> getNodeCache(final int generation, Operation operation) {
+            return new AccessTrackingCache<>("oak.segment.node-deduplication-cache-" + operation,
+                    new Cache<String, RecordId>() {
                 @Override
                 public void put(@Nonnull String stableId, @Nonnull RecordId recordId, byte cost) {
-                    nodeCache.get().put(stableId, recordId, generation, cost);
+                    nodeCache().put(stableId, recordId, generation, cost);
+                }
+
+                @Override
+                public void put(@Nonnull String key, @Nonnull RecordId value) {
+                    throw new UnsupportedOperationException();
                 }
 
                 @CheckForNull
                 @Override
                 public RecordId get(@Nonnull String stableId) {
-                    return nodeCache.get().get(stableId, generation);
+                    return nodeCache().get(stableId, generation);
                 }
-            };
+            });
         }
 
         @CheckForNull
@@ -380,26 +421,21 @@ public abstract class WriterCacheManager {
                     new Supplier<CacheStats>() {
                         @Override
                         public CacheStats get() {
-                            return nodeCache.get().getStats();
+                            return nodeCache().getStats();
                         }
                     },
                     new Supplier<Long>() {
                         @Override
                         public Long get() {
-                            return nodeCache.get().size();
+                            return nodeCache().size();
                         }
                     },
                     new Supplier<Long>() {
                         @Override
                         public Long get() {
-                            return nodeCache.get().estimateCurrentWeight();
+                            return nodeCache().estimateCurrentWeight();
                         }
                     });
-        }
-
-        @Override
-        public String getNodeCacheOccupancyInfo() {
-            return nodeCache.get().toString();
         }
 
         /**
@@ -409,7 +445,47 @@ public abstract class WriterCacheManager {
         protected final void evictCaches(Predicate<Integer> generations) {
             stringCaches.evictGenerations(generations);
             templateCaches.evictGenerations(generations);
-            nodeCache.get().purgeGenerations(generations);
+            nodeCache().purgeGenerations(generations);
         }
+
+        /**
+         * {@code Cache} wrapper exposing the number of read accesses and the
+         * number of misses ot the underlying cache via the {@link #statisticsProvider}.
+         */
+        private class AccessTrackingCache<K, V> implements Cache<K,V> {
+            private final Cache<K, V> delegate;
+            private final CounterStats accessCount;
+            private final CounterStats missCount;
+
+            private AccessTrackingCache(@Nonnull String name, @Nonnull Cache<K, V> delegate) {
+                this.delegate = delegate;
+                this.accessCount = statisticsProvider.getCounterStats(
+                        name + ".access-count", StatsOptions.DEFAULT);
+                this.missCount = statisticsProvider.getCounterStats(
+                        name + ".miss-count", StatsOptions.DEFAULT);
+            }
+
+            @Override
+            public void put(@Nonnull K key, @Nonnull V value) {
+                delegate.put(key, value);
+            }
+
+            @Override
+            public void put(@Nonnull K key, @Nonnull V value, byte cost) {
+                delegate.put(key, value, cost);
+            }
+
+            @CheckForNull
+            @Override
+            public V get(@Nonnull K key) {
+                V v = delegate.get(key);
+                accessCount.inc();
+                if (v == null) {
+                    missCount.inc();
+                }
+                return v;
+            }
+        }
+
     }
 }

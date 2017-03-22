@@ -19,6 +19,7 @@ package org.apache.jackrabbit.oak.plugins.document;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.base.Suppliers.memoize;
 import static com.google.common.collect.Iterables.filter;
 import static com.google.common.collect.Iterables.toArray;
 import static com.google.common.collect.Iterables.transform;
@@ -31,9 +32,9 @@ import static org.apache.jackrabbit.oak.plugins.document.Collection.JOURNAL;
 import static org.apache.jackrabbit.oak.plugins.document.Collection.NODES;
 import static org.apache.jackrabbit.oak.plugins.document.DocumentMK.FAST_DIFF;
 import static org.apache.jackrabbit.oak.plugins.document.DocumentMK.MANY_CHILDREN_THRESHOLD;
-import static org.apache.jackrabbit.oak.plugins.document.JournalEntry.fillExternalChanges;
 import static org.apache.jackrabbit.oak.plugins.document.UpdateOp.Key;
 import static org.apache.jackrabbit.oak.plugins.document.UpdateOp.Operation;
+import static org.apache.jackrabbit.oak.plugins.document.util.Utils.alignWithExternalRevisions;
 import static org.apache.jackrabbit.oak.plugins.document.util.Utils.getIdFromPath;
 import static org.apache.jackrabbit.oak.plugins.document.util.Utils.pathToId;
 import static org.apache.jackrabbit.oak.plugins.observation.ChangeCollectorProvider.COMMIT_CONTEXT_OBSERVATION_CHANGESET;
@@ -44,7 +45,6 @@ import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -83,7 +83,6 @@ import com.google.common.util.concurrent.UncheckedExecutionException;
 import org.apache.jackrabbit.api.stats.TimeSeries;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.cache.CacheLIRS;
-import org.apache.jackrabbit.oak.commons.IOUtils;
 import org.apache.jackrabbit.oak.commons.jmx.AnnotatedStandardMBean;
 import org.apache.jackrabbit.oak.core.SimpleCommitContext;
 import org.apache.jackrabbit.oak.plugins.blob.BlobStoreBlob;
@@ -101,7 +100,6 @@ import org.apache.jackrabbit.oak.plugins.observation.ChangeSetBuilder;
 import org.apache.jackrabbit.oak.spi.blob.BlobStore;
 import org.apache.jackrabbit.oak.commons.json.JsopStream;
 import org.apache.jackrabbit.oak.commons.json.JsopWriter;
-import org.apache.jackrabbit.oak.commons.sort.StringSort;
 import org.apache.jackrabbit.oak.api.Blob;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.cache.CacheStats;
@@ -203,12 +201,12 @@ public final class DocumentNodeStore
     /**
      * The document store (might be used by multiple node stores).
      */
-    protected final DocumentStore store;
+    private final DocumentStore store;
 
     /**
      * Marker node, indicating a node does not exist at a given revision.
      */
-    protected final DocumentNodeState missing;
+    private final DocumentNodeState missing;
 
     /**
      * The commit queue to coordinate the commits.
@@ -218,29 +216,29 @@ public final class DocumentNodeStore
     /**
      * Commit queue for batch updates.
      */
-    protected final BatchCommitQueue batchCommitQueue;
+    private final BatchCommitQueue batchCommitQueue;
 
     /**
      * The change dispatcher for this node store.
      */
-    protected final ChangeDispatcher dispatcher;
+    private final ChangeDispatcher dispatcher;
 
     /**
      * The delay for asynchronous operations (delayed commit propagation and
      * cache update).
      */
-    protected int asyncDelay = 1000;
+    private int asyncDelay = 1000;
 
     /**
      * The maximum back off time in milliseconds when merges are retried. The
      * default value is twice the {@link #asyncDelay}.
      */
-    protected int maxBackOffMillis =
+    private int maxBackOffMillis =
             Integer.getInteger("oak.maxBackOffMS", asyncDelay * 2);
 
-    protected int changeSetMaxItems =  Integer.getInteger("oak.document.changeSet.maxItems", 50);
+    private int changeSetMaxItems =  Integer.getInteger("oak.document.changeSet.maxItems", 50);
 
-    protected int changeSetMaxDepth =  Integer.getInteger("oak.document.changeSet.maxDepth", 9);
+    private int changeSetMaxDepth =  Integer.getInteger("oak.document.changeSet.maxDepth", 9);
 
     /**
      * Whether this instance is disposed.
@@ -305,6 +303,9 @@ public final class DocumentNodeStore
      */
     private final Object backgroundReadMonitor = new Object();
 
+    /**
+     * Background thread performing updates of _lastRev entries.
+     */
     private Thread backgroundUpdateThread;
 
     /**
@@ -440,7 +441,7 @@ public final class DocumentNodeStore
 
     private final Checkpoints checkpoints;
 
-    private final VersionGarbageCollector versionGarbageCollector;
+    private final Supplier<VersionGarbageCollector> versionGarbageCollectorSupplier;
 
     private final JournalGarbageCollector journalGarbageCollector;
 
@@ -526,7 +527,7 @@ public final class DocumentNodeStore
         this.clusterId = cid;
         this.branches = new UnmergedBranches();
         this.asyncDelay = builder.getAsyncDelay();
-        this.versionGarbageCollector = new VersionGarbageCollector(
+        this.versionGarbageCollectorSupplier = createVersionGCSupplier(
                 this, builder.createVersionGCSupport());
         this.journalGarbageCollector = new JournalGarbageCollector(this);
         this.referencedBlobs = builder.createReferencedBlobs(this);
@@ -1832,17 +1833,25 @@ public final class DocumentNodeStore
         return clusterId;
     }
 
+    @Override
     @Nonnull
     public RevisionVector getHeadRevision() {
         return root.getRootRevision();
     }
 
+    @Override
     @Nonnull
     public Revision newRevision() {
         if (simpleRevisionCounter != null) {
             return new Revision(simpleRevisionCounter.getAndIncrement(), 0, clusterId);
         }
         return Revision.newRevision(clusterId);
+    }
+
+    @Override
+    @Nonnull
+    public Clock getClock() {
+        return clock;
     }
 
     @Override
@@ -2003,7 +2012,7 @@ public final class DocumentNodeStore
      *          cluster node.
      */
     @Nonnull
-    RevisionVector getMinExternalRevisions() {
+    private RevisionVector getMinExternalRevisions() {
         return new RevisionVector(transform(filter(clusterNodes.values(),
                 new Predicate<ClusterNodeInfoDocument>() {
                     @Override
@@ -2022,76 +2031,22 @@ public final class DocumentNodeStore
     /**
      * Perform a background read and make external changes visible.
      */
-    BackgroundReadStats backgroundRead() {
-        BackgroundReadStats stats = new BackgroundReadStats();
-        long time = clock.getTime();
-        String id = Utils.getIdFromPath("/");
-        NodeDocument doc = store.find(Collection.NODES, id, asyncDelay);
-        if (doc == null) {
-            return stats;
-        }
-        alignWithExternalRevisions(doc);
-
-        StringSort externalSort = JournalEntry.newSorter();
-
-        Map<Integer, Revision> lastRevMap = doc.getLastRev();
-        try {
-            ChangeSetBuilder changeSetBuilder = newChangeSetBuilder();
-            JournalPropertyHandler journalPropertyHandler = journalPropertyHandlerFactory.newHandler();
-            RevisionVector headRevision = getHeadRevision();
-            Set<Revision> externalChanges = Sets.newHashSet();
-            for (Map.Entry<Integer, Revision> e : lastRevMap.entrySet()) {
-                int machineId = e.getKey();
-                if (machineId == clusterId) {
-                    // ignore own lastRev
-                    continue;
-                }
-                Revision r = e.getValue();
-                Revision last = headRevision.getRevision(machineId);
-                if (last == null) {
-                    // make sure we see all changes when a cluster node joins
-                    last = new Revision(0, 0, machineId);
-                }
-                if (r.compareRevisionTime(last) > 0) {
-                    // OAK-2345
-                    // only consider as external change if
-                    // the revision changed for the machineId
-                    externalChanges.add(r);
-                    // collect external changes
-                    if (externalSort != null) {
-                        // add changes for this particular clusterId to the externalSort
-                        try {
-                            fillExternalChanges(externalSort, PathUtils.ROOT_PATH, last, r, store, changeSetBuilder, journalPropertyHandler);
-                        } catch (Exception e1) { // OAK-5601 : catch any Exception, not only IOException
-                            LOG.error("backgroundRead: Exception while reading external changes from journal: " + e1, e1);
-                            IOUtils.closeQuietly(externalSort);
-                            externalSort = null;
-                        }
-                    }
-                }
+    private BackgroundReadStats backgroundRead() {
+        return new ExternalChange(this) {
+            @Override
+            void invalidateCache(@Nonnull Iterable<String> paths) {
+                stats.cacheStats = store.invalidateCache(pathToId(paths));
             }
 
-            stats.readHead = clock.getTime() - time;
-            time = clock.getTime();
+            @Override
+            void invalidateCache() {
+                stats.cacheStats = store.invalidateCache();
+            }
 
-            if (!externalChanges.isEmpty()) {
-                // invalidate caches
-                if (externalSort == null) {
-                    // if no externalSort available, then invalidate the classic way: everything
-                    stats.cacheStats = store.invalidateCache();
-                } else {
-                    try {
-                        externalSort.sort();
-                        stats.numExternalChanges = externalSort.getSize();
-                        stats.cacheStats = store.invalidateCache(pathToId(externalSort));
-                    } catch (Exception ioe) {
-                        LOG.error("backgroundRead: got IOException during external sorting/cache invalidation (as a result, invalidating entire cache): "+ioe, ioe);
-                        stats.cacheStats = store.invalidateCache();
-                    }
-                }
-                stats.cacheInvalidationTime = clock.getTime() - time;
-                time = clock.getTime();
-
+            @Override
+            void updateHead(@Nonnull Set<Revision> externalChanges,
+                            @Nullable Iterable<String> changedPaths) {
+                long time = clock.getTime();
                 // make sure no local commit is in progress
                 backgroundOperationLock.writeLock().lock();
                 try {
@@ -2105,32 +2060,29 @@ public final class DocumentNodeStore
                     setRoot(newHead);
                     commitQueue.headRevisionChanged();
                     time = clock.getTime();
-                    if (externalSort != null) {
+                    if (changedPaths != null) {
                         // then there were external changes and reading them
                         // was successful -> apply them to the diff cache
                         try {
-                            JournalEntry.applyTo(externalSort, diffCache,
+                            JournalEntry.applyTo(changedPaths, diffCache,
                                     PathUtils.ROOT_PATH, oldHead, newHead);
                         } catch (Exception e1) {
-                            LOG.error("backgroundRead: Exception while processing external changes from journal: {}", e1, e1);
+                            LOG.error("backgroundRead: Exception while processing external changes from journal: " + e1, e1);
                         }
                     }
                     stats.populateDiffCache = clock.getTime() - time;
                     time = clock.getTime();
 
-                    ChangeSet changeSet = changeSetBuilder.build();
+                    ChangeSet changeSet = getChangeSetBuilder().build();
                     LOG.debug("Dispatching external change with ChangeSet {}", changeSet);
-                    dispatcher.contentChanged(getRoot().fromExternalChange(), newCommitInfo(changeSet, journalPropertyHandler));
+                    dispatcher.contentChanged(getRoot().fromExternalChange(),
+                            newCommitInfo(changeSet, getJournalPropertyHandler()));
                 } finally {
                     backgroundOperationLock.writeLock().unlock();
                 }
                 stats.dispatchChanges = clock.getTime() - time;
             }
-        } finally {
-            IOUtils.closeQuietly(externalSort);
-        }
-
-        return stats;
+        }.process();
     }
 
     private static CommitInfo newCommitInfo(@Nonnull ChangeSet changeSet, JournalPropertyHandler journalPropertyHandler) {
@@ -2241,6 +2193,16 @@ public final class DocumentNodeStore
 
     //-----------------------------< internal >---------------------------------
 
+    private static Supplier<VersionGarbageCollector> createVersionGCSupplier(
+            final DocumentNodeStore ns, final VersionGCSupport gcSupport) {
+        return memoize(new Supplier<VersionGarbageCollector>() {
+            @Override
+            public VersionGarbageCollector get() {
+                return new VersionGarbageCollector(ns, gcSupport);
+            }
+        });
+    }
+
     /**
      * Checks if this node store can operate on the data in the given document
      * store.
@@ -2330,52 +2292,15 @@ public final class DocumentNodeStore
     private void initializeRootState(NodeDocument rootDoc) {
         checkState(root == null);
 
-        alignWithExternalRevisions(rootDoc);
+        try {
+            alignWithExternalRevisions(rootDoc, clock, clusterId);
+        } catch (InterruptedException e) {
+            throw new DocumentStoreException("Interrupted while aligning with " +
+                    "external revision: " + rootDoc.getLastRev());
+        }
         RevisionVector headRevision = new RevisionVector(
                 rootDoc.getLastRev().values()).update(newRevision());
         setRoot(headRevision);
-    }
-
-    /**
-     * Makes sure the current time is after the most recent external revision
-     * timestamp in the _lastRev map of the given root document. If necessary
-     * the current thread waits until {@link #clock} is after the external
-     * revision timestamp.
-     *
-     * @param rootDoc the root document.
-     */
-    private void alignWithExternalRevisions(@Nonnull NodeDocument rootDoc) {
-        Map<Integer, Revision> lastRevMap = checkNotNull(rootDoc).getLastRev();
-        try {
-            long externalTime = Utils.getMaxExternalTimestamp(lastRevMap.values(), clusterId);
-            long localTime = clock.getTime();
-            if (localTime < externalTime) {
-                LOG.warn("Detected clock differences. Local time is '{}', " +
-                                "while most recent external time is '{}'. " +
-                                "Current _lastRev entries: {}",
-                        new Date(localTime), new Date(externalTime), lastRevMap.values());
-                double delay = ((double) externalTime - localTime) / 1000d;
-                String fmt = "Background read will be delayed by %.1f seconds. " +
-                        "Please check system time on cluster nodes.";
-                String msg = String.format(fmt, delay);
-                LOG.warn(msg);
-                while (localTime + 60000 < externalTime) {
-                    clock.waitUntil(localTime + 60000);
-                    localTime = clock.getTime();
-                    delay = ((double) externalTime - localTime) / 1000d;
-                    LOG.warn(String.format(fmt, delay));
-                }
-                clock.waitUntil(externalTime + 1);
-            } else if (localTime == externalTime) {
-                // make sure local time is past external time
-                // but only log at debug
-                LOG.debug("Local and external time are equal. Waiting until local" +
-                        "time is more recent than external reported time.");
-                clock.waitUntil(externalTime + 1);
-            }
-        } catch (InterruptedException e) {
-            throw new RuntimeException("Background read interrupted", e);
-        }
     }
 
     @Nonnull
@@ -3026,17 +2951,13 @@ public final class DocumentNodeStore
         return diffCache;
     }
 
-    public Clock getClock() {
-        return clock;
-    }
-
     public Checkpoints getCheckpoints() {
         return checkpoints;
     }
 
     @Nonnull
     public VersionGarbageCollector getVersionGarbageCollector() {
-        return versionGarbageCollector;
+        return versionGarbageCollectorSupplier.get();
     }
 
     @Nonnull

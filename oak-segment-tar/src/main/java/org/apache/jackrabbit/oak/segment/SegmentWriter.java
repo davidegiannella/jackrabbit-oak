@@ -45,6 +45,7 @@ import static org.apache.jackrabbit.oak.api.Type.STRING;
 import static org.apache.jackrabbit.oak.segment.MapEntry.newModifiedMapEntry;
 import static org.apache.jackrabbit.oak.segment.MapRecord.BUCKETS_PER_LEVEL;
 import static org.apache.jackrabbit.oak.segment.RecordWriters.newNodeStateWriter;
+import static org.apache.jackrabbit.oak.segment.WriterCacheManager.Operation.COMPACT;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -66,7 +67,6 @@ import com.google.common.io.Closeables;
 import org.apache.jackrabbit.oak.api.Blob;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
-import org.apache.jackrabbit.oak.api.jmx.CacheStatsMBean;
 import org.apache.jackrabbit.oak.plugins.memory.ModifiedNodeState;
 import org.apache.jackrabbit.oak.segment.WriteOperationHandler.WriteOperation;
 import org.apache.jackrabbit.oak.segment.file.GCNodeWriteMonitor;
@@ -136,42 +136,8 @@ public class SegmentWriter {
         this.writeOperationHandler = checkNotNull(writeOperationHandler);
     }
 
-    /**
-     * Get occupancy information for the node deduplication cache indicating occupancy and
-     * evictions per priority.
-     * @return  occupancy information for the node deduplication cache.
-     */
-    @CheckForNull
-    public String getNodeCacheOccupancyInfo() {
-        return cacheManager.getNodeCacheOccupancyInfo();
-    }
-
     public void flush() throws IOException {
         writeOperationHandler.flush(store);
-    }
-
-    /**
-     * @return  Statistics for the string deduplication cache or {@code null} if not available.
-     */
-    @CheckForNull
-    public CacheStatsMBean getStringCacheStats() {
-        return cacheManager.getStringCacheStats();
-    }
-
-    /**
-     * @return  Statistics for the template deduplication cache or {@code null} if not available.
-     */
-    @CheckForNull
-    public CacheStatsMBean getTemplateCacheStats() {
-        return cacheManager.getTemplateCacheStats();
-    }
-
-    /**
-     * @return  Statistics for the node deduplication cache or {@code null} if not available.
-     */
-    @CheckForNull
-    public CacheStatsMBean getNodeCacheStats() {
-        return cacheManager.getNodeCacheStats();
     }
 
     /**
@@ -326,7 +292,7 @@ public class SegmentWriter {
             @Nonnull
             @Override
             public RecordId execute(@Nonnull SegmentBufferWriter writer) throws IOException {
-                return with(writer).writeNodeWithStats(state);
+                return with(writer).writeNode(state);
             }
         });
         return new SegmentNodeState(reader, this, nodeId);
@@ -354,7 +320,7 @@ public class SegmentWriter {
                 @Nonnull
                 @Override
                 public RecordId execute(@Nonnull SegmentBufferWriter writer) throws IOException {
-                    return with(writer).writeNodeWithStats(state);
+                    return with(writer, true).writeNode(state);
                 }
             });
             return new SegmentNodeState(reader, this, nodeId);
@@ -370,53 +336,6 @@ public class SegmentWriter {
      * <em>not thread safe</em>.
      */
     private abstract class SegmentWriteOperation implements WriteOperation {
-        private class NodeWriteStats {
-            /*
-             * Total number of nodes in the subtree rooted at the node passed
-             * to {@link #writeNode(SegmentWriteOperation, SegmentBufferWriter, NodeState)}
-             */
-            public int nodeCount;
-
-            /*
-             * Number of cache hits for a deferred compacted node
-             */
-            public int cacheHits;
-
-            /*
-             * Number of cache misses for a deferred compacted node
-             */
-            public int cacheMiss;
-
-            /*
-             * Number of nodes that where de-duplicated as the store already contained
-             * them.
-             */
-            public int deDupNodes;
-
-            /*
-             * Number of nodes that actually had to be written as there was no de-duplication
-             * and a cache miss (in case of a deferred compaction).
-             */
-            public int writesOps;
-
-            /*
-             * {@code true} for if the node written was a compaction operation, false otherwise
-             */
-            boolean isCompactOp;
-
-            @Override
-            public String toString() {
-                return "NodeStats{" +
-                        "op=" + (isCompactOp ? "compact" : "write") +
-                        ", nodeCount=" + nodeCount +
-                        ", writeOps=" + writesOps +
-                        ", deDupNodes=" + deDupNodes +
-                        ", cacheHits=" + cacheHits +
-                        ", cacheMiss=" + cacheMiss +
-                        ", hitRate=" + (100*(double) cacheHits / ((double) cacheHits + (double) cacheMiss)) +
-                        '}';
-            }
-        }
 
         /**
          * This exception is used internally to signal cancellation of a (recursive)
@@ -431,13 +350,10 @@ public class SegmentWriter {
         @Nonnull
         private final Supplier<Boolean> cancel;
 
-        @CheckForNull
-        private NodeWriteStats nodeWriteStats;
-
         private SegmentBufferWriter writer;
-        private RecordCache<String> stringCache;
-        private RecordCache<Template> templateCache;
-        private NodeCache nodeCache;
+        private Cache<String, RecordId> stringCache;
+        private Cache<Template, RecordId> templateCache;
+        private Cache<String, RecordId> nodeCache;
 
         protected SegmentWriteOperation(@Nonnull Supplier<Boolean> cancel) {
             this.cancel = cancel;
@@ -452,14 +368,19 @@ public class SegmentWriter {
         public abstract RecordId execute(@Nonnull SegmentBufferWriter writer) throws IOException;
 
         @Nonnull
-        SegmentWriteOperation with(@Nonnull SegmentBufferWriter writer) {
+        SegmentWriteOperation with(@Nonnull SegmentBufferWriter writer, boolean compacting) {
             checkState(this.writer == null);
             this.writer = writer;
             int generation = writer.getGeneration();
-            this.stringCache = cacheManager.getStringCache(generation);
-            this.templateCache = cacheManager.getTemplateCache(generation);
-            this.nodeCache = cacheManager.getNodeCache(generation);
+            this.stringCache = cacheManager.getStringCache(generation, COMPACT);
+            this.templateCache = cacheManager.getTemplateCache(generation, COMPACT);
+            this.nodeCache = cacheManager.getNodeCache(generation, COMPACT);
             return this;
+        }
+
+        @Nonnull
+        SegmentWriteOperation with(@Nonnull SegmentBufferWriter writer) {
+            return with(writer, false);
         }
 
         private RecordId writeMap(@Nullable MapRecord base,
@@ -971,30 +892,18 @@ public class SegmentWriter {
             return tid;
         }
 
-        private RecordId writeNodeWithStats(@Nonnull NodeState state) throws IOException {
-            this.nodeWriteStats = new NodeWriteStats();
-            try {
-                return writeNode(state);
-            } finally {
-                LOG.debug("{}", nodeWriteStats);
-            }
-        }
-
         private RecordId writeNode(@Nonnull NodeState state) throws IOException {
             if (cancel.get()) {
                 // Poor man's Either Monad
                 throw new CancelledWriteException();
             }
-            checkState(nodeWriteStats != null);
-            nodeWriteStats.nodeCount++;
 
-            RecordId compactedId = deduplicateNode(state, nodeWriteStats);
+            RecordId compactedId = deduplicateNode(state);
 
             if (compactedId != null) {
                 return compactedId;
             }
 
-            nodeWriteStats.writesOps++;
             RecordId recordId = writeNodeUncached(state);
             if (state instanceof SegmentNodeState) {
                 // This node state has been rewritten because it is from an older
@@ -1002,7 +911,6 @@ public class SegmentWriter {
                 // deduplication of hard links to it (e.g. checkpoints).
                 SegmentNodeState sns = (SegmentNodeState) state;
                 nodeCache.put(sns.getStableId(), recordId, cost(sns));
-                nodeWriteStats.isCompactOp = true;
                 compactionMonitor.compacted();
             }
             return recordId;
@@ -1025,7 +933,7 @@ public class SegmentWriter {
             if (after != null) {
                 // Pass null to indicate we don't want to update the node write statistics
                 // when deduplicating the base state
-                beforeId = deduplicateNode(after.getBaseState(), null);
+                beforeId = deduplicateNode(after.getBaseState());
             }
 
             SegmentNodeState before = null;
@@ -1131,12 +1039,9 @@ public class SegmentWriter {
          * and is still in the de-duplication cache for nodes.
          *
          * @param node The node states to de-duplicate.
-         * @param nodeWriteStats  write statistics to update if not {@code null}.
          * @return the id of the de-duplicated node or {@code null} if none.
          */
-        private RecordId deduplicateNode(
-                @Nonnull NodeState node,
-                @CheckForNull NodeWriteStats nodeWriteStats) {
+        private RecordId deduplicateNode(@Nonnull NodeState node) {
             if (!(node instanceof SegmentNodeState)) {
                 // De-duplication only for persisted node states
                 return null;
@@ -1152,26 +1057,13 @@ public class SegmentWriter {
             if (!isOldGeneration(sns.getRecordId())) {
                 // This segment node state is already in this store, no need to
                 // write it again
-                if (nodeWriteStats != null) {
-                    nodeWriteStats.deDupNodes++;
-                }
                 return sns.getRecordId();
             }
 
             // This is a segment node state from an old generation. Check
             // whether an equivalent one of the current generation is in the
             // cache
-            RecordId compacted = nodeCache.get(sns.getStableId());
-
-            if (nodeWriteStats != null) {
-                if (compacted == null) {
-                    nodeWriteStats.cacheMiss++;
-                } else {
-                    nodeWriteStats.cacheHits++;
-                }
-            }
-
-            return compacted;
+            return nodeCache.get(sns.getStableId());
         }
 
         /**

@@ -162,27 +162,27 @@ public class NodeRecordTest {
         }
     }
 
-    private WriterCacheManager nodesOnlyCache() {
+    private static WriterCacheManager nodesOnlyCache() {
         return new WriterCacheManager() {
 
             WriterCacheManager defaultCache = new WriterCacheManager.Default();
 
             @Nonnull
             @Override
-            public RecordCache<String> getStringCache(int generation) {
-                return Empty.INSTANCE.getStringCache(generation);
+            public Cache<String, RecordId> getStringCache(int generation, Operation operation) {
+                return Empty.INSTANCE.getStringCache(generation, operation);
             }
 
             @Nonnull
             @Override
-            public RecordCache<Template> getTemplateCache(int generation) {
-                return Empty.INSTANCE.getTemplateCache(generation);
+            public Cache<Template, RecordId> getTemplateCache(int generation, Operation operation) {
+                return Empty.INSTANCE.getTemplateCache(generation, operation);
             }
 
             @Nonnull
             @Override
-            public NodeCache getNodeCache(int generation) {
-                return defaultCache.getNodeCache(generation);
+            public Cache<String, RecordId> getNodeCache(int generation, Operation operation) {
+                return defaultCache.getNodeCache(generation, operation);
             }
         };
     }

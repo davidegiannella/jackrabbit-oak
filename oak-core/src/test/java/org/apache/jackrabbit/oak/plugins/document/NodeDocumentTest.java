@@ -146,7 +146,7 @@ public class NodeDocumentTest {
         NodeDocument root = getRootDocument(ns.getDocumentStore());
         // remove most recent previous doc
         NodeDocument toRemove = root.getAllPreviousDocs().next();
-        int numDeleted = new SplitDocumentCleanUp(ns.store, new VersionGCStats(),
+        int numDeleted = new SplitDocumentCleanUp(ns.getDocumentStore(), new VersionGCStats(),
                 Collections.singleton(toRemove)).disconnect().deleteSplitDocuments();
         assertEquals(1, numDeleted);
         numChanges -= Iterables.size(toRemove.getAllChanges());
@@ -169,7 +169,7 @@ public class NodeDocumentTest {
         NodeDocument root = getRootDocument(ns.getDocumentStore());
         // remove oldest previous doc
         NodeDocument toRemove = Iterators.getLast(root.getAllPreviousDocs());
-        int numDeleted = new SplitDocumentCleanUp(ns.store, new VersionGCStats(),
+        int numDeleted = new SplitDocumentCleanUp(ns.getDocumentStore(), new VersionGCStats(),
                 Collections.singleton(toRemove)).disconnect().deleteSplitDocuments();
         assertEquals(1, numDeleted);
         numChanges -= Iterables.size(toRemove.getAllChanges());
@@ -252,7 +252,7 @@ public class NodeDocumentTest {
         int numLeaves = Iterators.size(root.getPreviousDocLeaves());
         // remove most recent previous doc
         NodeDocument toRemove = root.getAllPreviousDocs().next();
-        int numDeleted = new SplitDocumentCleanUp(ns.store, new VersionGCStats(),
+        int numDeleted = new SplitDocumentCleanUp(ns.getDocumentStore(), new VersionGCStats(),
                 Collections.singleton(toRemove)).disconnect().deleteSplitDocuments();
         assertEquals(1, numDeleted);
 
@@ -276,7 +276,7 @@ public class NodeDocumentTest {
         int numLeaves = Iterators.size(root.getPreviousDocLeaves());
         // remove oldest previous doc
         NodeDocument toRemove = Iterators.getLast(root.getAllPreviousDocs());
-        int numDeleted = new SplitDocumentCleanUp(ns.store, new VersionGCStats(),
+        int numDeleted = new SplitDocumentCleanUp(ns.getDocumentStore(), new VersionGCStats(),
                 Collections.singleton(toRemove)).disconnect().deleteSplitDocuments();
         assertEquals(1, numDeleted);
 
@@ -857,6 +857,36 @@ public class NodeDocumentTest {
 
         ns1.dispose();
         ns2.dispose();
+    }
+
+    @Test
+    public void getSweepRevisions() throws Exception {
+        MemoryDocumentStore store = new MemoryDocumentStore();
+        NodeDocument doc = new NodeDocument(store);
+        RevisionVector sweepRev = doc.getSweepRevisions();
+        assertNotNull(sweepRev);
+        assertEquals(0, sweepRev.getDimensions());
+
+        Revision r1 = Revision.newRevision(1);
+        Revision r2 = Revision.newRevision(2);
+
+        UpdateOp op = new UpdateOp("id", true);
+        NodeDocument.setSweepRevision(op, r1);
+        UpdateUtils.applyChanges(doc, op);
+
+        sweepRev = doc.getSweepRevisions();
+        assertNotNull(sweepRev);
+        assertEquals(1, sweepRev.getDimensions());
+        assertEquals(new RevisionVector(r1), sweepRev);
+
+        op = new UpdateOp("id", false);
+        NodeDocument.setSweepRevision(op, r2);
+        UpdateUtils.applyChanges(doc, op);
+
+        sweepRev = doc.getSweepRevisions();
+        assertNotNull(sweepRev);
+        assertEquals(2, sweepRev.getDimensions());
+        assertEquals(new RevisionVector(r1, r2), sweepRev);
     }
 
     private DocumentNodeStore createTestStore(int numChanges) throws Exception {

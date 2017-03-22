@@ -504,7 +504,8 @@ public class SegmentNodeStoreService {
                 templateCacheStats.getName()
         ));
 
-        CacheStatsMBean stringDeduplicationCacheStats = store.getStringDeduplicationCacheStats();
+        WriterCacheManager cacheManager = builder.getCacheManager();
+        CacheStatsMBean stringDeduplicationCacheStats = cacheManager.getStringCacheStats();
         if (stringDeduplicationCacheStats != null) {
             closeables.add(registrations.registerMBean(
                     CacheStatsMBean.class,
@@ -514,7 +515,7 @@ public class SegmentNodeStoreService {
             ));
         }
 
-        CacheStatsMBean templateDeduplicationCacheStats = store.getTemplateDeduplicationCacheStats();
+        CacheStatsMBean templateDeduplicationCacheStats = cacheManager.getTemplateCacheStats();
         if (templateDeduplicationCacheStats != null) {
             closeables.add(registrations.registerMBean(
                     CacheStatsMBean.class,
@@ -524,7 +525,7 @@ public class SegmentNodeStoreService {
             ));
         }
 
-        CacheStatsMBean nodeDeduplicationCacheStats = store.getNodeDeduplicationCacheStats();
+        CacheStatsMBean nodeDeduplicationCacheStats = cacheManager.getNodeCacheStats();
         if (nodeDeduplicationCacheStats != null) {
             closeables.add(registrations.registerMBean(
                     CacheStatsMBean.class,
@@ -542,12 +543,14 @@ public class SegmentNodeStoreService {
                     GCMonitor.class,
                     monitor
             ));
-            closeables.add(registrations.registerMBean(
-                    SegmentRevisionGC.class,
-                    new SegmentRevisionGCMBean(store, gcOptions, monitor),
-                    SegmentRevisionGC.TYPE,
-                    "Segment node store revision garbage collection"
-            ));
+            if (!configuration.isStandbyInstance()) {
+                closeables.add(registrations.registerMBean(
+                        SegmentRevisionGC.class,
+                        new SegmentRevisionGCMBean(store, gcOptions, monitor),
+                        SegmentRevisionGC.TYPE,
+                        "Segment node store revision garbage collection"
+                ));
+            }
             Runnable cancelGC = new Runnable() {
 
                 @Override
