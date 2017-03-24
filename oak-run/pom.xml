@@ -189,6 +189,12 @@
       <version>${jackrabbit.version}</version>
       <optional>true</optional>
     </dependency>
+    <dependency>
+      <groupId>org.apache.jackrabbit</groupId>
+      <artifactId>oak-blob-cloud-azure</artifactId>
+      <version>${project.version}</version>
+      <optional>true</optional>
+    </dependency>
 
     <dependency>
       <groupId>net.sf.jopt-simple</groupId>

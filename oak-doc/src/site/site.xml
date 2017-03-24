@@ -28,6 +28,7 @@ under the License.
       <item href="index.html" name="Jackrabbit Oak" />
       <item href="license.html" name="License" />
       <item href="downloads.html" name="Downloads" />
+      <item href="articles.html" name="Articles" />
     </menu>
     <menu name="Concepts and Architecture">
       <item href="architecture/overview.html" name="Overview" />
@@ -41,6 +42,7 @@ under the License.
       <item href="nodestore/overview.html" name="Node Storage" collapse="false">
         <item href="nodestore/documentmk.html" name="Document NodeStore" collapse="false">
           <item href="nodestore/document/node-bundling.html" name="Node Bundling" />
+          <item href="nodestore/document/secondary-store.html" name="Secondary Store" />
           <item href="nodestore/persistent-cache.html" name="Persistent Cache" />
           <item href="clustering.html" name="Clustering" />
         </item>
@@ -56,6 +58,7 @@ under the License.
       </item>
       <item href="security/overview.html" name="Security" />
       <item href="features/atomic-counter.html" name="Atomic Counter" />
+      <item href="features/observation.html" name="Observation" />
     </menu>
     <menu name="Using Oak">
       <item href="use_getting_started.html" name="Getting Started" />
