@@ -80,7 +80,6 @@ import org.apache.jackrabbit.oak.segment.Compactor;
 import org.apache.jackrabbit.oak.segment.RecordId;
 import org.apache.jackrabbit.oak.segment.Segment;
 import org.apache.jackrabbit.oak.segment.SegmentId;
-import org.apache.jackrabbit.oak.segment.SegmentIdTable;
 import org.apache.jackrabbit.oak.segment.SegmentNodeState;
 import org.apache.jackrabbit.oak.segment.SegmentNotFoundException;
 import org.apache.jackrabbit.oak.segment.SegmentNotFoundExceptionListener;
@@ -386,7 +385,7 @@ public class FileStore extends AbstractFileStore {
      * @return {@code true} on success, {@code false} otherwise.
      */
     public boolean compact() {
-        return garbageCollector.compact() > 0;
+        return garbageCollector.compact().isSuccess();
     }
 
     /**
@@ -397,7 +396,9 @@ public class FileStore extends AbstractFileStore {
      * skipping the reclaimed segments.
      */
     public void cleanup() throws IOException {
-        garbageCollector.cleanup();
+        CompactionResult compactionResult = CompactionResult.skipped(
+                getGcGeneration(), garbageCollector.gcOptions);
+        fileReaper.add(garbageCollector.cleanup(compactionResult));
     }
 
     /**
@@ -741,14 +742,13 @@ public class FileStore extends AbstractFileStore {
     
                 if (sufficientEstimatedGain) {
                     if (!gcOptions.isPaused()) {
-                        int gen = compact();
-                        if (gen > 0) {
-                            fileReaper.add(cleanupOldGenerations(gen));
+                        CompactionResult compactionResult = compact();
+                        if (compactionResult.isSuccess()) {
                             lastSuccessfullGC = System.currentTimeMillis();
-                        } else if (gen < 0) {
+                        } else {
                             gcListener.info("TarMK GC #{}: cleaning up after failed compaction", GC_COUNT);
-                            fileReaper.add(cleanupGeneration(-gen));
                         }
+                        fileReaper.add(cleanup(compactionResult));
                     } else {
                         gcListener.skipped("TarMK GC #{}: compaction paused", GC_COUNT);
                     }
@@ -771,23 +771,20 @@ public class FileStore extends AbstractFileStore {
                     stats.getApproximateSize());
         }
 
-        private void log(@CheckForNull String nodeCacheOccupancyInfo) {
-            if (nodeCacheOccupancyInfo != null) {
-                log.info("NodeCache occupancy: {}", nodeCacheOccupancyInfo);
-            }
-        }
-
-        private int compactionAborted(int generation) {
+        @Nonnull
+        private CompactionResult compactionAborted(int generation) {
             gcListener.compactionFailed(generation);
-            return -generation;
+            return CompactionResult.aborted(getGcGeneration(), generation);
         }
 
-        private int compactionSucceeded(int generation) {
+        @Nonnull
+        private CompactionResult compactionSucceeded(int generation, @Nonnull RecordId compactedRootId) {
             gcListener.compactionSucceeded(generation);
-            return generation;
+            return CompactionResult.succeeded(generation, gcOptions, compactedRootId);
         }
 
-        synchronized int compact() {
+        @Nonnull
+        synchronized CompactionResult compact() {
             final int newGeneration = getGcGeneration() + 1;
             try {
                 Stopwatch watch = Stopwatch.createStarted();
@@ -799,7 +796,7 @@ public class FileStore extends AbstractFileStore {
                 compactionMonitor.init(GC_COUNT.get(), gcEntry.getRepoSize(), gcEntry.getNodes(), initialSize);
 
                 SegmentNodeState before = getHead();
-                Supplier<Boolean> cancel = new CancelCompactionSupplier(FileStore.this);
+                CancelCompactionSupplier cancel = new CancelCompactionSupplier(FileStore.this);
                 SegmentWriter writer = segmentWriterBuilder("c")
                         .with(cacheManager)
                         .withGeneration(newGeneration)
@@ -855,7 +852,9 @@ public class FileStore extends AbstractFileStore {
                         Stopwatch forceWatch = Stopwatch.createStarted();
                         
                         cycles++;
-                        success = forceCompact(writer, or(cancel, timeOut(forceTimeout, SECONDS)));
+                        cancel.timeOutAfter(forceTimeout, SECONDS);
+                        after = forceCompact(writer, cancel);
+                        success = after != null;
                         if (success) {
                             gcListener.info("TarMK GC #{}: compaction succeeded to force compact remaining commits " +
                                             "after {} ({} ms).",
@@ -878,7 +877,7 @@ public class FileStore extends AbstractFileStore {
                     writer.flush();
                     gcListener.info("TarMK GC #{}: compaction succeeded in {} ({} ms), after {} cycles",
                             GC_COUNT, watch, watch.elapsed(MILLISECONDS), cycles);
-                    return compactionSucceeded(newGeneration);
+                    return compactionSucceeded(newGeneration, after.getRecordId());
                 } else {
                     gcListener.info("TarMK GC #{}: compaction failed after {} ({} ms), and {} cycles",
                             GC_COUNT, watch, watch.elapsed(MILLISECONDS), cycles);
@@ -894,38 +893,6 @@ public class FileStore extends AbstractFileStore {
             }
         }
 
-        /**
-         * @param duration
-         * @param unit
-         * @return  {@code Supplier} instance which returns true once the time specified in
-         * {@code duration} and {@code unit} has passed.
-         */
-        private Supplier<Boolean> timeOut(final long duration, @Nonnull final TimeUnit unit) {
-            return new Supplier<Boolean>() {
-                final long deadline = currentTimeMillis() + MILLISECONDS.convert(duration, unit);
-                @Override
-                public Boolean get() {
-                    return currentTimeMillis() > deadline;
-                }
-            };
-        }
-
-        /**
-         * @param supplier1
-         * @param supplier2
-         * @return {@code Supplier} instance that returns {@code true} iff {@code supplier1} returns
-         * {@code true} or otherwise {@code supplier2} returns {@code true}.
-         */
-        private Supplier<Boolean> or(
-                @Nonnull Supplier<Boolean> supplier1,
-                @Nonnull Supplier<Boolean> supplier2) {
-            if (supplier1.get()) {
-                return Suppliers.ofInstance(true);
-            } else {
-                return supplier2;
-            }
-        }
-
         private SegmentNodeState compact(NodeState head, SegmentWriter writer, Supplier<Boolean> cancel)
         throws IOException {
             if (gcOptions.isOffline()) {
@@ -936,71 +903,44 @@ public class FileStore extends AbstractFileStore {
             }
         }
 
-        private boolean forceCompact(@Nonnull final SegmentWriter writer,
-                                     @Nonnull final Supplier<Boolean> cancel)
+        @CheckForNull
+        private SegmentNodeState forceCompact(@Nonnull final SegmentWriter writer,
+                                              @Nonnull final Supplier<Boolean> cancel)
         throws InterruptedException {
-            return revisions.
-                    setHead(new Function<RecordId, RecordId>() {
-                                @Nullable
-                                @Override
-                                public RecordId apply(RecordId base) {
-                                    try {
-                                        long t0 = currentTimeMillis();
-                                        SegmentNodeState after = compact(
-                                                segmentReader.readNode(base), writer, cancel);
-                                        if (after == null) {
-                                            gcListener.info("TarMK GC #{}: compaction cancelled after {} seconds",
-                                                    GC_COUNT, (currentTimeMillis() - t0) / 1000);
-                                            return null;
-                                        } else {
-                                            return after.getRecordId();
-                                        }
-                                    } catch (IOException e) {
-                                        gcListener.error("TarMK GC #{" + GC_COUNT + "}: Error during forced compaction.", e);
-                                        return null;
-                                    }
-                                }
-                            },
-                            timeout(gcOptions.getForceTimeout(), SECONDS));
-        }
-
-        synchronized void cleanup() throws IOException {
-            fileReaper.add(cleanupOldGenerations(getGcGeneration()));
-        }
-
-        /**
-         * Cleanup segments that are from an old generation. That segments whose generation
-         * is {@code gcGeneration - SegmentGCOptions.getRetainedGenerations()} or older.
-         * @param gcGeneration
-         * @return list of files to be removed
-         * @throws IOException
-         */
-        private List<File> cleanupOldGenerations(int gcGeneration) throws IOException {
-            final int reclaimGeneration = gcGeneration - gcOptions.getRetainedGenerations();
-
-            Predicate<Integer> reclaimPredicate = new Predicate<Integer>() {
+            RecordId compactedId = revisions.setHead(new Function<RecordId, RecordId>() {
+                @Nullable
                 @Override
-                public boolean apply(Integer generation) {
-                    return generation <= reclaimGeneration;
+                public RecordId apply(RecordId base) {
+                    try {
+                        long t0 = currentTimeMillis();
+                        SegmentNodeState after = compact(
+                                segmentReader.readNode(base), writer, cancel);
+                        if (after == null) {
+                            gcListener.info("TarMK GC #{}: compaction cancelled after {} seconds",
+                                    GC_COUNT, (currentTimeMillis() - t0) / 1000);
+                            return null;
+                        } else {
+                            return after.getRecordId();
+                        }
+                    } catch (IOException e) {
+                        gcListener.error("TarMK GC #{" + GC_COUNT + "}: Error during forced compaction.", e);
+                        return null;
+                    }
                 }
-            };
-            return cleanup(reclaimPredicate,
-                    "gc-count=" + GC_COUNT +
-                            ",gc-status=success" +
-                            ",store-generation=" + gcGeneration +
-                            ",reclaim-predicate=(generation<=" + reclaimGeneration + ")");
+            },
+            timeout(gcOptions.getForceTimeout(), SECONDS));
+            return compactedId != null
+                    ? segmentReader.readNode(compactedId)
+                    : null;
         }
 
         /**
-         * Cleanup segments whose generation matches the {@code reclaimGeneration} predicate.
-         * @param reclaimGeneration
-         * @param gcInfo  gc information to be passed to {@link SegmentIdTable#clearSegmentIdTables(Set, String)}
+         * Cleanup segments whose generation matches the {@link CompactionResult#reclaimer()} predicate.
          * @return list of files to be removed
          * @throws IOException
          */
-        private List<File> cleanup(
-                @Nonnull Predicate<Integer> reclaimGeneration,
-                @Nonnull String gcInfo)
+        @Nonnull
+        private List<File> cleanup(@Nonnull CompactionResult compactionResult)
         throws IOException {
             Stopwatch watch = Stopwatch.createStarted();
             Set<UUID> bulkRefs = newHashSet();
@@ -1034,7 +974,7 @@ public class FileStore extends AbstractFileStore {
 
             Set<UUID> reclaim = newHashSet();
             for (TarReader reader : cleaned.keySet()) {
-                reader.mark(bulkRefs, reclaim, reclaimGeneration);
+                reader.mark(bulkRefs, reclaim, compactionResult.reclaimer());
                 log.info("{}: size of bulk references/reclaim set {}/{}",
                         reader, bulkRefs.size(), reclaim.size());
                 if (shutdown) {
@@ -1079,7 +1019,7 @@ public class FileStore extends AbstractFileStore {
             } finally {
                 fileStoreLock.writeLock().unlock();
             }
-            tracker.clearSegmentIdTables(reclaimed, gcInfo);
+            tracker.clearSegmentIdTables(reclaimed, compactionResult.gcInfo());
 
             // Close old readers *after* setting readers to the new readers to avoid accessing
             // a closed reader from readSegment()
@@ -1094,7 +1034,9 @@ public class FileStore extends AbstractFileStore {
             long finalSize = size();
             long reclaimedSize = initialSize - afterCleanupSize;
             stats.reclaimed(reclaimedSize);
-            gcJournal.persist(reclaimedSize, finalSize, getGcGeneration(), compactionMonitor.getCompactedNodes());
+            gcJournal.persist(reclaimedSize, finalSize, getGcGeneration(),
+                    compactionMonitor.getCompactedNodes(),
+                    compactionResult.getCompactedRootId().toString10());
             gcListener.cleaned(reclaimedSize, finalSize);
             gcListener.info("TarMK GC #{}: cleanup completed in {} ({} ms). Post cleanup size is {} ({} bytes)" +
                             " and space reclaimed {} ({} bytes).",
@@ -1123,26 +1065,6 @@ public class FileStore extends AbstractFileStore {
                     bulkRefs.add(ref);
                 }
             }
-        }
-
-        /**
-         * Cleanup segments of the given generation {@code gcGeneration}.
-         * @param gcGeneration
-         * @return list of files to be removed
-         * @throws IOException
-         */
-        private List<File> cleanupGeneration(final int gcGeneration) throws IOException {
-            Predicate<Integer> cleanupPredicate = new Predicate<Integer>() {
-                @Override
-                public boolean apply(Integer generation) {
-                    return generation == gcGeneration;
-                }
-            };
-            return cleanup(cleanupPredicate,
-                    "gc-count=" + GC_COUNT +
-                            ",gc-status=failed" +
-                            ",store-generation=" + (gcGeneration - 1) +
-                            ",reclaim-predicate=(generation==" + gcGeneration + ")");
         }
 
         /**
@@ -1184,15 +1106,27 @@ public class FileStore extends AbstractFileStore {
          * the space was never sufficient to begin with), compaction is considered
          * canceled. Furthermore when the file store is shutting down, compaction is
          * considered canceled.
+         * Finally the cancellation can be triggered by a timeout that can be set
+         * at any time.
          */
         private class CancelCompactionSupplier implements Supplier<Boolean> {
             private final FileStore store;
 
             private String reason;
+            private volatile long deadline;
 
             public CancelCompactionSupplier(@Nonnull FileStore store) {
                 cancelled = false;
                 this.store = store;
+            }
+
+            /**
+             * Set a timeout for cancellation. Setting a different timeout cancels
+             * a previous one that did not yet elapse. Setting a timeout after
+             * cancellation took place has no effect.
+             */
+            public void timeOutAfter(final long duration, @Nonnull final TimeUnit unit) {
+                deadline = currentTimeMillis() + MILLISECONDS.convert(duration, unit);
             }
 
             @Override
@@ -1216,11 +1150,158 @@ public class FileStore extends AbstractFileStore {
                     reason = "Cancelled by user";
                     return true;
                 }
+                if (deadline > 0 && currentTimeMillis() > deadline) {
+                    reason = "Timeout after " + deadline/1000 + " seconds";
+                    return true;
+                }
                 return false;
             }
 
             @Override
             public String toString() { return reason; }
+        }
+    }
+
+    /**
+     * Instances of this class represent the result from a compaction.
+     * Either {@link #succeeded(int, SegmentGCOptions, RecordId) succeeded},
+     * {@link #aborted(int, int) aborted} or {@link #skipped(int, SegmentGCOptions) skipped}.
+     */
+    private abstract static class CompactionResult {
+        private final int currentGeneration;
+
+        protected CompactionResult(int currentGeneration) {
+            this.currentGeneration = currentGeneration;
+        }
+
+        /**
+         * Result of a succeeded compaction.
+         * @param newGeneration     the generation successfully created by compaction
+         * @param gcOptions         the current GC options used by compaction
+         * @param compactedRootId   the record id of the root created by compaction
+         */
+        static CompactionResult succeeded(
+                final int newGeneration,
+                @Nonnull final SegmentGCOptions gcOptions,
+                @Nonnull final RecordId compactedRootId) {
+            return new CompactionResult(newGeneration) {
+                int oldGeneration = newGeneration - gcOptions.getRetainedGenerations();
+
+                @Override
+                Predicate<Integer> reclaimer() {
+                    return CompactionResult.newOldReclaimer(oldGeneration);
+                }
+
+                @Override
+                boolean isSuccess() {
+                    return true;
+                }
+
+                @Override
+                RecordId getCompactedRootId() {
+                    return compactedRootId;
+                }
+            };
+        }
+
+        /**
+         * Result of an aborted compaction.
+         * @param currentGeneration  the current generation of the store
+         * @param failedGeneration   the generation that compaction attempted to create
+         */
+        static CompactionResult aborted(
+                int currentGeneration,
+                final int failedGeneration) {
+            return new CompactionResult(currentGeneration) {
+                @Override
+                Predicate<Integer> reclaimer() {
+                    return CompactionResult.newFailedReclaimer(failedGeneration);
+                }
+
+                @Override
+                boolean isSuccess() {
+                    return false;
+                }
+            };
+        }
+
+        /**
+         * Result serving as a placeholder for a compaction that was skipped.
+         * @param currentGeneration  the current generation of the store
+         * @param gcOptions         the current GC options used by compaction
+         */
+        static CompactionResult skipped(
+                final int currentGeneration,
+                @Nonnull final SegmentGCOptions gcOptions) {
+            return new CompactionResult(currentGeneration) {
+                int oldGeneration = currentGeneration - gcOptions.getRetainedGenerations();
+                @Override
+                Predicate<Integer> reclaimer() {
+                    return CompactionResult.newOldReclaimer(oldGeneration);
+                }
+
+                @Override
+                boolean isSuccess() {
+                    return true;
+                }
+            };
+        }
+
+        /**
+         * @return  a predicate determining which segments to
+         *          {@link GarbageCollector#cleanup(CompactionResult) clean up} for
+         *          the given compaction result.
+         */
+        abstract Predicate<Integer> reclaimer();
+
+        /**
+         * @return  {@code true} for {@link #succeeded(int, SegmentGCOptions, RecordId) succeeded}
+         *          and {@link #skipped(int, SegmentGCOptions) skipped}, {@code false} otherwise.
+         */
+        abstract boolean isSuccess();
+
+        /**
+         * @return  the record id of the compacted root on {@link #isSuccess() success},
+         *          {@link RecordId#NULL} otherwise.
+         */
+        RecordId getCompactedRootId() {
+            return RecordId.NULL;
+        }
+
+        /**
+         * @return  a diagnostic message describing the outcome of this compaction.
+         */
+        String gcInfo() {
+            return  "gc-count=" + GC_COUNT +
+                    ",gc-status=" + (isSuccess() ? "success" : "failed") +
+                    ",store-generation=" + currentGeneration +
+                    ",reclaim-predicate=" + reclaimer();
+        }
+
+        private static Predicate<Integer> newFailedReclaimer(final int failedGeneration) {
+            return new Predicate<Integer>() {
+                @Override
+                public boolean apply(Integer generation) {
+                    return generation == failedGeneration;
+                }
+                @Override
+                public String toString() {
+                    return "(generation==" + failedGeneration + ")";
+                }
+            };
+        }
+
+        private static Predicate<Integer> newOldReclaimer(final int oldGeneration) {
+            return new Predicate<Integer>() {
+                @Override
+                public boolean apply(Integer generation) {
+                    return generation <= oldGeneration;
+                }
+                @Override
+                public String toString() {
+                    return "(generation<=" + oldGeneration + ")";
+                }
+            };
         }
     }
 
