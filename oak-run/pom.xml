@@ -243,6 +243,11 @@
       <artifactId>oak-remote</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.apache.jackrabbit</groupId>
+      <artifactId>jackrabbit-jcr-server</artifactId>
+      <version>${jackrabbit.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>net.sf.jopt-simple</groupId>
@@ -314,6 +319,11 @@
       <groupId>org.apache.felix</groupId>
       <artifactId>org.apache.felix.inventory</artifactId>
       <version>1.0.4</version>
+    </dependency>
+    <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-servlet</artifactId>
+        <version>${jetty.version}</version>
     </dependency>
 
     <!-- Findbugs annotations -->
