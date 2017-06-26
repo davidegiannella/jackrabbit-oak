@@ -16,6 +16,7 @@
  */
 package org.apache.jackrabbit.oak.plugins.document;
 
+import static java.util.Collections.emptyList;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.jackrabbit.oak.api.CommitFailedException.CONSTRAINT;
 import static org.apache.jackrabbit.oak.plugins.document.Collection.NODES;
@@ -26,12 +27,15 @@ import static org.apache.jackrabbit.oak.plugins.document.NodeDocument.NUM_REVS_T
 import static org.apache.jackrabbit.oak.plugins.document.NodeDocument.PREV_SPLIT_FACTOR;
 import static org.apache.jackrabbit.oak.plugins.document.NodeDocument.getModifiedInSecs;
 import static org.apache.jackrabbit.oak.plugins.document.util.Utils.isCommitted;
+import static org.hamcrest.CoreMatchers.everyItem;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1930,7 +1934,7 @@ public class DocumentNodeStoreTest {
                             hookList.add(hook);
                         }
                         hookList.add(blockingHook);
-                        hookList.add(new ConflictHook(new AnnotatingConflictHandler()));
+                        hookList.add(ConflictHook.of(new AnnotatingConflictHandler()));
                         hookList.add(new EditorHook(new ConflictValidatorProvider()));
                         store.merge(builder, CompositeHook.compose(hookList), CommitInfo.EMPTY);
                     } catch (CommitFailedException cfe) {
@@ -3056,6 +3060,137 @@ public class DocumentNodeStoreTest {
         } finally {
             ns2.dispose();
         }
+    }
+
+    // OAK-6294
+    @Test
+    public void missingLastRevInApplyChanges() throws CommitFailedException {
+        DocumentNodeStore ns = builderProvider.newBuilder().getNodeStore();
+        DocumentNodeState root = ns.getRoot();
+
+        RevisionVector before = root.getLastRevision();
+        Revision rev = ns.newRevision();
+        RevisionVector after = new RevisionVector(ns.newRevision());
+
+        String path = "/foo";
+        ns.getNode(path, before);
+        assertNotNull(ns.getNodeCache().getIfPresent(new PathRev(path, before)));
+
+        ns.applyChanges(before, after, rev, path, false,
+                emptyList(), emptyList(), emptyList());
+        assertNull(ns.getNodeCache().getIfPresent(new PathRev(path, before)));
+    }
+
+    // OAK-6351
+    @Test
+    public void inconsistentNodeChildrenCache() throws Exception {
+        DocumentNodeStore ns = builderProvider.newBuilder().getNodeStore();
+        NodeBuilder builder = ns.getRoot().builder();
+        builder.child("a");
+        builder.child("b");
+        merge(ns, builder);
+        builder = ns.getRoot().builder();
+        builder.child("b").remove();
+        merge(ns, builder);
+        RevisionVector head = ns.getHeadRevision();
+
+        // simulate an incorrect cache entry
+        PathRev key = new PathRev("/", head);
+        DocumentNodeState.Children c = new DocumentNodeState.Children();
+        c.children.add("a");
+        c.children.add("b");
+        ns.getNodeChildrenCache().put(key, c);
+
+        try {
+            for (ChildNodeEntry entry : ns.getRoot().getChildNodeEntries()) {
+                entry.getName();
+            }
+            fail("must fail with DocumentStoreException");
+        } catch (DocumentStoreException e) {
+            // expected
+        }
+        // next attempt must succeed
+        List<String> names = Lists.newArrayList();
+        for (ChildNodeEntry entry : ns.getRoot().getChildNodeEntries()) {
+            names.add(entry.getName());
+        }
+        assertEquals(1L, names.size());
+        assertTrue(names.contains("a"));
+    }
+
+    // OAK-6383
+    @Test
+    public void disableBranches() throws Exception {
+        Clock clock = new Clock.Virtual();
+        clock.waitUntil(System.currentTimeMillis());
+        Revision.setClock(clock);
+        DocumentNodeStore ns = builderProvider.newBuilder().disableBranches()
+                .setUpdateLimit(100).clock(clock)
+                .setAsyncDelay(0).getNodeStore();
+        RevisionVector head = ns.getHeadRevision();
+        NodeBuilder b = ns.getRoot().builder();
+        for (int i = 0; i < 100; i++) {
+            b.child("node-" + i).setProperty("p", "v");
+        }
+        assertEquals(head, ns.getHeadRevision());
+        clock.waitUntil(clock.getTime() + TimeUnit.MINUTES.toMillis(5));
+        ns.runBackgroundOperations();
+        assertEquals(head, ns.getHeadRevision());
+    }
+
+    // OAK-6392
+    @Test
+    public void disabledBranchesWithBackgroundWrite() throws Exception {
+        final Thread current = Thread.currentThread();
+        final Set<Integer> updates = Sets.newHashSet();
+        DocumentStore store = new MemoryDocumentStore() {
+            @Override
+            public <T extends Document> List<T> createOrUpdate(Collection<T> collection,
+                                                               List<UpdateOp> updateOps) {
+                if (Thread.currentThread() != current) {
+                    updates.add(updateOps.size());
+                }
+                return super.createOrUpdate(collection, updateOps);
+            }
+        };
+        final DocumentNodeStore ns = builderProvider.newBuilder().disableBranches()
+                .setDocumentStore(store).setUpdateLimit(20).setAsyncDelay(0)
+                .getNodeStore();
+        NodeBuilder builder = ns.getRoot().builder();
+        for (int i = 0; i < 30; i++) {
+            builder.child("node-" + i).child("test");
+        }
+        merge(ns, builder);
+        ns.runBackgroundOperations();
+        final AtomicBoolean running = new AtomicBoolean(true);
+        Thread bgThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (running.get()) {
+                    ns.runBackgroundOperations();
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException e) {
+                        // ignore
+                    }
+                }
+            }
+        });
+        bgThread.start();
+
+        for (int j = 0; j < 20; j++) {
+            builder = ns.getRoot().builder();
+            for (int i = 0; i < 30; i++) {
+                builder.child("node-" + i).child("test").setProperty("p", j);
+            }
+            merge(ns, builder);
+        }
+        running.set(false);
+        bgThread.join();
+        // background thread must always update _lastRev from an entire
+        // branch commit and never partially
+        assertThat(updates, everyItem(is(30)));
+        assertEquals(1, updates.size());
     }
 
     private static class WriteCountingStore extends MemoryDocumentStore {

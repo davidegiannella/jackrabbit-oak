@@ -20,6 +20,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
+import org.apache.jackrabbit.oak.spi.query.QueryEngineSettings;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +31,10 @@ import org.slf4j.LoggerFactory;
  */
 public class FilterIterators {
     
-    private static final Logger LOG = LoggerFactory.getLogger(FilterIterators.class);    
+    private static final Logger LOG = LoggerFactory.getLogger(FilterIterators.class);
+
+    private FilterIterators() {
+    }
 
     /**
      * Verify the number of in-memory nodes is below the limit.

@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 
+import org.apache.jackrabbit.oak.run.cli.NodeStoreFixture;
 import org.apache.jackrabbit.oak.run.cli.NodeStoreFixtureProvider;
 import org.apache.jackrabbit.oak.run.cli.Options;
 import org.codehaus.groovy.tools.shell.IO;
@@ -60,7 +61,7 @@ public class Console {
         }
 
         GroovyConsole console =
-                new GroovyConsole(ConsoleSession.create(fixture.getStore()), new IO(), fixture);
+                new GroovyConsole(ConsoleSession.create(fixture.getStore(), fixture.getWhiteboard()), new IO(), fixture);
 
         int code = 0;
         if(!scriptArgs.isEmpty()){

@@ -354,6 +354,8 @@ public class RepositorySidegrade {
         NodeBuilder targetRoot = target.getRoot().builder();
         for (CheckpointRetriever.Checkpoint checkpoint : checkpoints) {
             NodeState checkpointRoot = source.retrieve(checkpoint.getName());
+            Map<String, String> checkpointInfo = source.checkpointInfo(checkpoint.getName());
+
             boolean tracePaths;
             if (previousRoot == EmptyNodeState.EMPTY_NODE) {
                 LOG.info("Migrating first checkpoint: {}", checkpoint.getName());
@@ -362,12 +364,15 @@ public class RepositorySidegrade {
                 LOG.info("Applying diff to {}", checkpoint.getName());
                 tracePaths = false;
             }
-            NodeState currentRoot = wrapSource(checkpointRoot, tracePaths, true);
-            currentRoot.compareAgainstBaseState(previousRoot, new ApplyDiff(targetRoot));
-            target.merge(targetRoot, EmptyHook.INSTANCE, CommitInfo.EMPTY);
-            previousRoot = currentRoot;
+            LOG.info("Checkpoint expiry time: {}, metadata: {}", checkpoint.getExpiryTime(), checkpointInfo);
 
-            Map<String, String> checkpointInfo = source.checkpointInfo(checkpoint.getName());
+            NodeState currentRoot = wrapSource(checkpointRoot, tracePaths, true);
+            NodeState baseRoot = previousRoot == EmptyNodeState.EMPTY_NODE ? previousRoot : wrapSource(previousRoot, false, true);
+            currentRoot.compareAgainstBaseState(baseRoot, new ApplyDiff(targetRoot));
+
+            target.merge(targetRoot, EmptyHook.INSTANCE, CommitInfo.EMPTY);
+            previousRoot = checkpointRoot;
+
             String newCheckpointName = target.checkpoint(checkpoint.getExpiryTime() - System.currentTimeMillis(), checkpointInfo);
             if (checkpointInfo.containsKey("name")) {
                 nameToRevision.put(checkpointInfo.get("name"), newCheckpointName);
@@ -384,8 +389,10 @@ public class RepositorySidegrade {
             LOG.info("Applying diff to head");
             tracePaths = false;
         }
+        
         NodeState currentRoot = wrapSource(sourceRoot, tracePaths, true);
-        currentRoot.compareAgainstBaseState(previousRoot, new ApplyDiff(targetRoot));
+        NodeState baseRoot = previousRoot == EmptyNodeState.EMPTY_NODE ? previousRoot : wrapSource(previousRoot, false, true);
+        currentRoot.compareAgainstBaseState(baseRoot, new ApplyDiff(targetRoot));
 
         LOG.info("Rewriting checkpoint names in /:async {}", nameToRevision);
         NodeBuilder async = targetRoot.getChildNode(":async");

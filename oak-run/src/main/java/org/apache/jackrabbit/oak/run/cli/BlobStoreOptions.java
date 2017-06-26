@@ -29,11 +29,12 @@ import joptsimple.OptionSpec;
 import static java.util.Arrays.asList;
 
 public class BlobStoreOptions implements OptionsBean {
-    public enum Type {FDS, S3, AZURE, NONE}
+    public enum Type {FDS, S3, AZURE, FAKE, NONE}
     private final OptionSpec<String> fdsOption;
     private final OptionSpec<String> s3Option;
     private final OptionSpec<String> azureOption;
     private final OptionSpec<String> fdsPathOption;
+    private final OptionSpec<String> fakeDsPathOption;
     private OptionSet options;
 
     public BlobStoreOptions(OptionParser parser){
@@ -41,7 +42,10 @@ public class BlobStoreOptions implements OptionsBean {
                 .withRequiredArg().ofType(String.class);
         fdsPathOption = parser.acceptsAll(asList("fds-path"), "FileDataStore path")
                 .withRequiredArg().ofType(String.class);
-        s3Option = parser.accepts("s3ds", "S3DataStore config path")
+        fakeDsPathOption = parser.acceptsAll(asList("fake-ds-path"), "Path to be used to construct a Fake " +
+                "FileDataStore. It return an empty stream for any Blob but allows writes if used in read-write mode. (for testing purpose only)")
+                .withRequiredArg().ofType(String.class);
+        s3Option = parser.acceptsAll(asList("s3ds", "s3-config-path"), "S3DataStore config path")
                 .withRequiredArg().ofType(String.class);
         azureOption = parser.acceptsAll(asList("azureblobds", "azureds"), "AzureBlobStorageDataStore config path")
                 .withRequiredArg().ofType(String.class);
@@ -60,7 +64,8 @@ public class BlobStoreOptions implements OptionsBean {
     @Override
     public String description() {
         return "Options related to configuring a BlobStore. All config options here (except --fds-path) refer to " +
-                "path of the config file. The file should be '.config' file confirming to OSGi config admin format ";
+                "the path of the config file. The file can be a '.config' file in the OSGi config admin format or " +
+                "properties file with '.cfg' and '.properties' extensions.";
     }
 
     @Override
@@ -89,6 +94,10 @@ public class BlobStoreOptions implements OptionsBean {
         return azureOption.value(options);
     }
 
+    public String getFakeDataStorePath() {
+        return fakeDsPathOption.value(options);
+    }
+
     public Type getBlobStoreType(){
         if (options.has(fdsOption) || options.has(fdsPathOption)){
             return Type.FDS;
@@ -96,6 +105,8 @@ public class BlobStoreOptions implements OptionsBean {
             return Type.S3;
         } else if (options.has(azureOption)){
             return Type.AZURE;
+        } else if (options.has(fakeDsPathOption)){
+            return Type.FAKE;
         }
         return Type.NONE;
     }

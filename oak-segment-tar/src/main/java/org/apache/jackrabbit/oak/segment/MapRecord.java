@@ -305,8 +305,14 @@ public class MapRecord extends Record {
             List<MapRecord> buckets = getBucketList(segment);
             List<Iterable<String>> keys =
                     newArrayListWithCapacity(buckets.size());
-            for (MapRecord bucket : buckets) {
-                keys.add(bucket.getKeys());
+            for (final MapRecord bucket : buckets) {
+                keys.add(new Iterable<String>() {
+                    @Nonnull
+                    @Override
+                    public Iterator<String> iterator() {
+                        return bucket.getKeys().iterator();
+                    }
+                });
             }
             return concat(keys);
         }
@@ -351,6 +357,7 @@ public class MapRecord extends Record {
                     newArrayListWithCapacity(buckets.size());
             for (final MapRecord bucket : buckets) {
                 entries.add(new Iterable<MapEntry>() {
+                    @Nonnull
                     @Override
                     public Iterator<MapEntry> iterator() {
                         return bucket.getEntries(diffKey, diffValue).iterator();

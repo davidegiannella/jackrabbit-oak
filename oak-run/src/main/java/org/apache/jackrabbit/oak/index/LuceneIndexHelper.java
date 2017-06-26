@@ -22,21 +22,16 @@ package org.apache.jackrabbit.oak.index;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.io.FileUtils;
-import org.apache.jackrabbit.oak.plugins.index.lucene.ExtractedTextCache;
 import org.apache.jackrabbit.oak.plugins.index.lucene.IndexCopier;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexEditorProvider;
+import org.apache.jackrabbit.oak.plugins.index.lucene.directory.ActiveDeletedBlobCollectorFactory.BlobDeletionCallback;
 import org.apache.jackrabbit.oak.plugins.index.lucene.directory.DirectoryFactory;
 import org.apache.jackrabbit.oak.spi.blob.GarbageCollectableBlobStore;
 
 class LuceneIndexHelper implements Closeable {
     private final IndexHelper indexHelper;
     private IndexCopier indexCopier;
-    //TODO Set pre extracted text provider
-    private final ExtractedTextCache textCache =
-            new ExtractedTextCache(FileUtils.ONE_MB * 5, TimeUnit.HOURS.toSeconds(5));
     private DirectoryFactory directoryFactory;
 
     LuceneIndexHelper(IndexHelper indexHelper) {
@@ -44,19 +39,30 @@ class LuceneIndexHelper implements Closeable {
     }
 
     public LuceneIndexEditorProvider createEditorProvider() throws IOException {
-        LuceneIndexEditorProvider editor =  new LuceneIndexEditorProvider(
-                getIndexCopier(),
-                textCache,
-                null,
-                indexHelper.getMountInfoProvider()
-        );
+        LuceneIndexEditorProvider editor;
+        if (directoryFactory != null) {
+            editor = new LuceneIndexEditorProvider(
+                    getIndexCopier(),
+                    indexHelper.getExtractedTextCache(),
+                    null,
+                    indexHelper.getMountInfoProvider()
+            ) {
+                @Override
+                protected DirectoryFactory newDirectoryFactory(BlobDeletionCallback blobDeletionCallback) {
+                    return directoryFactory;
+                }
+            };
+        } else {
+            editor = new LuceneIndexEditorProvider(
+                    getIndexCopier(),
+                    indexHelper.getExtractedTextCache(),
+                    null,
+                    indexHelper.getMountInfoProvider()
+            );
+        }
 
         if (indexHelper.getBlobStore() instanceof GarbageCollectableBlobStore) {
             editor.setBlobStore((GarbageCollectableBlobStore) indexHelper.getBlobStore());
-        }
-
-        if (directoryFactory != null) {
-            editor.setDirectoryFactory(directoryFactory);
         }
 
         return editor;

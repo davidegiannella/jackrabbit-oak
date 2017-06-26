@@ -19,12 +19,15 @@
 
 package org.apache.jackrabbit.oak.api.jmx;
 
+import javax.management.openmbean.CompositeData;
 import javax.management.openmbean.TabularData;
 
 import aQute.bnd.annotation.ProviderType;
 
+import java.util.Date;
+
 /**
- * MBean for managing {@link org.apache.jackrabbit.oak.spi.state.NodeStore#checkpoint checkpoints}.
+ * MBean for managing {@code org.apache.jackrabbit.oak.spi.state.NodeStore#checkpoint checkpoints}.
  */
 @ProviderType
 public interface CheckpointMBean {
@@ -38,18 +41,34 @@ public interface CheckpointMBean {
     TabularData listCheckpoints();
 
     /**
+     * @return creation timestamp of oldest checkpoint.
+     */
+    long getOldestCheckpointCreationTimestamp();
+
+    /**
+     * @return creation date of oldest checkpoint.
+     */
+    Date getOldestCheckpointCreationDate();
+
+    /**
+     * @return creation information about oldest checkpoint.
+     */
+    @Deprecated
+    CompositeData getOldestCheckpointCreationTime();
+
+    /**
      * Create a new checkpoint with the given {@code lifetime}.
+     * See {@code org.apache.jackrabbit.oak.spi.state.NodeStore#checkpoint}
      * @param lifetime
      * @return the id of the newly created checkpoint
-     * @see org.apache.jackrabbit.oak.spi.state.NodeStore#checkpoint
      */
     String createCheckpoint(long lifetime);
 
     /**
      * Release the checkpoint with the given {@code id}.
+     * See {@code org.apache.jackrabbit.oak.spi.state.NodeStore#checkpoint}
      * @param id
      * @return  {@code true} on success, {@code false} otherwise.
-     * @see org.apache.jackrabbit.oak.spi.state.NodeStore#checkpoint
      */
     boolean releaseCheckpoint(String id);
 }

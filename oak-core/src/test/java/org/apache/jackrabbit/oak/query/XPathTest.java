@@ -18,12 +18,14 @@ package org.apache.jackrabbit.oak.query;
 
 import static org.apache.jackrabbit.oak.InitialContent.INITIAL_CONTENT;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.text.ParseException;
 
 import org.apache.jackrabbit.oak.query.ast.NodeTypeInfoProvider;
 import org.apache.jackrabbit.oak.query.xpath.XPathToSQL2Converter;
+import org.apache.jackrabbit.oak.spi.query.QueryEngineSettings;
 import org.junit.Test;
 
 /**
@@ -33,6 +35,40 @@ public class XPathTest {
     
     private final NodeTypeInfoProvider nodeTypes =
             new NodeStateNodeTypeInfoProvider(INITIAL_CONTENT);
+    
+    @Test
+    public void complexQuery() throws ParseException {
+        for(int n = 1; n < 15; n++) {
+            for(int m = 1; m < 15; m++) {
+                complexQuery(n, m);
+            }            
+        }
+    }
+    
+    private void complexQuery(int n, int m) throws ParseException {
+        StringBuilder buff = new StringBuilder();
+        buff.append("/jcr:root//*[");
+        for (int i = 0; i < n; i++) {
+            if (i > 0) {
+                buff.append("and ");
+            }
+            buff.append("(");
+            for (int j = 0; j < m; j++) {
+                if (j > 0) {
+                    buff.append("or ");
+                }
+                buff.append("@x" + j + " = " + j);
+            }
+            buff.append(")\n");
+        }
+        buff.append("]");
+        String xpath = buff.toString();
+        String sql2 = new XPathToSQL2Converter().convert(xpath);
+        assertTrue("Length: " + sql2.length(), sql2.length() < 200000);
+        SQL2Parser p = new SQL2Parser(null, nodeTypes, new QueryEngineSettings());
+        Query q = p.parse(sql2, false);
+        q.buildAlternativeQuery();
+    }
     
     @Test
     public void queryOptions() throws ParseException {

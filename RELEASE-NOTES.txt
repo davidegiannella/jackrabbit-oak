@@ -1,4 +1,4 @@
-Release Notes -- Apache Jackrabbit Oak -- Version 1.5.18
+Release Notes -- Apache Jackrabbit Oak -- Version 1.7.2
 
 Introduction
 ------------
@@ -7,91 +7,85 @@ Jackrabbit Oak is a scalable, high-performance hierarchical content
 repository designed for use as the foundation of modern world-class
 web sites and other demanding content applications.
 
-Apache Jackrabbit Oak 1.5.18 is an unstable release cut directly from
+Apache Jackrabbit Oak 1.7.2 is an unstable release cut directly from
 Jackrabbit Oak trunk, with a focus on new features and other
-improvements. For production use we recommend the latest stable 1.4.x
+improvements. For production use we recommend the latest stable 1.6.x
 release.
 
 The Oak effort is a part of the Apache Jackrabbit project.
 Apache Jackrabbit is a project of the Apache Software Foundation.
 
-Changes in Oak 1.5.18
+Changes in Oak 1.7.2
 ---------------------
 
 Technical task
 
-    [OAK-5414] - Refactor LuceneIndexEditor to move out logic related
-    to making Lucene Document to separate class
-    [OAK-5415] - Refactor Binary text extraction logic from
-    LuceneIndexEditor
-    [OAK-5430] - Provide an extension point in DocumentNodeStore
-    Journal support
-    [OAK-5431] - Expose withAsyncIndexing name variant in Jcr builder
+    [OAK-6248] - Enable use of pre extracted text cache
+    [OAK-6286] - Use BlobStore in read only mode by default unless
+    read-write mode enabled
 
 Bug
 
-    [OAK-4954] - SetPropertyTest benchmark fails on Segment Tar
-    [OAK-5304] - DefaultSyncContext.sync(ExternalIdentity) does not
-    verify same identity provider
-    [OAK-5326] - Not able to move segment store directory on
-    filesystem after closing FileStore
-    [OAK-5328] - Fix the errors reported by the Javadoc tool in JDK8
-    [OAK-5348] - ChangeCollectorProvider should be registered as
-    EditorProvider
-    [OAK-5413] - XPath: "union" combined with "or" is not converted
-    correctly
-    [OAK-5416] - Async reindex of a sync property does't release
-    created checkpoint
-    [OAK-5423] - MultiplexingNodeStoreService: Missing element AD in
-    element OCD
-    [OAK-5436] - o.a.j.o.segment.file.Manifest#load leaks a file
-    descriptor
-    [OAK-5454] - Failed test:
-    org.apache.jackrabbit.oak.plugins.blob.CachingDataStoreTest.zeroStagingCacheAddGetDelete
-    [OAK-5461] - [BlobGC] BlobIdTracker remove() should merge
-    generations
-    [OAK-5462] - Expensive NodeDocument.split() with multi-valued
-    binary property
-    [OAK-5465] - StandbyClientSyncExecution uses an unbound segment
-    cache
-    [OAK-5471] - Too many files with unapproved license
+    [OAK-6294] - The "missing" node cache value breaks the
+    DocumentNodeStore#applyChanges
+    [OAK-6314] - ActiveDeletedBlobCollectorTest.multiThreadedCommits
+    is failing intermittently for a few users
+    [OAK-6321] - oak-blob-plugins exports all packages
+    [OAK-6335] - Baseline check fails in oak-api
+    [OAK-6338] - AbstractCompositeProviderTest reverse order flag is
+    ignored
+    [OAK-6365] - oak-store-spi fails on javadoc
 
 Improvement
 
-    [OAK-4808] - Index external changes as part of NRT indexing
-    [OAK-4809] - JMX Stats for NRT Indexing
-    [OAK-5406] - LuceneIndexEditor context should only log perf log if
-    index is updated
-    [OAK-5417] - Refactor registration of PropertyIndexAsyncReindex
-    [OAK-5421] - Add LuceneDoc directly to queue from
-    LuceneIndexEditor
-    [OAK-5425] - Log warning when revision GC is skipped
-    [OAK-5438] - FileStore and ReadOnlyFileStore might leak journal
-    file descriptors
-    [OAK-5443] - VersionGarbageCollector:measure time to sort docIds
-    separately
-    [OAK-5448] - Aggregate logic should optimize for case where
-    patterns do not include wildcard
-    [OAK-5452] - Fix typo in CheckpointMBean type value
-    [OAK-5456] - Reduce reads in NodeDocument.getVisibleChanges()
-    [OAK-5474] - Use random ports when running Cold Standby tests
+    [OAK-3381] - Provide Common Ancestor To ConflictHandler
+    [OAK-4637] - Property index: include/exclude key pattern list
+    [OAK-6295] - Move constants from oak.query.QueryImpl to
+    oak.spi.query.QueryConstants
+    [OAK-6323] - Remove StandbyTest
+    [OAK-6324] - Remove SegmentNodeStoreFactoryTest#nodeStoreProvider
+    [OAK-6326] - Remove unused field SegmentNodeStore.reader
+    [OAK-6327] - Convert FileStore.maxFileSize fiels into local
+    variable
+    [OAK-6328] - Declare StandbyStoreService.closer final
+    [OAK-6329] - Declare immutable field of FileStore.CompactionResult
+    final
+    [OAK-6330] - LockBasedScheduler.execute declares exception that is
+    never thrown
+    [OAK-6331] - Closeable.close in StandbyStoreService declares
+    exception that is never thrown
+    [OAK-6332] - Add missing @Nonnull annotations
+    [OAK-6348] - Active deletion of blobs should have larger queue for
+    blobs being deleted
+    [OAK-6349] - Randomized permission tests
+    [OAK-6351] - Invalidate cache entries when getChildNodes() is
+    aborted
+    [OAK-6354] - Move DocumentNodeStoreMBean implementation in
+    separate file
+    [OAK-6361] - Oak run tika command should connect to NodeStore in
+    read only mode
+    [OAK-6362] - Use NodeStoreFixtureProvider in tika command of
+    oak-run
+    [OAK-6363] - BlobStoreFixtureProvider should support '.cfg' files
+    also
+    [OAK-6364] - BlobStoreFixtureProvider should configure a default
+    'secret' value if none specified
+
+New Feature
+
+    [OAK-3712] - Clean up uncommitted changes
 
 Task
 
-    [OAK-5136] - remove prefiltering testmode (feature/config) before
-    1.6
-    [OAK-5230] - AsyncIndexService should ensure that async lanes
-    should confirm to naming convention
-    [OAK-5320] - Update Oak trunk to Jackrabbit 2.14.0
-    [OAK-5335] - Clarify the various directories and their usages in
-    SegmentNodeStoreService
-    [OAK-5422] - Increase the DocumentQueue size to 10000
-    [OAK-5432] - update html unit test dependency
-    [OAK-5445] - Log the path of LuceneDoc while adding it to queue
-    [OAK-5466] - Switch to oak-segment-tar in pojosr module
+    [OAK-6304] - Cyclic dependency between oak.spi.query an
+    oak.query.*
+    [OAK-6311] - Move generic part of PropertyStateValue and
+    PropertyValues to oak-store-spi
+    [OAK-6343] - Add replacement for deprecated
+    RootFactory.createSystemRoot
 
 In addition to the above-mentioned changes, this release contains
-all changes included up to the Apache Jackrabbit Oak 1.5.x release.
+all changes included up to the Apache Jackrabbit Oak 1.7.x release.
 
 For more detailed information about all the changes in this and other
 Oak releases, please see the Oak issue tracker at

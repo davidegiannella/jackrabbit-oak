@@ -18,17 +18,21 @@ package org.apache.jackrabbit.oak.query.xpath;
 
 import java.util.ArrayList;
 
-import org.apache.jackrabbit.oak.query.QueryImpl;
 import org.apache.jackrabbit.oak.query.QueryOptions;
 import org.apache.jackrabbit.oak.query.QueryOptions.Traversal;
 import org.apache.jackrabbit.oak.query.xpath.Expression.AndCondition;
 import org.apache.jackrabbit.oak.query.xpath.Expression.OrCondition;
 import org.apache.jackrabbit.oak.query.xpath.Expression.Property;
+import org.apache.jackrabbit.oak.spi.query.QueryConstants;
 
 /**
  * An xpath statement.
  */
 public class Statement {
+    
+    private static final UnsupportedOperationException TOO_MANY_UNION = 
+            new UnsupportedOperationException("Too many union queries");
+    private final static int MAX_UNION = Integer.getInteger("oak.xpathMaxUnion", 1000);
 
     boolean explain;
     boolean measure;
@@ -62,7 +66,12 @@ public class Statement {
         where = where.optimize();
         optimizeSelectorNodeTypes();
         ArrayList<Expression> unionList = new ArrayList<Expression>();
-        addToUnionList(where, unionList);
+        try {
+            addToUnionList(where, unionList);
+        } catch (UnsupportedOperationException e) {
+            // too many union
+            return this;
+        }
         if (unionList.size() == 1) {
             return this;
         }
@@ -141,6 +150,9 @@ public class Statement {
                 return;
             }
         }
+        if (unionList.size() > MAX_UNION) {
+            throw TOO_MANY_UNION;
+        }
         unionList.add(condition);
     }
     
@@ -158,14 +170,14 @@ public class Statement {
         
         // select ...
         buff.append("select ");
-        buff.append(new Expression.Property(columnSelector, QueryImpl.JCR_PATH, false).toString());
+        buff.append(new Expression.Property(columnSelector, QueryConstants.JCR_PATH, false).toString());
         if (selectors.size() > 1) {
-            buff.append(" as ").append('[').append(QueryImpl.JCR_PATH).append(']');
+            buff.append(" as ").append('[').append(QueryConstants.JCR_PATH).append(']');
         }
         buff.append(", ");
-        buff.append(new Expression.Property(columnSelector, QueryImpl.JCR_SCORE, false).toString());
+        buff.append(new Expression.Property(columnSelector, QueryConstants.JCR_SCORE, false).toString());
         if (selectors.size() > 1) {
-            buff.append(" as ").append('[').append(QueryImpl.JCR_SCORE).append(']');
+            buff.append(" as ").append('[').append(QueryConstants.JCR_SCORE).append(']');
         }
         if (columnList.isEmpty()) {
             buff.append(", ");
@@ -304,7 +316,12 @@ public class Statement {
             if (measure) {
                 buff.append("measure ");
             }
-            buff.append(s1).append(" union ").append(s2);
+            try {
+                buff.append(s1).append(" union ").append(s2);
+            } catch (OutOfMemoryError | StackOverflowError e) {
+System.out.println("OOME");                
+                throw e;
+            }
             // order by ...
             if (orderList != null && !orderList.isEmpty()) {
                 buff.append(" order by ");

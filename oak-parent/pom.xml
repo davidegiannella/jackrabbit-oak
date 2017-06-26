@@ -148,14 +148,6 @@
               <_nodefaultversion>true</_nodefaultversion>
             </instructions>
           </configuration>
-          <!-- OAK-3041: use updated Bnd -->
-          <dependencies>
-            <dependency>
-              <groupId>biz.aQute.bnd</groupId>
-              <artifactId>bndlib</artifactId>
-              <version>2.4.0</version>
-            </dependency>
-          </dependencies>
           <executions>
             <execution>
               <id>baseline</id>
@@ -600,6 +592,11 @@
         <groupId>commons-io</groupId>
         <artifactId>commons-io</artifactId>
         <version>2.5</version>
+      </dependency>
+      <dependency>
+        <groupId>commons-codec</groupId>
+        <artifactId>commons-codec</artifactId>
+        <version>1.5</version>
       </dependency>
       <dependency>
         <groupId>org.apache.commons</groupId>

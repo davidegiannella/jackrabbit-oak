@@ -29,6 +29,8 @@ import com.google.common.collect.MutableClassToInstanceMap;
 import com.google.common.collect.Sets;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
+import org.apache.jackrabbit.oak.spi.whiteboard.DefaultWhiteboard;
+import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.util.Arrays.asList;
@@ -42,6 +44,7 @@ public class Options {
     private String commandName;
     private String summary;
     private String connectionString;
+    private final Whiteboard whiteboard = new DefaultWhiteboard();
 
     public Options(){
         this.oakRunOptions = EnumSet.allOf(OptionBeans.class);
@@ -74,7 +77,7 @@ public class Options {
         configure(optionSet);
         checkForHelp(parser);
         if (checkNonOptions) {
-            checkNonOptions(parser);
+            checkNonOptions();
         }
         return optionSet;
     }
@@ -119,6 +122,10 @@ public class Options {
         return getOptionBean(CommonOptions.class);
     }
 
+    public Whiteboard getWhiteboard() {
+        return whiteboard;
+    }
+
     private void configure(OptionSet optionSet){
         for (OptionsBean bean : optionBeans.values()){
             bean.configure(optionSet);
@@ -133,11 +140,11 @@ public class Options {
         }
     }
 
-    private void checkNonOptions(OptionParser parser) throws IOException {
+    public void checkNonOptions() throws IOException {
         //Some non option should be provided to enable
         if (optionBeans.containsKey(CommonOptions.class)
                 && getCommonOpts().getNonOptions().isEmpty()){
-            parser.printHelpOn(System.out);
+            System.out.println("NodeStore details not provided");
             systemExit(1);
         }
     }

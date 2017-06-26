@@ -49,6 +49,7 @@ import javax.management.openmbean.OpenType;
 import javax.management.openmbean.SimpleType;
 import javax.management.openmbean.TabularData;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Lists;
 import org.apache.jackrabbit.api.stats.TimeSeries;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
@@ -64,7 +65,10 @@ import org.apache.jackrabbit.oak.plugins.commit.ConflictHook;
 import org.apache.jackrabbit.oak.plugins.commit.ConflictValidatorProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexUpdate.MissingIndexProviderStrategy;
 import org.apache.jackrabbit.oak.plugins.index.TrackingCorruptIndexHandler.CorruptIndexInfo;
+import org.apache.jackrabbit.oak.plugins.index.progress.MetricRateEstimator;
+import org.apache.jackrabbit.oak.plugins.index.progress.NodeCounterMBeanEstimator;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
+import org.apache.jackrabbit.oak.plugins.metric.MetricStatisticsProvider;
 import org.apache.jackrabbit.oak.spi.commit.CommitContext;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
@@ -199,6 +203,8 @@ public class AsyncIndexUpdate implements Runnable, Closeable {
 
     private TrackingCorruptIndexHandler corruptIndexHandler = new TrackingCorruptIndexHandler();
 
+    private final StatisticsProvider statisticsProvider;
+
     public AsyncIndexUpdate(@Nonnull String name, @Nonnull NodeStore store,
                             @Nonnull IndexEditorProvider provider, boolean switchOnSync) {
         this(name, store, provider, StatisticsProvider.NOOP, switchOnSync);
@@ -212,6 +218,7 @@ public class AsyncIndexUpdate implements Runnable, Closeable {
         this.provider = checkNotNull(provider);
         this.switchOnSync = switchOnSync;
         this.leaseTimeOut = DEFAULT_ASYNC_TIMEOUT;
+        this.statisticsProvider = statsProvider;
         this.indexStats = new AsyncIndexStats(name, statsProvider);
     }
 
@@ -380,7 +387,7 @@ public class AsyncIndexUpdate implements Runnable, Closeable {
         }
 
         @Override
-        public void traversedNode() throws CommitFailedException{
+        public void traversedNode(PathSource pathSource) throws CommitFailedException{
             checkIfStopped();
 
             if (indexStats.incTraversal() % LEASE_CHECK_INTERVAL == 0 && isLeaseCheckEnabled(leaseTimeOut)) {
@@ -704,7 +711,7 @@ public class AsyncIndexUpdate implements Runnable, Closeable {
         // sure to not delete the reference checkpoint, as the other index
         // task will take care of it
         taskSplitter.maybeSplit(beforeCheckpoint, callback.lease);
-        IndexUpdate indexUpdate;
+        IndexUpdate indexUpdate = null;
         try {
             NodeBuilder builder = store.getRoot().builder();
 
@@ -715,6 +722,7 @@ public class AsyncIndexUpdate implements Runnable, Closeable {
             indexUpdate =
                     new IndexUpdate(provider, name, after, builder, callback, callback, info, corruptIndexHandler)
                     .withMissingProviderStrategy(missingStrategy);
+            configureRateEstimator(indexUpdate);
             CommitFailedException exception =
                     EditorDiff.process(VisibleEditor.wrap(indexUpdate), before, after);
             if (exception != null) {
@@ -760,13 +768,21 @@ public class AsyncIndexUpdate implements Runnable, Closeable {
             mergeWithConcurrencyCheck(store, validatorProviders, builder, beforeCheckpoint,
                     callback.lease, name);
             if (indexUpdate.isReindexingPerformed()) {
-                log.info("[{}] Reindexing completed for indexes: {} in {}",
-                        name, indexUpdate.getReindexStats(), watch);
+                log.info("[{}] Reindexing completed for indexes: {} in {} ({} ms)",
+                        name, indexUpdate.getReindexStats(), 
+                        watch, watch.elapsed(TimeUnit.MILLISECONDS));
                 progressLogged = true;
             }
 
             corruptIndexHandler.markWorkingIndexes(indexUpdate.getUpdatedIndexPaths());
         } finally {
+            if (indexUpdate != null) {
+                if (updatePostRunStatus) {
+                    indexUpdate.commitProgress(IndexCommitCallback.IndexProgress.COMMIT_SUCCEDED);
+                } else {
+                    indexUpdate.commitProgress(IndexCommitCallback.IndexProgress.COMMIT_FAILED);
+                }
+            }
             callback.close();
         }
 
@@ -781,6 +797,17 @@ public class AsyncIndexUpdate implements Runnable, Closeable {
         }
 
         return updatePostRunStatus;
+    }
+
+    private void configureRateEstimator(IndexUpdate indexUpdate) {
+        //As metrics is an optional library guard the access with the check
+        if (statisticsProvider.getClass().getSimpleName().equals("MetricStatisticsProvider")){
+            MetricRegistry registry = ((MetricStatisticsProvider) statisticsProvider).getRegistry();
+            indexUpdate.setTraversalRateEstimator(new MetricRateEstimator(name, registry));
+        }
+
+        NodeCounterMBeanEstimator estimator = new NodeCounterMBeanEstimator(store);
+        indexUpdate.setNodeCountEstimator(estimator);
     }
 
     static String leasify(String name) {
@@ -823,7 +850,7 @@ public class AsyncIndexUpdate implements Runnable, Closeable {
         editorProviders.addAll(validatorProviders);
         CompositeHook hooks = new CompositeHook(
                 ResetCommitAttributeHook.INSTANCE,
-                new ConflictHook(new AnnotatingConflictHandler()),
+                ConflictHook.of(new AnnotatingConflictHandler()),
                 new EditorHook(CompositeEditorProvider.compose(editorProviders)),
                 concurrentUpdateCheck);
         try {
@@ -1391,6 +1418,7 @@ public class AsyncIndexUpdate implements Runnable, Closeable {
                     c = c.getChildNode(p);
                 }
                 if (c.exists() && name.equals(c.getString("async"))) {
+                    //TODO Fix this to account for nrt and sync
                     c.setProperty("async", newIndexTaskName);
                     updated.add(path);
                 }

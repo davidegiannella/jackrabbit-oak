@@ -63,6 +63,7 @@ import org.apache.jackrabbit.oak.api.Root;
 import org.apache.jackrabbit.oak.api.jmx.QueryEngineSettingsMBean;
 import org.apache.jackrabbit.oak.api.jmx.RepositoryManagementMBean;
 import org.apache.jackrabbit.oak.commons.concurrent.ExecutorCloser;
+import org.apache.jackrabbit.oak.commons.jmx.AnnotatedStandardMBean;
 import org.apache.jackrabbit.oak.core.ContentRepositoryImpl;
 import org.apache.jackrabbit.oak.management.RepositoryManager;
 import org.apache.jackrabbit.oak.plugins.atomic.AtomicCounterEditorProvider;
@@ -78,18 +79,19 @@ import org.apache.jackrabbit.oak.plugins.index.counter.jmx.NodeCounterMBean;
 import org.apache.jackrabbit.oak.plugins.index.property.jmx.PropertyIndexAsyncReindex;
 import org.apache.jackrabbit.oak.plugins.index.property.jmx.PropertyIndexAsyncReindexMBean;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
-import org.apache.jackrabbit.oak.query.QueryEngineSettings;
-import org.apache.jackrabbit.oak.query.QueryEngineSettingsMBeanImpl;
+import org.apache.jackrabbit.oak.spi.query.QueryEngineSettings;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.CompositeHook;
 import org.apache.jackrabbit.oak.spi.commit.ConflictHandler;
+import org.apache.jackrabbit.oak.spi.commit.ConflictHandlers;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
 import org.apache.jackrabbit.oak.spi.commit.EditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.Observable;
 import org.apache.jackrabbit.oak.spi.commit.Observer;
+import org.apache.jackrabbit.oak.spi.commit.ThreeWayConflictHandler;
 import org.apache.jackrabbit.oak.spi.lifecycle.CompositeInitializer;
 import org.apache.jackrabbit.oak.spi.lifecycle.RepositoryInitializer;
 import org.apache.jackrabbit.oak.spi.lifecycle.WorkspaceInitializer;
@@ -132,7 +134,7 @@ public class Oak {
     
     private final List<RepositoryInitializer> initializers = newArrayList();
 
-    private QueryEngineSettingsMBeanImpl queryEngineSettings = new QueryEngineSettingsMBeanImpl();
+    private AnnotatedQueryEngineSettings queryEngineSettings = new AnnotatedQueryEngineSettings();
 
     private final List<QueryIndexProvider> queryIndexProviders = newArrayList();
 
@@ -380,7 +382,7 @@ public class Oak {
 
     @Nonnull
     public Oak with(@Nonnull QueryEngineSettings queryEngineSettings) {
-        this.queryEngineSettings = new QueryEngineSettingsMBeanImpl(queryEngineSettings);
+        this.queryEngineSettings = new AnnotatedQueryEngineSettings(queryEngineSettings);
         return this;
     }
 
@@ -491,9 +493,16 @@ public class Oak {
      *
      * @param conflictHandler conflict handler
      * @return this builder
+     * @deprecated Use {@link #with(ThreeWayConflictHandler)} instead
      */
+    @Deprecated
     @Nonnull
     public Oak with(@Nonnull ConflictHandler conflictHandler) {
+        return with(ConflictHandlers.wrap(conflictHandler));
+    }
+
+    @Nonnull
+    public Oak with(@Nonnull ThreeWayConflictHandler conflictHandler) {
         checkNotNull(conflictHandler);
         withEditorHook();
         commitHooks.add(new ConflictHook(conflictHandler));
@@ -526,7 +535,7 @@ public class Oak {
         }
         QueryEngineSettings queryEngineSettings = WhiteboardUtils.getService(whiteboard, QueryEngineSettings.class);
         if (queryEngineSettings != null) {
-            this.queryEngineSettings = new QueryEngineSettingsMBeanImpl(queryEngineSettings);
+            this.queryEngineSettings = new AnnotatedQueryEngineSettings(queryEngineSettings);
         }
         return this;
     }
@@ -786,4 +795,93 @@ public class Oak {
         }
     }
 
+    /**
+     * Settings of the query engine. This instance is an AnnotatedStandardMBean.
+     */
+    private static final class AnnotatedQueryEngineSettings extends AnnotatedStandardMBean implements QueryEngineSettingsMBean {
+
+        private final QueryEngineSettings settings;
+
+        /**
+         * Create a new query engine settings object. Creating the object is
+         * relatively slow, and at runtime, as few such objects as possible should
+         * be created (ideally, only one per Oak instance). Creating new instances
+         * also means they can not be configured using JMX, as one would expect.
+         */
+        private AnnotatedQueryEngineSettings(QueryEngineSettings settings) {
+            super(QueryEngineSettingsMBean.class);
+            this.settings = settings;
+        }
+
+        /**
+         * Create a new query engine settings object. Creating the object is
+         * relatively slow, and at runtime, as few such objects as possible should
+         * be created (ideally, only one per Oak instance). Creating new instances
+         * also means they can not be configured using JMX, as one would expect.
+         */
+        private AnnotatedQueryEngineSettings() {
+            this(new QueryEngineSettings());
+        }
+
+        @Override
+        public long getLimitInMemory() {
+            return settings.getLimitInMemory();
+        }
+
+        @Override
+        public void setLimitInMemory(long limitInMemory) {
+            settings.setLimitInMemory(limitInMemory);
+        }
+
+        @Override
+        public long getLimitReads() {
+            return settings.getLimitReads();
+        }
+
+        @Override
+        public void setLimitReads(long limitReads) {
+            settings.setLimitReads(limitReads);
+        }
+
+        @Override
+        public boolean getFailTraversal() {
+            return settings.getFailTraversal();
+        }
+
+        @Override
+        public void setFailTraversal(boolean failQueriesWithoutIndex) {
+            settings.setFailTraversal(failQueriesWithoutIndex);
+        }
+
+        @Override
+        public boolean isFastQuerySize() {
+            return settings.isFastQuerySize();
+        }
+
+        @Override
+        public void setFastQuerySize(boolean fastQuerySize) {
+            settings.setFastQuerySize(fastQuerySize);
+        }
+
+        public void setFullTextComparisonWithoutIndex(boolean fullTextComparisonWithoutIndex) {
+            settings.setFullTextComparisonWithoutIndex(fullTextComparisonWithoutIndex);
+        }
+
+        public boolean getFullTextComparisonWithoutIndex() {
+            return settings.getFullTextComparisonWithoutIndex();
+        }
+
+        public boolean isSql2Optimisation() {
+            return settings.isSql2Optimisation();
+        }
+
+        public QueryEngineSettings unwrap() {
+            return settings;
+        }
+
+        @Override
+        public String toString() {
+            return settings.toString();
+        }
+    }
 }

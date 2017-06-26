@@ -291,7 +291,6 @@ final class RecordWriters {
 
     /**
      * Block record writer.
-     * @see SegmentWriter#writeBlock
      * @see RecordType#BLOCK
      */
     private static class BlockWriter extends RecordWriter {
@@ -504,7 +503,7 @@ final class RecordWriters {
             if (stableId == null) {
                 // Write this node's record id to indicate that the stable id is not
                 // explicitly stored.
-                writer.writeRecordId(id, false);
+                writer.writeRecordId(id);
             } else {
                 writer.writeRecordId(stableId);
             }

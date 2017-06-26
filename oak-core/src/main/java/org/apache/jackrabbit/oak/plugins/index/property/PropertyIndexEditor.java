@@ -45,7 +45,7 @@ import org.apache.jackrabbit.oak.plugins.index.property.strategy.IndexStoreStrat
 import org.apache.jackrabbit.oak.plugins.nodetype.TypePredicate;
 import org.apache.jackrabbit.oak.spi.commit.Editor;
 import org.apache.jackrabbit.oak.spi.mount.MountInfoProvider;
-import org.apache.jackrabbit.oak.spi.query.PropertyValues;
+import org.apache.jackrabbit.oak.plugins.memory.PropertyValues;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
@@ -130,7 +130,7 @@ class PropertyIndexEditor implements IndexEditor {
         } else {
             this.propertyNames = newHashSet(names.getValue(NAMES));
         }
-        this.valuePattern = new ValuePattern(definition.getString(IndexConstants.VALUE_PATTERN));
+        this.valuePattern = new ValuePattern(definition);
 
         // get declaring types, and all their subtypes
         // TODO: should we reindex when type definitions change?
