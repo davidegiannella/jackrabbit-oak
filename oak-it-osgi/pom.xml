@@ -39,19 +39,19 @@
     <plugins>
       <plugin>
         <artifactId>maven-assembly-plugin</artifactId>
+        <configuration>
+          <descriptors>
+            <descriptor>test-bundles.xml</descriptor>
+          </descriptors>
+          <finalName>test</finalName>
+          <attach>false</attach>
+        </configuration>
         <executions>
           <execution>
             <phase>pre-integration-test</phase>
             <goals>
               <goal>single</goal>
             </goals>
-            <configuration>
-              <descriptors>
-                <descriptor>test-bundles.xml</descriptor>
-              </descriptors>
-              <finalName>test</finalName>
-              <attach>false</attach>
-            </configuration>
           </execution>
         </executions>
       </plugin>
@@ -95,6 +95,12 @@
     </dependency>
     <dependency>
       <groupId>org.apache.jackrabbit</groupId>
+      <artifactId>oak-security-spi</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.jackrabbit</groupId>
       <artifactId>oak-core</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
@@ -102,6 +108,12 @@
     <dependency>
       <groupId>org.apache.jackrabbit</groupId>
       <artifactId>oak-segment-tar</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.jackrabbit</groupId>
+      <artifactId>oak-store-document</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
@@ -151,7 +163,7 @@
     <dependency>
       <groupId>org.apache.felix</groupId>
       <artifactId>org.apache.felix.framework</artifactId>
-      <version>4.2.1</version>
+      <version>5.6.8</version>
       <scope>test</scope>
     </dependency>
     <dependency>

@@ -26,6 +26,7 @@ import static org.apache.jackrabbit.oak.api.Type.NAMES;
 import static org.apache.jackrabbit.oak.api.Type.STRINGS;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.DECLARING_NODE_TYPES;
 import static org.apache.jackrabbit.oak.plugins.index.IndexConstants.INDEX_DEFINITIONS_NAME;
+import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.EVALUATE_PATH_RESTRICTION;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.INDEX_DATA_CHILD_NAME;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.INDEX_RULES;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.ORDERED_PROP_NAMES;
@@ -56,6 +57,7 @@ import javax.annotation.Nonnull;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
+import org.apache.jackrabbit.oak.plugins.index.lucene.IndexPlanner.PropertyIndexResult;
 import org.apache.jackrabbit.oak.plugins.index.lucene.reader.DefaultIndexReader;
 import org.apache.jackrabbit.oak.plugins.index.lucene.reader.LuceneIndexReader;
 import org.apache.jackrabbit.oak.plugins.index.lucene.reader.LuceneIndexReaderFactory;
@@ -950,6 +952,177 @@ public class IndexPlannerTest {
         assertTrue(pr.hasProperty("jcr:content/bar"));
         assertFalse(pr.hasProperty("metadata/baz"));
     }
+
+    @Test
+    public void evaluatePathRestrictionExposesSupportCorrectly() throws Exception{
+        FilterImpl filter = createFilter("nt:base");
+        filter.restrictProperty("foo", Operator.EQUAL, PropertyValues.newString("bar"));
+
+        // Evaluates path restriction
+        NodeBuilder defn = newLucenePropertyIndexDefinition(builder, "test", of("foo"), "async")
+                .setProperty(EVALUATE_PATH_RESTRICTION, true);
+        IndexNode node = createIndexNode(new IndexDefinition(root, defn.getNodeState(), "/foo"));
+        IndexPlanner planner = new IndexPlanner(node, "/foo", filter, Collections.<OrderEntry>emptyList());
+        QueryIndex.IndexPlan plan = planner.getPlan();
+        assertTrue(plan.getSupportsPathRestriction());
+
+        // Doesn't evaluate path restriction
+        defn = newLucenePropertyIndexDefinition(builder, "test", of("foo"), "async")
+                .setProperty(EVALUATE_PATH_RESTRICTION, false);
+        node = createIndexNode(new IndexDefinition(root, defn.getNodeState(), "/foo1"));
+        planner = new IndexPlanner(node, "/foo1", filter, Collections.<OrderEntry>emptyList());
+        plan = planner.getPlan();
+        assertFalse(plan.getSupportsPathRestriction());
+    }
+
+
+    //~------------------------------< sync indexes >
+
+    @Test
+    public void syncIndex_uniqueIndex() throws Exception{
+        IndexDefinitionBuilder defnb = new IndexDefinitionBuilder();
+        defnb.indexRule("nt:base").property("foo").propertyIndex().unique();
+
+        IndexDefinition defn = new IndexDefinition(root, defnb.build(), "/foo");
+        IndexNode node = createIndexNode(defn, 100);
+
+        FilterImpl filter = createFilter("nt:base");
+        filter.restrictProperty("foo", Operator.EQUAL, PropertyValues.newString("bar"));
+
+        IndexPlanner planner = new IndexPlanner(node, "/foo", filter, Collections.<OrderEntry>emptyList());
+        QueryIndex.IndexPlan plan = planner.getPlan();
+        assertNotNull(plan);
+
+        assertEquals(1, plan.getEstimatedEntryCount());
+        PropertyIndexResult hr = pr(plan).getPropertyIndexResult();
+
+        assertNotNull(hr);
+        assertEquals("foo", hr.propertyName);
+        assertEquals("foo", hr.pr.propertyName);
+    }
+
+    @Test
+    public void syncIndex_uniqueAndRelative() throws Exception{
+        IndexDefinitionBuilder defnb = new IndexDefinitionBuilder();
+        defnb.indexRule("nt:base").property("foo").propertyIndex().unique();
+
+        IndexDefinition defn = new IndexDefinition(root, defnb.build(), "/foo");
+        IndexNode node = createIndexNode(defn);
+
+        FilterImpl filter = createFilter("nt:base");
+        filter.restrictProperty("jcr:content/foo", Operator.EQUAL, PropertyValues.newString("bar"));
+
+        IndexPlanner planner = new IndexPlanner(node, "/foo", filter, Collections.<OrderEntry>emptyList());
+        QueryIndex.IndexPlan plan = planner.getPlan();
+        assertNotNull(plan);
+
+        assertEquals(1, plan.getEstimatedEntryCount());
+        PropertyIndexResult hr = pr(plan).getPropertyIndexResult();
+
+        assertNotNull(hr);
+        assertEquals("foo", hr.propertyName);
+        assertEquals("jcr:content/foo", hr.pr.propertyName);
+    }
+
+    @Test
+    public void syncIndex_nonUnique() throws Exception{
+        IndexDefinitionBuilder defnb = new IndexDefinitionBuilder();
+        defnb.indexRule("nt:base").property("foo").propertyIndex().sync();
+
+        IndexDefinition defn = new IndexDefinition(root, defnb.build(), "/foo");
+        IndexNode node = createIndexNode(defn, 100);
+
+        FilterImpl filter = createFilter("nt:base");
+        filter.restrictProperty("foo", Operator.EQUAL, PropertyValues.newString("bar"));
+
+        IndexPlanner planner = new IndexPlanner(node, "/foo", filter, Collections.<OrderEntry>emptyList());
+        QueryIndex.IndexPlan plan = planner.getPlan();
+        assertNotNull(plan);
+
+        //For non unique count is actual
+        assertEquals(100, plan.getEstimatedEntryCount());
+        PropertyIndexResult hr = pr(plan).getPropertyIndexResult();
+
+        assertNotNull(hr);
+        assertEquals("foo", hr.propertyName);
+        assertEquals("foo", hr.pr.propertyName);
+    }
+
+    /**
+     * If both non unique and unique indexes are found then unique should be picked
+     */
+    @Test
+    public void syncIndex_nonUniqueAndUniqueBoth() throws Exception{
+        IndexDefinitionBuilder defnb = new IndexDefinitionBuilder();
+        defnb.indexRule("nt:base").property("foo").propertyIndex().unique();
+        defnb.indexRule("nt:base").property("bar").propertyIndex().sync();
+
+        IndexDefinition defn = new IndexDefinition(root, defnb.build(), "/foo");
+        IndexNode node = createIndexNode(defn, 100);
+
+        FilterImpl filter = createFilter("nt:base");
+        filter.restrictProperty("foo", Operator.EQUAL, PropertyValues.newString("bar"));
+        filter.restrictProperty("bar", Operator.EQUAL, PropertyValues.newString("foo"));
+
+        IndexPlanner planner = new IndexPlanner(node, "/foo", filter, Collections.<OrderEntry>emptyList());
+        QueryIndex.IndexPlan plan = planner.getPlan();
+        assertNotNull(plan);
+
+        assertEquals(1, plan.getEstimatedEntryCount());
+        PropertyIndexResult hr = pr(plan).getPropertyIndexResult();
+
+        assertNotNull(hr);
+        assertEquals("foo", hr.propertyName);
+        assertEquals("foo", hr.pr.propertyName);
+    }
+
+    @Test
+    public void syncIndex_NotUsedWithSort() throws Exception{
+        IndexDefinitionBuilder defnb = new IndexDefinitionBuilder();
+        defnb.indexRule("nt:base").property("foo").propertyIndex().sync();
+        defnb.indexRule("nt:base").property("bar").propertyIndex().ordered();
+
+        IndexDefinition defn = new IndexDefinition(root, defnb.build(), "/foo");
+        IndexNode node = createIndexNode(defn, 100);
+
+        FilterImpl filter = createFilter("nt:base");
+        filter.restrictProperty("foo", Operator.EQUAL, PropertyValues.newString("bar"));
+
+        IndexPlanner planner = new IndexPlanner(node, "/foo", filter,
+                ImmutableList.of(new OrderEntry("bar", Type.LONG, OrderEntry.Order.ASCENDING)));
+        QueryIndex.IndexPlan plan = planner.getPlan();
+        assertNotNull(plan);
+
+        assertEquals(100, plan.getEstimatedEntryCount());
+        PropertyIndexResult hr = pr(plan).getPropertyIndexResult();
+
+        assertNull(hr);
+    }
+
+    @Test
+    public void syncIndex_NotUsedWithFulltext() throws Exception{
+        IndexDefinitionBuilder defnb = new IndexDefinitionBuilder();
+        defnb.indexRule("nt:base").property("foo").propertyIndex().sync();
+        defnb.indexRule("nt:base").property("bar").analyzed();
+
+        IndexDefinition defn = new IndexDefinition(root, defnb.build(), "/foo");
+        IndexNode node = createIndexNode(defn, 100);
+
+        FilterImpl filter = createFilter("nt:base");
+        filter.restrictProperty("foo", Operator.EQUAL, PropertyValues.newString("bar"));
+        filter.setFullTextConstraint(FullTextParser.parse("bar", "mountain"));
+
+        IndexPlanner planner = new IndexPlanner(node, "/foo", filter,
+                ImmutableList.of(new OrderEntry("bar", Type.LONG, OrderEntry.Order.ASCENDING)));
+        QueryIndex.IndexPlan plan = planner.getPlan();
+        assertNotNull(plan);
+
+        assertEquals(100, plan.getEstimatedEntryCount());
+        PropertyIndexResult hr = pr(plan).getPropertyIndexResult();
+
+        assertNull(hr);
+    }
+
 
     private IndexPlanner createPlannerForFulltext(NodeState defn, FullTextExpression exp) throws IOException {
         IndexNode node = createIndexNode(new IndexDefinition(root, defn, "/foo"));

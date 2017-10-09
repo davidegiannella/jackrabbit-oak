@@ -38,6 +38,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.apache.jackrabbit.oak.api.jmx.CacheStatsMBean;
 import org.apache.jackrabbit.oak.api.jmx.CheckpointMBean;
+import org.apache.jackrabbit.oak.osgi.OsgiWhiteboard;
 import org.apache.jackrabbit.oak.plugins.blob.datastore.CachingFileDataStore;
 import org.apache.jackrabbit.oak.plugins.blob.datastore.DataStoreBlobStore;
 import org.apache.jackrabbit.oak.plugins.blob.datastore.DataStoreUtils;
@@ -47,6 +48,8 @@ import org.apache.jackrabbit.oak.plugins.index.IndexEditorProvider;
 import org.apache.jackrabbit.oak.plugins.index.IndexPathService;
 import org.apache.jackrabbit.oak.plugins.index.fulltext.PreExtractedTextProvider;
 import org.apache.jackrabbit.oak.plugins.index.importer.IndexImporterProvider;
+import org.apache.jackrabbit.oak.plugins.index.lucene.property.PropertyIndexCleaner;
+import org.apache.jackrabbit.oak.plugins.index.lucene.directory.BufferedOakDirectory;
 import org.apache.jackrabbit.oak.plugins.index.lucene.score.ScorerProviderFactory;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.spi.blob.GarbageCollectableBlobStore;
@@ -56,6 +59,8 @@ import org.apache.jackrabbit.oak.spi.mount.MountInfoProvider;
 import org.apache.jackrabbit.oak.spi.mount.Mounts;
 import org.apache.jackrabbit.oak.spi.query.QueryIndexProvider;
 import org.apache.jackrabbit.oak.spi.state.NodeStore;
+import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
+import org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils;
 import org.apache.jackrabbit.oak.stats.StatisticsProvider;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.util.InfoStream;
@@ -63,7 +68,6 @@ import org.apache.sling.testing.mock.osgi.MockOsgi;
 import org.apache.sling.testing.mock.osgi.junit.OsgiContext;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -84,6 +88,8 @@ public class LuceneIndexProviderServiceTest {
 
     private LuceneIndexProviderService service = new LuceneIndexProviderService();
 
+    private Whiteboard wb;
+
     @Before
     public void setUp(){
         context.registerService(MountInfoProvider.class, Mounts.defaultMountInfoProvider());
@@ -94,6 +100,8 @@ public class LuceneIndexProviderServiceTest {
         context.registerService(IndexPathService.class, mock(IndexPathService.class));
         context.registerService(AsyncIndexInfoService.class, mock(AsyncIndexInfoService.class));
         context.registerService(CheckpointMBean.class, mock(CheckpointMBean.class));
+
+        wb = new OsgiWhiteboard(context.bundleContext());
         MockOsgi.injectServices(service, context.bundleContext());
     }
 
@@ -133,7 +141,12 @@ public class LuceneIndexProviderServiceTest {
         assertNotNull(context.getService(JournalPropertyService.class));
         assertNotNull(context.getService(IndexImporterProvider.class));
 
+        assertNotNull(WhiteboardUtils.getServices(wb, Runnable.class, r -> r instanceof PropertyIndexCleaner));
+
         MockOsgi.deactivate(service, context.bundleContext());
+
+        IndexTracker tracker = (IndexTracker) FieldUtils.readDeclaredField(service, "tracker", true);
+        assertNotNull(tracker.getAsyncIndexInfoService());
     }
 
     @Test
@@ -316,6 +329,46 @@ public class LuceneIndexProviderServiceTest {
     }
 
 
+    @Test
+    public void singleBlobPerIndexFileConfig() throws Exception {
+        Map<String, Object> config = getDefaultConfig();
+        config.put("enableSingleBlobIndexFiles", "true");
+        MockOsgi.activate(service, context.bundleContext(), config);
+        assertTrue("Enabling property must reflect in BufferedOakDirectory state",
+                BufferedOakDirectory.isEnableWritingSingleBlobIndexFile());
+        MockOsgi.deactivate(service, context.bundleContext());
+
+        config = getDefaultConfig();
+        config.put("enableSingleBlobIndexFiles", "false");
+        MockOsgi.activate(service, context.bundleContext(), config);
+        assertFalse("Enabling property must reflect in BufferedOakDirectory state",
+                BufferedOakDirectory.isEnableWritingSingleBlobIndexFile());
+        MockOsgi.deactivate(service, context.bundleContext());
+    }
+
+    @Test
+    public void cleanerRegistration() throws Exception{
+        Map<String,Object> config = getDefaultConfig();
+        config.put("propIndexCleanerIntervalInSecs", 142);
+
+        MockOsgi.activate(service, context.bundleContext(), config);
+        ServiceReference[] sr = context.bundleContext().getAllServiceReferences(Runnable.class.getName(),
+                "(scheduler.name="+PropertyIndexCleaner.class.getName()+")");
+        assertEquals(sr.length, 1);
+
+        assertEquals(142L, sr[0].getProperty("scheduler.period"));
+    }
+
+    @Test
+    public void cleanerRegistrationDisabled() throws Exception{
+        Map<String,Object> config = getDefaultConfig();
+        config.put("propIndexCleanerIntervalInSecs", 0);
+
+        MockOsgi.activate(service, context.bundleContext(), config);
+        ServiceReference[] sr = context.bundleContext().getAllServiceReferences(Runnable.class.getName(),
+                "(scheduler.name="+PropertyIndexCleaner.class.getName()+")");
+        assertNull(sr);
+    }
 
     private void reactivate() {
         MockOsgi.deactivate(service, context.bundleContext());

@@ -29,6 +29,7 @@ import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
 import org.apache.jackrabbit.oak.plugins.index.lucene.IndexDefinition.IndexingRule;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.IndexingMode;
+import org.apache.jackrabbit.oak.plugins.index.lucene.util.IndexDefinitionBuilder;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.TokenizerChain;
 import org.apache.jackrabbit.oak.plugins.index.lucene.writer.CommitMitigatingTieredMergePolicy;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -62,7 +63,7 @@ import static org.apache.jackrabbit.oak.plugins.index.lucene.util.LuceneIndexHel
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
 import static org.apache.jackrabbit.oak.plugins.memory.PropertyStates.createProperty;
 import static org.apache.jackrabbit.oak.InitialContent.INITIAL_CONTENT;
-import static org.apache.jackrabbit.oak.plugins.tree.impl.TreeConstants.OAK_CHILD_ORDER;
+import static org.apache.jackrabbit.oak.plugins.tree.TreeConstants.OAK_CHILD_ORDER;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -82,6 +83,7 @@ public class IndexDefinitionTest {
         IndexDefinition idxDefn = new IndexDefinition(root, builder.getNodeState(), "/foo");
         assertTrue(idxDefn.saveDirListing());
         assertFalse(idxDefn.isNRTIndexingEnabled());
+        assertFalse(idxDefn.hasSyncPropertyDefinitions());
     }
 
     @Test
@@ -162,7 +164,7 @@ public class IndexDefinitionTest {
     public void mergePolicyConfig() throws Exception{
         IndexDefinition defn = new IndexDefinition(root, builder.getNodeState(), "/foo");
         assertNotNull(defn.getMergePolicy());
-        assertEquals(CommitMitigatingTieredMergePolicy.class, defn.getMergePolicy().getClass());
+        assertEquals(TieredMergePolicy.class, defn.getMergePolicy().getClass());
 
         builder.setProperty(LuceneIndexConstants.MERGE_POLICY_NAME, "tiered");
         defn = new IndexDefinition(root, builder.getNodeState(), "/foo");
@@ -187,7 +189,7 @@ public class IndexDefinitionTest {
         builder.setProperty(LuceneIndexConstants.MERGE_POLICY_NAME, "default");
         defn = new IndexDefinition(root, builder.getNodeState(), "/foo");
         assertNotNull(defn.getMergePolicy());
-        assertEquals(CommitMitigatingTieredMergePolicy.class, defn.getMergePolicy().getClass());
+        assertEquals(TieredMergePolicy.class, defn.getMergePolicy().getClass());
 
         builder.setProperty(LuceneIndexConstants.MERGE_POLICY_NAME, "mitigated");
         defn = new IndexDefinition(root, builder.getNodeState(), "/foo");
@@ -198,7 +200,7 @@ public class IndexDefinitionTest {
         builder.setProperty(LuceneIndexConstants.MERGE_POLICY_NAME, "whoawhoa");
         defn = new IndexDefinition(root, builder.getNodeState(), "/foo");
         assertNotNull(defn.getMergePolicy());
-        assertEquals(CommitMitigatingTieredMergePolicy.class, defn.getMergePolicy().getClass());
+        assertEquals(TieredMergePolicy.class, defn.getMergePolicy().getClass());
     }
 
     @Test
@@ -973,6 +975,36 @@ public class IndexDefinitionTest {
 
         assertFalse(defn.hasMatchingNodeTypeReg(root2));
         assertTrue(defn.hasMatchingNodeTypeReg(root3));
+    }
+
+    @Test
+    public void uniqueIsSync() throws Exception{
+        IndexDefinitionBuilder defnb = new IndexDefinitionBuilder();
+        defnb.indexRule("nt:base").property("foo").unique();
+
+        IndexDefinition defn = IndexDefinition.newBuilder(root, defnb.build(), "/foo").build();
+        assertTrue(defn.getApplicableIndexingRule("nt:base").getConfig("foo").sync);
+        assertTrue(defn.getApplicableIndexingRule("nt:base").getConfig("foo").unique);
+        assertTrue(defn.getApplicableIndexingRule("nt:base").getConfig("foo").propertyIndex);
+    }
+
+    @Test
+    public void syncIsProperty() throws Exception{
+        IndexDefinitionBuilder defnb = new IndexDefinitionBuilder();
+        defnb.indexRule("nt:base").property("foo").sync();
+
+        IndexDefinition defn = IndexDefinition.newBuilder(root, defnb.build(), "/foo").build();
+        assertTrue(defn.getApplicableIndexingRule("nt:base").getConfig("foo").sync);
+        assertTrue(defn.getApplicableIndexingRule("nt:base").getConfig("foo").propertyIndex);
+    }
+
+    @Test
+    public void syncPropertyDefinitions() throws Exception{
+        IndexDefinitionBuilder defnb = new IndexDefinitionBuilder();
+        defnb.indexRule("nt:base").property("foo").sync();
+
+        IndexDefinition defn = IndexDefinition.newBuilder(root, defnb.build(), "/foo").build();
+        assertTrue(defn.hasSyncPropertyDefinitions());
     }
 
     //TODO indexesAllNodesOfMatchingType - with nullCheckEnabled

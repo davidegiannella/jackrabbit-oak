@@ -22,10 +22,6 @@ package org.apache.jackrabbit.oak.plugins.index;
 import java.io.File;
 import java.io.IOException;
 
-import org.apache.felix.scr.annotations.Activate;
-import org.apache.felix.scr.annotations.Component;
-import org.apache.felix.scr.annotations.Deactivate;
-import org.apache.felix.scr.annotations.Reference;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.jmx.IndexerMBean;
 import org.apache.jackrabbit.oak.commons.jmx.AnnotatedStandardMBean;
@@ -41,11 +37,18 @@ import org.apache.jackrabbit.oak.spi.whiteboard.Registration;
 import org.apache.jackrabbit.oak.spi.whiteboard.Tracker;
 import org.apache.jackrabbit.oak.spi.whiteboard.Whiteboard;
 import org.osgi.framework.BundleContext;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Reference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.jackrabbit.oak.spi.whiteboard.WhiteboardUtils.registerMBean;
 
-@Component
+@Component(service = {})
 public class IndexerMBeanImpl extends AnnotatedStandardMBean implements IndexerMBean {
+    private final Logger log = LoggerFactory.getLogger(getClass());
     @Reference
     private NodeStore nodeStore;
 
@@ -62,9 +65,14 @@ public class IndexerMBeanImpl extends AnnotatedStandardMBean implements IndexerM
 
     @Override
     public boolean importIndex(String indexDirPath) throws IOException, CommitFailedException {
-        IndexImporter importer = new IndexImporter(nodeStore, new File(indexDirPath), editorProvider, createLock());
-        providerTracker.getServices().forEach(importer::addImporterProvider);
-        importer.importIndex();
+        try {
+            IndexImporter importer = new IndexImporter(nodeStore, new File(indexDirPath), editorProvider, createLock());
+            providerTracker.getServices().forEach(importer::addImporterProvider);
+            importer.importIndex();
+        } catch (IOException | CommitFailedException | RuntimeException e) {
+            log.warn("Error occurred while importing index from path [{}]", indexDirPath, e);
+            throw e;
+        }
         return true;
     }
 

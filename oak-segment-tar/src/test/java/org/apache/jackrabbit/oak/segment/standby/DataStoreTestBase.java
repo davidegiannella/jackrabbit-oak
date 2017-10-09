@@ -22,25 +22,26 @@ package org.apache.jackrabbit.oak.segment.standby;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Random;
 
-import org.apache.commons.io.IOUtils;
 import com.google.common.io.ByteStreams;
+import org.apache.commons.io.IOUtils;
 import org.apache.jackrabbit.oak.api.Blob;
 import org.apache.jackrabbit.oak.api.CommitFailedException;
 import org.apache.jackrabbit.oak.api.PropertyState;
 import org.apache.jackrabbit.oak.api.Type;
+import org.apache.jackrabbit.oak.commons.junit.TemporaryPort;
 import org.apache.jackrabbit.oak.segment.SegmentNodeStoreBuilders;
 import org.apache.jackrabbit.oak.segment.file.FileStore;
 import org.apache.jackrabbit.oak.segment.standby.client.StandbyClientSync;
 import org.apache.jackrabbit.oak.segment.standby.server.StandbyServerSync;
-import org.apache.jackrabbit.oak.commons.junit.TemporaryPort;
 import org.apache.jackrabbit.oak.segment.test.proxy.NetworkErrorProxy;
 import org.apache.jackrabbit.oak.spi.commit.CommitInfo;
 import org.apache.jackrabbit.oak.spi.commit.EmptyHook;
@@ -123,6 +124,58 @@ public abstract class DataStoreTestBase extends TestBase {
     public void after() {
         proxy.close();
     }
+    
+    @Test
+    public void testResilientSync() throws Exception {
+        final int blobSize = 5 * MB;
+        FileStore primary = getPrimary();
+        FileStore secondary = getSecondary();
+
+        NodeStore store = SegmentNodeStoreBuilders.builder(primary).build();
+        byte[] data = addTestContent(store, "server", blobSize);
+
+        // run 1: unsuccessful
+        try (
+                StandbyServerSync serverSync = new StandbyServerSync(serverPort.getPort(), primary, 1 * MB);
+                StandbyClientSync cl = newStandbyClientSync(secondary, serverPort.getPort(), 4_000)
+        ) {
+            serverSync.start();
+            // no persisted head on primary
+            // sync shouldn't be successful, but shouldn't throw exception either,
+            // timeout too low for TarMK flush thread to kick-in
+            cl.run();
+            assertNotEquals(primary.getHead(), secondary.getHead());
+        }
+        
+        // run 2: successful
+        try (
+                StandbyServerSync serverSync = new StandbyServerSync(serverPort.getPort(), primary, 1 * MB);
+                StandbyClientSync cl = newStandbyClientSync(secondary, serverPort.getPort(), 4_000)
+        ) {
+            serverSync.start();
+            // this time persisted head will be available on primary
+            // waited at least 4s + 4s > 5s (TarMK flush thread run frequency)
+            cl.run();
+            assertEquals(primary.getHead(), secondary.getHead());
+        }
+
+        assertTrue(primary.getStats().getApproximateSize() < MB);
+        assertTrue(secondary.getStats().getApproximateSize() < MB);
+
+        PropertyState ps = secondary.getHead().getChildNode("root")
+                .getChildNode("server").getProperty("testBlob");
+        assertNotNull(ps);
+        assertEquals(Type.BINARY.tag(), ps.getType().tag());
+        Blob b = ps.getValue(Type.BINARY);
+        assertEquals(blobSize, b.length());
+        byte[] testData = new byte[blobSize];
+        try (
+                InputStream blobInputStream = b.getNewStream()
+        ) {
+            ByteStreams.readFully(blobInputStream, testData);
+            assertArrayEquals(data, testData);
+        }
+    }
 
     @Test
     public void testSync() throws Exception {
@@ -152,8 +205,12 @@ public abstract class DataStoreTestBase extends TestBase {
         Blob b = ps.getValue(Type.BINARY);
         assertEquals(blobSize, b.length());
         byte[] testData = new byte[blobSize];
-        ByteStreams.readFully(b.getNewStream(), testData);
-        assertArrayEquals(data, testData);
+        try (
+                InputStream blobInputStream = b.getNewStream()
+        ) {
+            ByteStreams.readFully(blobInputStream, testData);
+            assertArrayEquals(data, testData);
+        }
     }
 
     /*
@@ -163,16 +220,16 @@ public abstract class DataStoreTestBase extends TestBase {
     public void testSyncBigBlob() throws Exception {
         final long blobSize = (long) (1 * GB);
         final int seed = 13;
-        
+
         FileStore primary = getPrimary();
         FileStore secondary = getSecondary();
 
         NodeStore store = SegmentNodeStoreBuilders.builder(primary).build();
         addTestContentOnTheFly(store, "server", blobSize, seed);
-        
+
         try (
-                StandbyServerSync serverSync = new StandbyServerSync(serverPort.getPort(), primary, 16 * MB);
-                StandbyClientSync cl = newStandbyClientSync(secondary, serverPort.getPort(), 15_000)
+                StandbyServerSync serverSync = new StandbyServerSync(serverPort.getPort(), primary, 8 * MB);
+                StandbyClientSync cl = newStandbyClientSync(secondary, serverPort.getPort(), 60_000)
         ) {
             serverSync.start();
             primary.flush();
@@ -189,8 +246,13 @@ public abstract class DataStoreTestBase extends TestBase {
         assertEquals(Type.BINARY.tag(), ps.getType().tag());
         Blob b = ps.getValue(Type.BINARY);
         assertEquals(blobSize, b.length());
-        
-        assertTrue(IOUtils.contentEquals(newRandomInputStream(blobSize, seed), b.getNewStream()));
+
+        try (
+                InputStream randomInputStream = newRandomInputStream(blobSize, seed);
+                InputStream blobInputStream = b.getNewStream()
+        ) {
+            assertTrue(IOUtils.contentEquals(randomInputStream, blobInputStream));
+        }
     }
     
     /*
@@ -302,7 +364,11 @@ public abstract class DataStoreTestBase extends TestBase {
         Blob b = ps.getValue(Type.BINARY);
         assertEquals(blobSize, b.length());
         byte[] testData = new byte[blobSize];
-        ByteStreams.readFully(b.getNewStream(), testData);
-        assertArrayEquals(data, testData);
+        try (
+                InputStream blobInputStream = b.getNewStream()
+        ) {
+            ByteStreams.readFully(blobInputStream, testData);
+            assertArrayEquals(data, testData);
+        }
     }
 }

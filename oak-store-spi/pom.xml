@@ -39,10 +39,12 @@
                 org.apache.jackrabbit.oak.json,
                 org.apache.jackrabbit.oak.spi.cluster,
                 org.apache.jackrabbit.oak.spi.commit,
+                org.apache.jackrabbit.oak.spi.filter,
                 org.apache.jackrabbit.oak.spi.lifecycle,
                 org.apache.jackrabbit.oak.spi.state,
                 org.apache.jackrabbit.oak.plugins.memory,
-                org.apache.jackrabbit.oak.plugins.value
+                org.apache.jackrabbit.oak.plugins.value,
+                org.apache.jackrabbit.oak.plugins.value.jcr
               </Export-Package>
             </instructions>
           </configuration>
@@ -87,11 +89,6 @@
     <dependency>
       <groupId>org.osgi</groupId>
       <artifactId>org.osgi.compendium</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.felix</groupId>
-      <artifactId>org.apache.felix.scr.annotations</artifactId>
       <scope>provided</scope>
     </dependency>
 

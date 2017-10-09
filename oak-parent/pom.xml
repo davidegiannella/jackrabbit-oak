@@ -43,7 +43,7 @@
     <project.reporting.outputEncoding>
       ${project.build.sourceEncoding}
     </project.reporting.outputEncoding>
-    <jackrabbit.version>2.15.5</jackrabbit.version>
+    <jackrabbit.version>2.15.6</jackrabbit.version>
     <mongo.host>127.0.0.1</mongo.host>
     <mongo.port>27017</mongo.port>
     <mongo.db>MongoMKDB</mongo.db>
@@ -229,14 +229,17 @@
                   <filter>!org.apache.jackrabbit.oak.plugins.nodetype.write</filter>
                   <filter>!org.apache.jackrabbit.oak.plugins.observation</filter>
                   <filter>!org.apache.jackrabbit.oak.plugins.observation.filter</filter>
+                  <filter>!org.apache.jackrabbit.oak.plugins.tree.factories</filter>
                   <filter>!org.apache.jackrabbit.oak.plugins.value</filter>
                   <filter>!org.apache.jackrabbit.oak.plugins.version</filter>
                   <filter>!org.apache.jackrabbit.oak.query</filter>
                   <filter>!org.apache.jackrabbit.oak.query.fulltext</filter>
                   <filter>!org.apache.jackrabbit.oak.security</filter>
                   <filter>!org.apache.jackrabbit.oak.spi.commit</filter>
+                  <filter>!org.apache.jackrabbit.oak.spi.filter</filter>
                   <filter>!org.apache.jackrabbit.oak.spi.gc</filter>
                   <filter>!org.apache.jackrabbit.oak.spi.lifecycle</filter>
+                  <filter>!org.apache.jackrabbit.oak.spi.observation</filter>
                   <filter>!org.apache.jackrabbit.oak.spi.query</filter>
                   <filter>!org.apache.jackrabbit.oak.spi.query.fulltext</filter>
                   <filter>!org.apache.jackrabbit.oak.spi.state</filter>
@@ -520,6 +523,12 @@
         <version>1.3.0</version>
       </dependency>
       <dependency>
+        <groupId>org.osgi</groupId>
+        <artifactId>org.osgi.service.metatype.annotations</artifactId>
+        <version>1.3.0</version>
+      </dependency>
+
+      <dependency>
         <groupId>org.apache.felix</groupId>
         <artifactId>org.apache.felix.scr.annotations</artifactId>
         <version>1.9.6</version>
@@ -619,7 +628,7 @@
       <dependency>
         <groupId>org.apache.tomcat</groupId>
         <artifactId>tomcat-jdbc</artifactId>
-        <version>7.0.78</version>
+        <version>7.0.81</version>
       </dependency>
       <dependency>
         <groupId>org.apache.felix</groupId>
@@ -900,7 +909,7 @@
         <dependency>
           <groupId>mysql</groupId>
           <artifactId>mysql-connector-java</artifactId>
-          <version>5.1.40</version>
+          <version>5.1.44</version>
         </dependency>
       </dependencies>
     </profile>
@@ -910,7 +919,7 @@
         <dependency>
           <groupId>org.postgresql</groupId>
           <artifactId>postgresql</artifactId>
-          <version>42.1.1</version>
+          <version>42.1.4</version>
         </dependency>
       </dependencies>
     </profile>
@@ -958,21 +967,14 @@
       <!-- requires local copy of IBM DB2 JDBC drivers deployed to Maven repo-->
       <!-- for instance:
         mvn install:install-file -Dfile=db2jcc4.jar -Dpackaging=jar\
-          -DgroupId=com.ibm.db2 -DartifactId=db2 -Dversion=4.16.53
-        mvn install:install-file -Dfile=db2jcc_license_cu.jar -Dpackaging=jar\
-          -DgroupId=com.ibm.db2 -DartifactId=db2-license -Dversion=4.16.53
+          -DgroupId=com.ibm.db2 -DartifactId=db2 -Dversion=4.19.66
        -->
       <id>rdb-db2</id>
       <dependencies>
         <dependency>
           <groupId>com.ibm.db2</groupId>
           <artifactId>db2</artifactId>
-          <version>4.16.53</version>
-        </dependency>
-        <dependency>
-          <groupId>com.ibm.db2</groupId>
-          <artifactId>db2-license</artifactId>
-          <version>4.16.53</version>
+          <version>4.19.66</version>
         </dependency>
       </dependencies>
     </profile>

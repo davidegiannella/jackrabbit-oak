@@ -100,6 +100,11 @@
         </dependency>
         <dependency>
             <groupId>org.apache.jackrabbit</groupId>
+            <artifactId>oak-security-spi</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.jackrabbit</groupId>
             <artifactId>oak-core-spi</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -164,6 +169,10 @@
                 <exclusion>
                     <groupId>org.apache.lucene</groupId>
                     <artifactId>lucene-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.hadoop</groupId>
+                    <artifactId>hadoop-annotations</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>

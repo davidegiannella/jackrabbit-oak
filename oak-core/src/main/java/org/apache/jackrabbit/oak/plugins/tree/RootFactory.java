@@ -21,7 +21,6 @@ import javax.annotation.Nullable;
 
 import org.apache.jackrabbit.oak.Oak;
 import org.apache.jackrabbit.oak.api.Root;
-import org.apache.jackrabbit.oak.core.ImmutableRoot;
 import org.apache.jackrabbit.oak.core.SystemRoot;
 import org.apache.jackrabbit.oak.query.QueryEngineSettings;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
@@ -35,6 +34,8 @@ import org.apache.jackrabbit.oak.spi.state.NodeStore;
 
 /**
  * Factory to obtain immutable {@code Root} objects.
+ *
+ * @deprecated Use {@link org.apache.jackrabbit.oak.plugins.tree.factories.RootFactory} instead.
  */
 public final class RootFactory {
 
@@ -42,12 +43,12 @@ public final class RootFactory {
 
     @Nonnull
     public static Root createReadOnlyRoot(@Nonnull NodeState rootState) {
-        return new ImmutableRoot(rootState);
+        return org.apache.jackrabbit.oak.plugins.tree.factories.RootFactory.createReadOnlyRoot(rootState);
     }
 
     @Nonnull
     public static Root createReadOnlyRoot(@Nonnull Root root) {
-        return ImmutableRoot.getInstance(root);
+        return org.apache.jackrabbit.oak.plugins.tree.factories.RootFactory.createReadOnlyRoot(root);
     }
 
     /**
@@ -75,11 +76,6 @@ public final class RootFactory {
                                         @Nullable String workspaceName,
                                         @Nullable SecurityProvider securityProvider,
                                         @Nullable QueryIndexProvider indexProvider) {
-        return SystemRoot.create(store,
-                (hook == null) ? EmptyHook.INSTANCE : hook,
-                (workspaceName == null) ? Oak.DEFAULT_WORKSPACE_NAME : workspaceName,
-                (securityProvider == null) ? new OpenSecurityProvider() : securityProvider,
-                (indexProvider == null) ? new CompositeQueryIndexProvider(): indexProvider);
-
+        return org.apache.jackrabbit.oak.plugins.tree.factories.RootFactory.createSystemRoot(store, hook, workspaceName, securityProvider, indexProvider);
     }
 }

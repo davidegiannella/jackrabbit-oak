@@ -19,31 +19,25 @@ package org.apache.jackrabbit.oak.plugins.tree;
 import javax.annotation.Nonnull;
 
 import org.apache.jackrabbit.oak.api.Tree;
-import org.apache.jackrabbit.oak.plugins.tree.impl.ImmutableTree;
-import org.apache.jackrabbit.oak.plugins.tree.impl.NodeBuilderTree;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 /**
- * Factory to obtain {@code Tree} objects from {@code NodeState}s
- * and {@code NodeBuilder}s.
+ * @deprecated Use {@link org.apache.jackrabbit.oak.plugins.tree.factories.TreeFactory} instead.
  */
 public final class TreeFactory {
 
     private TreeFactory() {}
 
     public static Tree createTree(@Nonnull NodeBuilder builder) {
-        return new NodeBuilderTree("", builder);
+        return org.apache.jackrabbit.oak.plugins.tree.factories.TreeFactory.createTree(builder);
     }
 
     public static Tree createReadOnlyTree(@Nonnull NodeState rootState) {
-        return new ImmutableTree(rootState);
+        return org.apache.jackrabbit.oak.plugins.tree.factories.TreeFactory.createReadOnlyTree(rootState);
     }
 
     public static Tree createReadOnlyTree(@Nonnull Tree readOnlyParent, @Nonnull String childName, @Nonnull NodeState childState) {
-        checkArgument(readOnlyParent instanceof ImmutableTree);
-        return new ImmutableTree((ImmutableTree) readOnlyParent, childName, childState);
+        return org.apache.jackrabbit.oak.plugins.tree.factories.TreeFactory.createReadOnlyTree(readOnlyParent, childName, childState);
     }
 }

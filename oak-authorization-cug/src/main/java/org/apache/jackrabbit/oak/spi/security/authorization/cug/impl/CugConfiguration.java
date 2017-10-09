@@ -45,11 +45,11 @@ import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.namepath.NamePathMapper;
 import org.apache.jackrabbit.oak.plugins.memory.MemoryNodeStore;
 import org.apache.jackrabbit.oak.plugins.name.NamespaceEditorProvider;
-import org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants;
+import org.apache.jackrabbit.oak.spi.nodetype.NodeTypeConstants;
 import org.apache.jackrabbit.oak.plugins.nodetype.ReadOnlyNodeTypeManager;
 import org.apache.jackrabbit.oak.plugins.nodetype.TypeEditorProvider;
 import org.apache.jackrabbit.oak.plugins.nodetype.write.NodeTypeRegistry;
-import org.apache.jackrabbit.oak.plugins.tree.RootFactory;
+import org.apache.jackrabbit.oak.plugins.tree.factories.RootFactory;
 import org.apache.jackrabbit.oak.spi.commit.CommitHook;
 import org.apache.jackrabbit.oak.spi.commit.CompositeEditorProvider;
 import org.apache.jackrabbit.oak.spi.commit.EditorHook;
@@ -109,7 +109,7 @@ public class CugConfiguration extends ConfigurationBase implements Authorization
      * CUG authorization model multiplexing aware.
      */
     @Reference
-    private MountInfoProvider mountInfoProvider;
+    private MountInfoProvider mountInfoProvider = Mounts.defaultMountInfoProvider();
 
     private Set<String> supportedPaths = ImmutableSet.of();
 
@@ -120,9 +120,6 @@ public class CugConfiguration extends ConfigurationBase implements Authorization
 
     public CugConfiguration(@Nonnull SecurityProvider securityProvider) {
         super(securityProvider, securityProvider.getParameters(NAME));
-
-        mountInfoProvider = getParameters().getConfigValue(PARAM_MOUNT_PROVIDER, Mounts.defaultMountInfoProvider(), MountInfoProvider.class);
-        supportedPaths = CugUtil.getSupportedPaths(getParameters(), mountInfoProvider);
     }
 
     @Nonnull
@@ -210,6 +207,14 @@ public class CugConfiguration extends ConfigurationBase implements Authorization
     @Modified
     protected void modified(Map<String, Object> properties) {
         activate(properties);
+    }
+
+    public void bindMountInfoProvider(MountInfoProvider mountInfoProvider) {
+        this.mountInfoProvider = mountInfoProvider;
+    }
+
+    public void unbindMountInfoProvider(MountInfoProvider mountInfoProvider) {
+        this.mountInfoProvider = null;
     }
 
     //--------------------------------------------------------------------------

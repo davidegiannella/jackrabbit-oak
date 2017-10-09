@@ -33,9 +33,9 @@ import org.apache.jackrabbit.oak.api.Tree;
 import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
-import org.apache.jackrabbit.oak.plugins.index.PathFilter;
 import org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants;
-import org.apache.jackrabbit.oak.plugins.tree.TreeFactory;
+import org.apache.jackrabbit.oak.plugins.tree.factories.TreeFactory;
+import org.apache.jackrabbit.oak.spi.filter.PathFilter;
 import org.apache.jackrabbit.oak.spi.state.EqualsDiff;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
 import org.apache.jackrabbit.oak.spi.state.NodeState;
@@ -366,6 +366,16 @@ public final class IndexDefinitionBuilder {
 
         public PropertyRule valueIncludedPrefixes(String... values){
             propTree.setProperty(IndexConstants.VALUE_INCLUDED_PREFIXES, asList(values), STRINGS);
+            return this;
+        }
+
+        public PropertyRule sync(){
+            propTree.setProperty(LuceneIndexConstants.PROP_SYNC, true);
+            return this;
+        }
+
+        public PropertyRule unique(){
+            propTree.setProperty(LuceneIndexConstants.PROP_UNIQUE, true);
             return this;
         }
 

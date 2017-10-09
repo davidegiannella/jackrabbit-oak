@@ -17,6 +17,8 @@
 
 package org.apache.jackrabbit.oak.segment.standby.codec;
 
+import static org.apache.jackrabbit.oak.segment.standby.server.FileStoreUtil.roundDiv;
+
 import java.io.InputStream;
 import java.io.PushbackInputStream;
 
@@ -123,8 +125,8 @@ public class ChunkedBlobStream implements ChunkedInput<ByteBuf> {
             decorated = decorateRawBuffer(allocator, buffer);
 
             offset += written;
-            log.info("Sending chunk {}/{} of size {} to client {}", roundDiv(offset, chunkSize),
-                    roundDiv(length, chunkSize), written, clientId);
+            log.debug("Sending chunk {}/{} of size {} from blob {} to client {}", roundDiv(offset, chunkSize),
+                    roundDiv(length, chunkSize), written, blobId, clientId);
 
             release = false;
             return decorated;
@@ -142,24 +144,21 @@ public class ChunkedBlobStream implements ChunkedInput<ByteBuf> {
 
         byte mask = createMask(data.length);
         Hasher hasher = Hashing.murmur3_32().newHasher();
-        long hash = hasher.putByte(mask).putBytes(data).hash().padToLong();
+        long hash = hasher.putByte(mask).putLong(length).putBytes(data).hash().padToLong();
 
         byte[] blobIdBytes = blobId.getBytes();
 
         ByteBuf out = allocator.buffer();
-        out.writeInt(1 + 1 + 4 + blobIdBytes.length + 8 + data.length);
+        out.writeInt(1 + 1 + 8 + 4 + blobIdBytes.length + 8 + data.length);
         out.writeByte(Messages.HEADER_BLOB);
         out.writeByte(mask);
+        out.writeLong(length);
         out.writeInt(blobIdBytes.length);
         out.writeBytes(blobIdBytes);
         out.writeLong(hash);
         out.writeBytes(data);
 
         return out;
-    }
-
-    private static int roundDiv(long x, int y) {
-        return (int) Math.ceil((double) x / (double) y);
     }
 
     private byte createMask(int bytesRead) {

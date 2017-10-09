@@ -48,14 +48,14 @@ import org.apache.jackrabbit.oak.api.Type;
 import org.apache.jackrabbit.oak.commons.PathUtils;
 import org.apache.jackrabbit.oak.namepath.NamePathMapper;
 import org.apache.jackrabbit.oak.plugins.index.IndexConstants;
-import org.apache.jackrabbit.oak.plugins.index.PathFilter;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.ConfigUtil;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.FunctionIndexProcessor;
 import org.apache.jackrabbit.oak.plugins.index.lucene.util.TokenizerChain;
 import org.apache.jackrabbit.oak.plugins.index.lucene.writer.CommitMitigatingTieredMergePolicy;
 import org.apache.jackrabbit.oak.plugins.memory.PropertyStates;
 import org.apache.jackrabbit.oak.plugins.nodetype.ReadOnlyNodeTypeManager;
-import org.apache.jackrabbit.oak.plugins.tree.TreeFactory;
+import org.apache.jackrabbit.oak.plugins.tree.factories.TreeFactory;
+import org.apache.jackrabbit.oak.spi.filter.PathFilter;
 import org.apache.jackrabbit.oak.spi.query.QueryIndex.OrderEntry;
 import org.apache.jackrabbit.oak.spi.state.ChildNodeEntry;
 import org.apache.jackrabbit.oak.spi.state.NodeBuilder;
@@ -95,13 +95,13 @@ import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstant
 import static org.apache.jackrabbit.oak.plugins.index.lucene.PropertyDefinition.DEFAULT_BOOST;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.util.ConfigUtil.getOptionalValue;
 import static org.apache.jackrabbit.oak.plugins.memory.EmptyNodeState.EMPTY_NODE;
-import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
-import static org.apache.jackrabbit.oak.plugins.nodetype.NodeTypeConstants.NODE_TYPES_PATH;
+import static org.apache.jackrabbit.oak.spi.nodetype.NodeTypeConstants.JCR_NODE_TYPES;
+import static org.apache.jackrabbit.oak.spi.nodetype.NodeTypeConstants.NODE_TYPES_PATH;
 
 public final class IndexDefinition implements Aggregate.AggregateMapper {
     /**
      * Name of the internal property that contains the child order defined in
-     * org.apache.jackrabbit.oak.plugins.tree.impl.TreeConstants
+     * org.apache.jackrabbit.oak.plugins.tree.TreeConstants
      */
     private static final String OAK_CHILD_ORDER = ":childOrder";
 
@@ -266,6 +266,8 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
     @Nullable
     private final String[] indexTags;
 
+    private final boolean syncPropertyIndexes;
+
     //~--------------------------------------------------------< Builder >
 
     public static Builder newBuilder(NodeState root, NodeState defn, String indexPath){
@@ -402,6 +404,7 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
         this.spellcheckEnabled = evaluateSpellcheckEnabled();
         this.nrtIndexMode = supportsNRTIndexing(defn);
         this.syncIndexMode = supportsSyncIndexing(defn);
+        this.syncPropertyIndexes = definedRules.stream().anyMatch(ir -> !ir.syncProps.isEmpty());
     }
 
     public NodeState getDefinitionNodeState() {
@@ -553,6 +556,10 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
 
     public boolean isSyncIndexingEnabled() {
         return syncIndexMode;
+    }
+
+    public boolean hasSyncPropertyDefinitions() {
+        return syncPropertyIndexes;
     }
 
     /**
@@ -871,6 +878,7 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
         private final List<PropertyDefinition> functionRestrictions;
         private final List<PropertyDefinition> notNullCheckEnabledProperties;
         private final List<PropertyDefinition> nodeScopeAnalyzedProps;
+        private final List<PropertyDefinition> syncProps;
         private final boolean indexesAllNodesOfMatchingType;
         private final boolean nodeNameIndexed;
 
@@ -897,9 +905,10 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
             List<PropertyDefinition> functionRestrictions = newArrayList();
             List<PropertyDefinition> existentProperties = newArrayList();
             List<PropertyDefinition> nodeScopeAnalyzedProps = newArrayList();
+            List<PropertyDefinition> syncProps = newArrayList();
             List<Aggregate.Include> propIncludes = newArrayList();
             this.propConfigs = collectPropConfigs(config, namePatterns, propIncludes, nonExistentProperties,
-                    existentProperties, nodeScopeAnalyzedProps, functionRestrictions);
+                    existentProperties, nodeScopeAnalyzedProps, functionRestrictions, syncProps);
             this.propAggregate = new Aggregate(nodeTypeName, propIncludes);
             this.aggregate = combine(propAggregate, nodeTypeName);
 
@@ -913,6 +922,7 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
             this.propertyIndexEnabled = hasAnyPropertyIndexConfigured();
             this.indexesAllNodesOfMatchingType = areAlMatchingNodeByTypeIndexed();
             this.nodeNameIndexed = evaluateNodeNameIndexed(config);
+            this.syncProps = ImmutableList.copyOf(syncProps);
             validateRuleDefinition();
         }
 
@@ -942,6 +952,7 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
             this.nodeFullTextIndexed = aggregate.hasNodeAggregates() || original.nodeFullTextIndexed;
             this.indexesAllNodesOfMatchingType = areAlMatchingNodeByTypeIndexed();
             this.nodeNameIndexed = original.nodeNameIndexed;
+            this.syncProps = original.syncProps;
         }
 
         /**
@@ -1109,7 +1120,8 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
                                                                    List<PropertyDefinition> nonExistentProperties,
                                                                    List<PropertyDefinition> existentProperties,
                                                                    List<PropertyDefinition> nodeScopeAnalyzedProps,
-                                                                   List<PropertyDefinition> functionRestrictions) {
+                                                                   List<PropertyDefinition> functionRestrictions,
+                                                                   List<PropertyDefinition> syncProps) {
             Map<String, PropertyDefinition> propDefns = newHashMap();
             NodeState propNode = config.getChildNode(LuceneIndexConstants.PROP_NODE);
 
@@ -1164,6 +1176,10 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
                             && pd.analyzed
                             && !pd.isRegexp){
                         nodeScopeAnalyzedProps.add(pd);
+                    }
+
+                    if (pd.sync) {
+                        syncProps.add(pd);
                     }
                 }
             }
@@ -1519,9 +1535,9 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
         if (mergePolicyName != null) {
             if (mergePolicyName.equalsIgnoreCase("no")) {
                 mergePolicy = NoMergePolicy.COMPOUND_FILES;
-            } else if (mergePolicyName.equalsIgnoreCase("mitigated") || mergePolicyName.equalsIgnoreCase("default")) {
+            } else if (mergePolicyName.equalsIgnoreCase("mitigated")) {
                 mergePolicy = new CommitMitigatingTieredMergePolicy();
-            } else if (mergePolicyName.equalsIgnoreCase("tiered")) {
+            } else if (mergePolicyName.equalsIgnoreCase("tiered") || mergePolicyName.equalsIgnoreCase("default")) {
                 mergePolicy = new TieredMergePolicy();
             } else if (mergePolicyName.equalsIgnoreCase("logbyte")) {
                 mergePolicy = new LogByteSizeMergePolicy();
@@ -1530,7 +1546,7 @@ public final class IndexDefinition implements Aggregate.AggregateMapper {
             }
         }
         if (mergePolicy == null) {
-            mergePolicy = new CommitMitigatingTieredMergePolicy();
+            mergePolicy = new TieredMergePolicy();
         }
         return mergePolicy;
     }

@@ -19,6 +19,7 @@ package org.apache.jackrabbit.oak.segment.standby.codec;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
+import static org.apache.jackrabbit.oak.segment.standby.server.FileStoreUtil.roundDiv;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -26,6 +27,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.UUID;
 
@@ -68,6 +70,8 @@ public class ResponseDecoder extends ByteToMessageDecoder {
             }
         }
     }
+    
+    private int blobChunkSize;
     
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
@@ -121,9 +125,10 @@ public class ResponseDecoder extends ByteToMessageDecoder {
         out.add(new GetSegmentResponse(null, segmentId, data));
     }
 
-    private static void decodeGetBlobResponse(int length, ByteBuf in, List<Object> out) throws IOException {
+    private void decodeGetBlobResponse(int length, ByteBuf in, List<Object> out) throws IOException {
         byte mask = in.readByte();
-
+        long blobLength = in.readLong();
+        
         int blobIdLength = in.readInt();
         byte[] blobIdBytes = new byte[blobIdLength];
         in.readBytes(blobIdBytes);
@@ -132,19 +137,22 @@ public class ResponseDecoder extends ByteToMessageDecoder {
         
         // START_CHUNK flag enabled
         if ((mask & (1 << 0)) != 0) {
+            blobChunkSize = in.readableBytes() - 8;
+            
             if (tempFile.exists()) {
                 log.debug("Detected previous incomplete transfer for {}. Cleaning up...", blobId);
-                tempFile.delete();
+                Files.delete(tempFile.toPath());
             }
         }
 
         long hash = in.readLong();
 
-        log.debug("Received chunk of size {} from blob {} ", in.readableBytes(), blobId);
+        log.debug("Received chunk {}/{} of size {} from blob {}", roundDiv(tempFile.length() + in.readableBytes(), blobChunkSize),
+                roundDiv(blobLength, blobChunkSize), in.readableBytes(), blobId);
         byte[] chunkData = new byte[in.readableBytes()];
         in.readBytes(chunkData);
 
-        if (hash(mask, chunkData) != hash) {
+        if (hash(mask, blobLength, chunkData) != hash) {
             log.debug("Invalid checksum, discarding current chunk from {}", blobId);
             return;
         } else {
@@ -158,8 +166,13 @@ public class ResponseDecoder extends ByteToMessageDecoder {
         if ((mask & (1 << 1)) != 0) {
             log.debug("Received entire blob {}", blobId);
 
-            FileInputStream fis = new DeleteOnCloseFileInputStream(tempFile);
-            out.add(new GetBlobResponse(null, blobId, fis, fis.getChannel().size()));
+            if (blobLength == tempFile.length()) {
+                FileInputStream fis = new DeleteOnCloseFileInputStream(tempFile);
+                out.add(new GetBlobResponse(null, blobId, fis, fis.getChannel().size()));
+            } else {
+                log.debug("Blob {} discarded due to size mismatch. Expected size: {}, actual size: {} ", blobId,
+                        blobLength, tempFile.length());
+            }
         }
     }
 
@@ -194,8 +207,8 @@ public class ResponseDecoder extends ByteToMessageDecoder {
         return Hashing.murmur3_32().newHasher().putBytes(data).hash().padToLong();
     }
 
-    private static long hash(byte mask, byte[] data) {
-        return Hashing.murmur3_32().newHasher().putByte(mask).putBytes(data).hash().padToLong();
+    private static long hash(byte mask, long blobLength, byte[] data) {
+        return Hashing.murmur3_32().newHasher().putByte(mask).putLong(blobLength).putBytes(data).hash().padToLong();
     }
     
 }

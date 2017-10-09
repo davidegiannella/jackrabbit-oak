@@ -42,7 +42,7 @@ import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstant
 import static org.apache.jackrabbit.oak.plugins.index.lucene.LuceneIndexConstants.PROP_WEIGHT;
 import static org.apache.jackrabbit.oak.plugins.index.lucene.util.ConfigUtil.getOptionalValue;
 
-class PropertyDefinition {
+public class PropertyDefinition {
     private static final Logger log = LoggerFactory.getLogger(PropertyDefinition.class);
     /**
      * The default boost: 1.0f.
@@ -106,7 +106,7 @@ class PropertyDefinition {
 
     /**
      * For function-based indexes: the function name, in Polish notation.
-     */    
+     */
     final String function;
     
     /**
@@ -114,7 +114,11 @@ class PropertyDefinition {
      */    
     final String[] functionCode;
 
-    final ValuePattern valuePattern;
+    public final ValuePattern valuePattern;
+
+    public final boolean sync;
+
+    public final boolean unique;
 
     public PropertyDefinition(IndexingRule idxDefn, String nodeName, NodeState defn) {
         this.isRegexp = getOptionalValue(defn, PROP_IS_REGEX, false);
@@ -135,8 +139,6 @@ class PropertyDefinition {
             this.analyzed = getOptionalValueIfIndexed(defn, LuceneIndexConstants.PROP_ANALYZED, false);
         }
 
-        //If node is not set for full text then a property definition indicates that definition is for property index
-        this.propertyIndex = getOptionalValueIfIndexed(defn, LuceneIndexConstants.PROP_PROPERTY_INDEX, false);
         this.ordered = getOptionalValueIfIndexed(defn, LuceneIndexConstants.PROP_ORDERED, false);
         this.includedPropertyTypes = IndexDefinition.getSupportedTypes(defn, LuceneIndexConstants.PROP_INCLUDED_TYPE,
                 IndexDefinition.TYPES_ALLOW_ALL);
@@ -156,6 +158,11 @@ class PropertyDefinition {
                 getOptionalValue(defn, LuceneIndexConstants.PROP_FUNCTION, null));
         this.functionCode = FunctionIndexProcessor.getFunctionCode(this.function);
         this.valuePattern = new ValuePattern(defn);
+        this.unique = getOptionalValueIfIndexed(defn, LuceneIndexConstants.PROP_UNIQUE, false);
+        this.sync = unique || getOptionalValueIfIndexed(defn, LuceneIndexConstants.PROP_SYNC, false);
+
+        //If some property is set to sync then propertyIndex mode is always enabled
+        this.propertyIndex = sync || getOptionalValueIfIndexed(defn, LuceneIndexConstants.PROP_PROPERTY_INDEX, false);
         validate();
     }
 

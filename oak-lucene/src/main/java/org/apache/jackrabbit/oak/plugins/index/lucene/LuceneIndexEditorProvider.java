@@ -33,7 +33,11 @@ import org.apache.jackrabbit.oak.plugins.index.lucene.directory.DirectoryFactory
 import org.apache.jackrabbit.oak.plugins.index.lucene.hybrid.IndexingQueue;
 import org.apache.jackrabbit.oak.plugins.index.lucene.hybrid.LocalIndexWriterFactory;
 import org.apache.jackrabbit.oak.plugins.index.lucene.hybrid.LuceneDocumentHolder;
+import org.apache.jackrabbit.oak.plugins.index.lucene.property.LuceneIndexPropertyQuery;
+import org.apache.jackrabbit.oak.plugins.index.lucene.property.PropertyIndexUpdateCallback;
+import org.apache.jackrabbit.oak.plugins.index.lucene.property.PropertyQuery;
 import org.apache.jackrabbit.oak.plugins.index.lucene.writer.DefaultIndexWriterFactory;
+import org.apache.jackrabbit.oak.plugins.index.lucene.writer.LuceneIndexWriterConfig;
 import org.apache.jackrabbit.oak.plugins.index.lucene.writer.LuceneIndexWriterFactory;
 import org.apache.jackrabbit.oak.spi.blob.GarbageCollectableBlobStore;
 import org.apache.jackrabbit.oak.spi.commit.CommitContext;
@@ -68,6 +72,7 @@ public class LuceneIndexEditorProvider implements IndexEditorProvider {
     private GarbageCollectableBlobStore blobStore;
     private IndexingQueue indexingQueue;
     private boolean nrtIndexingEnabled;
+    private LuceneIndexWriterConfig writerConfig = new LuceneIndexWriterConfig();
 
     /**
      * Number of indexed Lucene document that can be held in memory
@@ -133,6 +138,9 @@ public class LuceneIndexEditorProvider implements IndexEditorProvider {
             LuceneIndexWriterFactory writerFactory = null;
             IndexDefinition indexDefinition = null;
             boolean asyncIndexing = true;
+            String indexPath = indexingContext.getIndexPath();
+            PropertyIndexUpdateCallback propertyUpdateCallback = null;
+
             if (nrtIndexingEnabled() && !indexingContext.isAsync() && IndexDefinition.supportsSyncOrNRTIndexing(definition)) {
 
                 //Would not participate in reindexing. Only interested in
@@ -153,18 +161,32 @@ public class LuceneIndexEditorProvider implements IndexEditorProvider {
 
                 //TODO Also check if index has been done once
 
+
                 writerFactory = new LocalIndexWriterFactory(getDocumentHolder(commitContext),
-                        indexingContext.getIndexPath());
+                        indexPath);
 
                 //IndexDefinition from tracker might differ from one passed here for reindexing
                 //case which should be fine. However reusing existing definition would avoid
                 //creating definition instance for each commit as this gets executed for each commit
                 if (indexTracker != null){
-                    indexDefinition = indexTracker.getIndexDefinition(indexingContext.getIndexPath());
+                    indexDefinition = indexTracker.getIndexDefinition(indexPath);
                     if (indexDefinition != null && !indexDefinition.hasMatchingNodeTypeReg(root)){
                         log.debug("Detected change in NodeType registry for index {}. Would not use " +
                                 "existing index definition", indexDefinition.getIndexPath());
                         indexDefinition = null;
+                    }
+                }
+
+                if (indexDefinition == null) {
+                    indexDefinition = IndexDefinition.newBuilder(root, definition.getNodeState(),
+                            indexPath).build();
+                }
+
+                if (indexDefinition.hasSyncPropertyDefinitions()) {
+                    propertyUpdateCallback = new PropertyIndexUpdateCallback(indexPath, definition);
+                    if (indexTracker != null) {
+                        PropertyQuery query = new LuceneIndexPropertyQuery(indexTracker, indexPath);
+                        propertyUpdateCallback.getUniquenessConstraintValidator().setSecondStore(query);
                     }
                 }
 
@@ -179,11 +201,13 @@ public class LuceneIndexEditorProvider implements IndexEditorProvider {
             }
 
             if (writerFactory == null) {
-                writerFactory = new DefaultIndexWriterFactory(mountInfoProvider, newDirectoryFactory(blobDeletionCallback));
+                writerFactory = new DefaultIndexWriterFactory(mountInfoProvider, newDirectoryFactory(blobDeletionCallback), writerConfig);
             }
 
             LuceneIndexEditorContext context = new LuceneIndexEditorContext(root, definition, indexDefinition, callback,
                     writerFactory, extractedTextCache, augmentorFactory, indexingContext, asyncIndexing);
+
+            context.setPropertyUpdateCallback(propertyUpdateCallback);
             return new LuceneIndexEditor(context);
         }
         return null;
@@ -225,6 +249,10 @@ public class LuceneIndexEditorProvider implements IndexEditorProvider {
     public void setIndexingQueue(IndexingQueue indexingQueue) {
         this.indexingQueue = indexingQueue;
         this.nrtIndexingEnabled = indexingQueue != null;
+    }
+
+    public void setWriterConfig(LuceneIndexWriterConfig writerConfig) {
+        this.writerConfig = writerConfig;
     }
 
     GarbageCollectableBlobStore getBlobStore() {
