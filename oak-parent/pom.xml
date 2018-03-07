@@ -101,6 +101,10 @@
           <configuration>
             <target>${java.version}</target>
             <source>${java.version}</source>
+            <compilerArgs>
+              <!-- OAK-7310 -->
+              <arg>-Xpkginfo:always</arg>
+            </compilerArgs>
           </configuration>
         </plugin>
         <plugin>
@@ -122,7 +126,6 @@
             <source>${java.version}</source>
             <aggregate>true</aggregate>
             <links>
-              <link>http://docs.oracle.com/javase/7/docs/api/</link>
               <link>https://docs.adobe.com/docs/en/spec/javax.jcr/javadocs/jcr-2.0/</link>
               <link>http://jackrabbit.apache.org/api/trunk/</link>
             </links>
@@ -268,6 +271,9 @@
           <groupId>org.apache.rat</groupId>
           <artifactId>apache-rat-plugin</artifactId>
           <version>0.12</version>
+          <configuration>
+            <consoleOutput>true</consoleOutput>
+          </configuration>
         </plugin>
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
@@ -535,6 +541,11 @@
         <version>${guava.version}</version>
       </dependency>
       <dependency>
+	  	<groupId>com.googlecode.concurrentlinkedhashmap</groupId>
+	    <artifactId>concurrentlinkedhashmap-lru</artifactId>
+	    <version>1.4.2</version>
+      </dependency>
+      <dependency>
         <groupId>org.easymock</groupId>
         <artifactId>easymock</artifactId>
         <version>3.4</version>
@@ -603,7 +614,7 @@
       <dependency>
         <groupId>org.apache.tomcat</groupId>
         <artifactId>tomcat-jdbc</artifactId>
-        <version>8.5.23</version>
+        <version>8.5.28</version>
       </dependency>
       <dependency>
         <groupId>org.apache.felix</groupId>
@@ -894,7 +905,7 @@
         <dependency>
           <groupId>org.postgresql</groupId>
           <artifactId>postgresql</artifactId>
-          <version>42.2.0</version>
+          <version>42.2.1</version>
         </dependency>
       </dependencies>
     </profile>
